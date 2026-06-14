@@ -284,15 +284,6 @@ export function GenerateResult() {
           <span className="material-symbols-outlined text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
           {applied ? 'Lihat Rencana Mingguan' : 'Terapkan ke Planner'}
         </button>
-        {showShopping && (
-          <button
-            onClick={() => navigate(`/order/${planId}`)}
-            className="flex-1 px-6 py-3 border border-primary bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[20px]">shopping_cart_checkout</span>
-            Pesan Paket Belanja
-          </button>
-        )}
       </div>
 
       {/* Modal detail resep */}
