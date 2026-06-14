@@ -37,7 +37,9 @@ function getWeekDates() {
 
 
 function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onGoToGenerate, onGenerateShoppingList }) {
-  const { showToast, restoreSlot } = usePlan();
+  const { showToast, restoreSlot, clearAllSlots } = usePlan();
+
+  const [confirmClear, setConfirmClear] = useState(false);
 
   // Slot yang sedang diisi: { day, meal } | null
   const [pickerTarget, setPickerTarget] = useState(null);
@@ -140,12 +142,60 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
           {/* ---------------- Planner Grid ---------------- */}
           <div className="flex-1 min-w-0">
             <div className="mb-6 md:mb-8">
-              <h1 className="font-headline-xl text-headline-lg md:text-headline-xl text-primary tracking-tight mb-2 leading-tight">
-                Rencana Masak Mingguan
-              </h1>
-              <p className="text-on-surface-variant text-body-lg">
-                Atur jadwal makan Anda untuk hidup yang lebih sehat dan teratur.
-              </p>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h1 className="font-headline-xl text-headline-lg md:text-headline-xl text-primary tracking-tight mb-2 leading-tight">
+                    Rencana Masak Mingguan
+                  </h1>
+                  <p className="text-on-surface-variant text-body-lg">
+                    Atur jadwal makan Anda untuk hidup yang lebih sehat dan teratur.
+                  </p>
+                </div>
+                {stats.filled > 0 && (
+                  <div className="shrink-0 flex items-center gap-2 mt-1">
+                    {confirmClear ? (
+                      <>
+                        <span className="text-xs font-semibold text-on-surface-variant whitespace-nowrap">Hapus semua?</span>
+                        <button
+                          onClick={() => {
+                            const snapshot = weeklyPlan;
+                            clearAllSlots();
+                            setConfirmClear(false);
+                            showToast('Semua menu dihapus', {
+                              onUndo: () => {
+                                const DAYS_LIST = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+                                const MEALS_LIST = ['breakfast','lunch','dinner'];
+                                DAYS_LIST.forEach((d) => MEALS_LIST.forEach((m) => {
+                                  const s = snapshot[d]?.[m];
+                                  if (s) restoreSlot(d, m, s);
+                                }));
+                                showToast('Menu dikembalikan');
+                              }
+                            });
+                          }}
+                          className="px-3 py-1.5 bg-error text-white text-xs font-bold rounded-full hover:bg-error/80 transition cursor-pointer"
+                        >
+                          Ya, hapus
+                        </button>
+                        <button
+                          onClick={() => setConfirmClear(false)}
+                          className="px-3 py-1.5 border border-outline-variant text-on-surface-variant text-xs font-bold rounded-full hover:bg-secondary-container/20 transition cursor-pointer"
+                        >
+                          Batal
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmClear(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-error/40 text-error text-xs font-bold rounded-full hover:bg-error/10 transition cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-base">delete_sweep</span>
+                        Hapus Semua
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* CTA generate AI saat planner masih kosong */}
