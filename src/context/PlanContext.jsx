@@ -249,6 +249,21 @@ export function PlanProvider({ children }) {
     persistRemove(day, mealType, nextPlan);
   }, [persistRemove]);
 
+  const clearAllSlots = useCallback(() => {
+    const emptyPlan = createEmptyPlan();
+    setWeeklyPlan(emptyPlan);
+    if (isAuthenticated) {
+      if (planIdRef.current) {
+        planService.clearAllSlots(planIdRef.current)
+          .catch((e) => console.error("clearAllSlots gagal:", e.message));
+      } else {
+        pendingRef.current = [];
+      }
+    } else {
+      localStorage.setItem('weeklyPlan', JSON.stringify(emptyPlan));
+    }
+  }, [isAuthenticated]);
+
   const restoreSlot = useCallback((day, mealType, slotData) => {
     let nextPlan;
     setWeeklyPlan((prev) => {
@@ -280,8 +295,9 @@ export function PlanProvider({ children }) {
     applySlots,
     removeSlot,
     restoreSlot,
+    clearAllSlots,
     plannedCount,
-  }), [toast, showToast, isInPlan, weeklyPlan, setSlot, applySlots, removeSlot, restoreSlot, plannedCount]);
+  }), [toast, showToast, isInPlan, weeklyPlan, setSlot, applySlots, removeSlot, restoreSlot, clearAllSlots, plannedCount]);
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
 }

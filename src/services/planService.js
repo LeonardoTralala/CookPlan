@@ -152,4 +152,13 @@ export async function removeSlot(planId, day, mealType) {
   if (error) throw error;
 }
 
+// Hapus semua slot dalam satu plan (satu DELETE, lebih efisien dari loop removeSlot).
+export async function clearAllSlots(planId) {
+  const { error } = await supabase
+    .from("meal_entries")
+    .delete()
+    .eq("plan_id", planId);
+  if (error) throw error;
+}
+
 export { DAYS, MEAL_TYPES };

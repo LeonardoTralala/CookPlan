@@ -37,7 +37,9 @@ function getWeekDates() {
 
 
 function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onGoToGenerate, onGenerateShoppingList }) {
-  const { showToast, restoreSlot } = usePlan();
+  const { showToast, restoreSlot, clearAllSlots } = usePlan();
+
+  const [confirmClear, setConfirmClear] = useState(false);
 
   // Slot yang sedang diisi: { day, meal } | null
   const [pickerTarget, setPickerTarget] = useState(null);
@@ -292,6 +294,57 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
 
           {/* ---------------- Sidebar ---------------- */}
           <aside className="lg:w-80 shrink-0 flex flex-col gap-6">
+            {/* Hapus Semua */}
+            {stats.filled > 0 && (
+              <div className="border border-error/20 rounded-panel p-4 bg-error/5">
+                <p className="text-xs text-on-surface-variant mb-3">
+                  Hapus seluruh menu minggu ini sekaligus.
+                </p>
+                {confirmClear ? (
+                  <div className="flex flex-col gap-2">
+                    <p className="text-sm font-semibold text-on-surface">Yakin hapus semua menu?</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          const snapshot = weeklyPlan;
+                          clearAllSlots();
+                          setConfirmClear(false);
+                          showToast('Semua menu dihapus', {
+                            onUndo: () => {
+                              const DAYS_LIST = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+                              const MEALS_LIST = ['breakfast','lunch','dinner'];
+                              DAYS_LIST.forEach((d) => MEALS_LIST.forEach((m) => {
+                                const s = snapshot[d]?.[m];
+                                if (s) restoreSlot(d, m, s);
+                              }));
+                              showToast('Menu dikembalikan');
+                            }
+                          });
+                        }}
+                        className="flex-1 py-2 bg-error text-white text-sm font-bold rounded-full hover:bg-error/80 transition cursor-pointer"
+                      >
+                        Ya, hapus semua
+                      </button>
+                      <button
+                        onClick={() => setConfirmClear(false)}
+                        className="flex-1 py-2 border border-outline-variant text-on-surface-variant text-sm font-bold rounded-full hover:bg-secondary-container/20 transition cursor-pointer"
+                      >
+                        Batal
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmClear(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 border border-error/40 text-error text-sm font-bold rounded-full hover:bg-error/10 transition cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-base">delete_sweep</span>
+                    Hapus Semua Menu
+                  </button>
+                )}
+              </div>
+            )}
+
             {/* Recommended for you */}
             <div className="bg-surface-cream/40 border border-outline-variant rounded-panel p-6">
               <h3 className="font-headline-md text-headline-md text-primary mb-2">Rekomendasi untuk Anda</h3>
@@ -366,6 +419,7 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
                 </p>
               )}
             </div>
+
           </aside>
         </div>
       </main>
