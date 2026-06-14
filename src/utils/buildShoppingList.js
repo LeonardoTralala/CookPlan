@@ -1,0 +1,126 @@
+// Util agregasi daftar belanja (frontend) — dipakai bersama oleh halaman Belanja
+// (dari Weekly Planner) dan halaman Paket. Menggabungkan bahan dari sekumpulan
+// "slot" (tiap slot punya recipe + servings), skala per (servings/base_servings),
+// lalu kelompokkan per kategori.
+//
+// Resep dipakai dalam bentuk camelCase dari recipeService (ingredients: [{name,
+// amount, unit, category, priceIdr}], baseServings).
+
+// Metadata tampilan tiap kategori bahan: label, ikon, toko lokal penyedia.
+// Urutan menentukan urutan section.
+export const CATEGORY_META = {
+  vegetables: { label: 'Sayuran', icon: 'eco', store: 'Lembang Organic Farm' },
+  meat: { label: 'Protein', icon: 'set_meal', store: 'Pasar Segar Lokal' },
+  dairy: { label: 'Telur & Susu', icon: 'egg', store: 'Toko Tani Sejahtera' },
+  dry_goods: { label: 'Bahan Pokok', icon: 'grocery', store: 'Toko Sembako Makmur' },
+  spices: { label: 'Bumbu & Rempah', icon: 'restaurant', store: 'Pasar Modern BSD' },
+};
+
+export const CATEGORY_FALLBACK = { label: 'Lainnya', icon: 'shopping_basket', store: 'Toko Serba Ada' };
+
+const DEFAULT_BASE_SERVINGS = 2;
+
+export function formatRupiah(num) {
+  return new Intl.NumberFormat('id-ID', {
+    style: 'currency', currency: 'IDR', minimumFractionDigits: 0, maximumFractionDigits: 0,
+  }).format(num || 0);
+}
+
+// Bulatkan jumlah bahan agar rapi (max 1 desimal).
+export function formatAmount(amount) {
+  const rounded = Math.round((amount + Number.EPSILON) * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+// Agregasi daftar belanja dari kumpulan slot.
+// slots: [{ recipe, servings }] — recipe shape camelCase (punya ingredients[] & baseServings).
+// Return { sections, totalItems, estimatedCost }.
+export function buildShoppingListFromSlots(slots) {
+  const itemMap = new Map(); // key: `${name}__${unit}` -> { name, unit, amount, priceIdr, category }
+
+  for (const slot of slots ?? []) {
+    const recipe = slot?.recipe;
+    if (!recipe) continue;
+    const base = recipe.baseServings && recipe.baseServings > 0 ? recipe.baseServings : DEFAULT_BASE_SERVINGS;
+    const factor = (slot.servings || base) / base;
+
+    for (const ing of recipe.ingredients ?? []) {
+      const key = `${ing.name}__${ing.unit}`;
+      const existing = itemMap.get(key);
+      if (existing) {
+        existing.amount += (Number(ing.amount) || 0) * factor;
+        existing.priceIdr += (Number(ing.priceIdr) || 0) * factor;
+      } else {
+        itemMap.set(key, {
+          name: ing.name,
+          unit: ing.unit,
+          amount: (Number(ing.amount) || 0) * factor,
+          priceIdr: (Number(ing.priceIdr) || 0) * factor,
+          category: ing.category,
+        });
+      }
+    }
+  }
+
+  let estimatedCost = 0;
+  itemMap.forEach((item) => { estimatedCost += item.priceIdr; });
+
+  const order = Object.keys(CATEGORY_META);
+  const grouped = {};
+  itemMap.forEach((item, key) => {
+    const cat = order.includes(item.category) ? item.category : 'other';
+    if (!grouped[cat]) grouped[cat] = [];
+    grouped[cat].push({ ...item, id: key });
+  });
+
+  const sections = [];
+  [...order, 'other'].forEach((cat) => {
+    const items = grouped[cat];
+    if (!items || items.length === 0) return;
+    items.sort((a, b) => a.name.localeCompare(b.name, 'id'));
+    sections.push({ key: cat, meta: CATEGORY_META[cat] || CATEGORY_FALLBACK, items });
+  });
+
+  return { sections, totalItems: itemMap.size, estimatedCost: Math.round(estimatedCost) };
+}
+
+// Bentuk slot dari weeklyPlan (shape PlanContext: { Senin:{breakfast,lunch,dinner}, ... }).
+// recipeIndex: Map<recipeId, recipe>. Slot tanpa resep di-skip.
+export function slotsFromWeeklyPlan(weeklyPlan, recipeIndex) {
+  const slots = [];
+  if (weeklyPlan && typeof weeklyPlan === 'object') {
+    for (const daySlots of Object.values(weeklyPlan)) {
+      if (!daySlots) continue;
+      for (const slot of Object.values(daySlots)) {
+        if (!slot) continue;
+        const recipe = recipeIndex.get(slot.recipeId);
+        if (recipe) slots.push({ recipe, servings: slot.servings });
+      }
+    }
+  }
+  return slots;
+}
+
+// Bentuk slot dari menu paket (package_meals yang sudah embed recipe).
+// meals: [{ recipe, servings }] — biasanya servings = porsi yang di-request user.
+export function slotsFromPackageMeals(meals, servings) {
+  const slots = [];
+  for (const m of meals ?? []) {
+    if (m?.recipe) slots.push({ recipe: m.recipe, servings: servings ?? m.servings });
+  }
+  return slots;
+}
+
+// Ratakan sections jadi array item polos (untuk snapshot simpan daftar belanja).
+export function flattenSections(sections) {
+  const items = [];
+  for (const s of sections ?? []) {
+    for (const it of s.items ?? []) {
+      items.push({
+        name: it.name, amount: it.amount, unit: it.unit,
+        category: it.category, priceIdr: Math.round(it.priceIdr || 0),
+      });
+    }
+  }
+  return items;
+}

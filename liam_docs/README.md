@@ -61,6 +61,7 @@ sistem order via WhatsApp — sesuai target MVP PKM-K 2026.
 | Phase 7 | [phase-7-mobile-responsive/](./03-PHASES/phase-7-mobile-responsive/) | Mobile responsive (fokus) |
 | Phase 8 | [phase-8-testing-polish/](./03-PHASES/phase-8-testing-polish/) | Testing & polish |
 | Phase 11 | [phase-11-regenerate-day/](./03-PHASES/phase-11-regenerate-day/) | Regenerate menu harian + catatan |
+| Phase 12 | [phase-12-paket-belanja/](./03-PHASES/phase-12-paket-belanja/) | Paket "Belanja di Kami" + 2 tab belanja + simpan daftar |
 
 ### 04 — REFERENCE
 | Dokumen | Isi |
