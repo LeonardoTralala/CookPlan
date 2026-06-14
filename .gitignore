@@ -34,3 +34,10 @@ poles-tampilan.md
 # Database backups (may contain PII)
 .backups/
 backups
+
+# Graphify
+graphify-out/
+
+# Claude Code project guidance (local only)
+CLAUDE.md
+.claude

@@ -61,6 +61,16 @@ export async function callProvider(
   if (provider.supports_json_mode) {
     body.response_format = { type: "json_object" };
   }
+  // DeepSeek hybrid reasoning: matikan "thinking" untuk provider DeepSeek yang
+  // ditandai is_reasoning=false. Model reasoning DeepSeek (mis. deepseek-v4-flash)
+  // menghabiskan ~90% token output untuk chain-of-thought, bikin latensi
+  // membengkak (foodplan seminggu bisa ~140s). Mematikannya memangkas waktu
+  // drastis (≈belasan detik) tanpa kehilangan kualitas untuk tugas terstruktur.
+  // Param ini khusus API DeepSeek, jadi di-scope via base_url agar tidak
+  // dikirim ke provider lain (9router/Gemini) yang akan menolaknya.
+  if (/deepseek\.com/i.test(provider.base_url) && provider.is_reasoning === false) {
+    body.thinking = { type: "disabled" };
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);

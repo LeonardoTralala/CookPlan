@@ -2,24 +2,35 @@
 
 export interface GenerateInput {
   periode: number;        // 3 | 7 | 14
-  porsi: number;          // >=1
+  porsi: number;          // >=1 — porsi per JAM MAKAN (servings per slot)
   diet: string[];
   budget: number;         // IDR
   pantry: { name: string; amount?: number; unit?: string }[];
   outputType: "foodplan" | "foodprep" | "full";
+  variasiPerHari: number; // 1..3 — jumlah resep BERBEDA per hari (foodprep)
+  notes: string;          // catatan khusus user (opsional, preferensi tambahan), max 300
 }
 
-const VALID_PERIODE = [3, 7, 14];
+const NOTES_MAX = 300;
+
+// Periode bebas 1..7 hari (maksimal selaras kapasitas planner mingguan).
+const PERIODE_MIN = 1;
+const PERIODE_MAX = 7;
 const VALID_OUTPUT = ["foodplan", "foodprep", "full"];
+// Urutan kanonik waktu makan — setiap hari TETAP 3 slot ini. variasiPerHari
+// hanya mengatur berapa resep BERBEDA yang mengisinya (sisanya pakai ulang).
+const VALID_MEALS = ["breakfast", "lunch", "dinner"];
+const VARIASI_MIN = 1;
+const VARIASI_MAX = 3; // tidak mungkin > jumlah waktu makan
 
 // Validasi & normalisasi input dari klien. Throw Error dengan pesan ramah.
 export function validateInput(raw: unknown): GenerateInput {
   if (!raw || typeof raw !== "object") throw new Error("Input tidak valid.");
   const r = raw as Record<string, unknown>;
 
-  const periode = Number(r.periode);
-  if (!VALID_PERIODE.includes(periode)) {
-    throw new Error("Periode harus 3, 7, atau 14 hari.");
+  const periode = Math.floor(Number(r.periode));
+  if (!Number.isFinite(periode) || periode < PERIODE_MIN || periode > PERIODE_MAX) {
+    throw new Error(`Periode harus antara ${PERIODE_MIN} dan ${PERIODE_MAX} hari.`);
   }
 
   const porsi = Number(r.porsi);
@@ -51,7 +62,23 @@ export function validateInput(raw: unknown): GenerateInput {
     };
   }).filter((p) => p.name);
 
-  return { periode, porsi, diet, budget, pantry, outputType: outputType as GenerateInput["outputType"] };
+  // Jumlah variasi menu per hari (resep berbeda). Clamp 1..3. Klien lama yang
+  // masih kirim `meals` (subset waktu makan) → turunkan jadi jumlah waktu makan
+  // yang dipilih supaya tetap masuk akal (mis. pilih 1 slot lama ≈ 1 variasi).
+  let variasiRaw = Number(r.variasiPerHari);
+  if (!Number.isFinite(variasiRaw) && Array.isArray(r.meals)) {
+    const legacy = new Set(
+      r.meals.map((m) => String(m).toLowerCase().trim()).filter((m) => VALID_MEALS.includes(m)),
+    );
+    variasiRaw = legacy.size || VARIASI_MAX;
+  }
+  if (!Number.isFinite(variasiRaw)) variasiRaw = VARIASI_MAX;
+  const variasiPerHari = Math.min(VARIASI_MAX, Math.max(VARIASI_MIN, Math.floor(variasiRaw)));
+
+  // Catatan khusus opsional. Trim + cap panjang (hemat token + batasi abuse).
+  const notes = String(r.notes ?? "").trim().slice(0, NOTES_MAX);
+
+  return { periode, porsi, diet, budget, pantry, variasiPerHari, notes, outputType: outputType as GenerateInput["outputType"] };
 }
 
 // Validasi output AI secara semantik. Return { ok, errors }.
@@ -92,6 +119,50 @@ export function validateOutput(
   }
 
   return { ok: errors.length === 0, errors };
+}
+
+// Tegakkan model "variasi per hari" sebagai safety net (prompt sudah menginstruksikan,
+// tapi jangan percaya penuh ke AI — sama filosofinya dgn subtractPantry). Untuk SETIAP hari:
+//   1. Pastikan ketiga waktu makan (breakfast/lunch/dinner) terisi — slot yang bolong
+//      diisi ulang dari resep hari itu (foodprep: masak sekali, makan beberapa kali).
+//   2. Batasi jumlah resep BERBEDA per hari = variasiPerHari; kelebihan dipetakan ulang
+//      ke salah satu resep yang dipertahankan (palette).
+//   3. Set servings tiap slot = porsi (porsi per jam makan) → total = 3 × porsi/hari.
+// Hari tanpa satu pun meal valid dibiarkan apa adanya (tak bisa mengarang resep).
+// Tidak menyentuh shopping_list/total: harga dihitung per resep & resep dipakai ulang;
+// pengurangan biaya diserahkan ke subtractPantry (sama seperti sebelumnya).
+export function enforceVariety(
+  output: Record<string, unknown>,
+  variasiPerHari: number,
+  porsi: number,
+) {
+  if (!Array.isArray(output.days)) return output;
+  const variasi = Math.min(VARIASI_MAX, Math.max(VARIASI_MIN, Math.floor(variasiPerHari) || 1));
+  const days = (output.days as Record<string, unknown>[]).map((day) => {
+    const meals = Array.isArray(day.meals) ? (day.meals as Record<string, unknown>[]) : [];
+    if (meals.length === 0) return day;
+
+    // Resep berbeda sesuai urutan kemunculan → palette dipotong ke `variasi`.
+    const distinct: Record<string, unknown>[] = [];
+    for (const m of meals) {
+      const rid = Number(m.recipe_id);
+      if (!distinct.some((d) => Number(d.recipe_id) === rid)) distinct.push(m);
+    }
+    const palette = distinct.slice(0, variasi);
+    const allowedIds = new Set(palette.map((p) => Number(p.recipe_id)));
+
+    // Bangun 3 slot kanonik. Slot yang sudah ada & resepnya ada di palette dipertahankan;
+    // sisanya diisi resep palette secara bergiliran.
+    const newMeals = VALID_MEALS.map((mealType, i) => {
+      const existing = meals.find(
+        (m) => m.meal_type === mealType && allowedIds.has(Number(m.recipe_id)),
+      );
+      const base = existing ?? palette[i % palette.length];
+      return { ...base, meal_type: mealType, servings: porsi };
+    });
+    return { ...day, meals: newMeals };
+  });
+  return { ...output, days };
 }
 
 // Kurangi pantry user dari shopping list. Pencocokan nama longgar (case-insensitive,

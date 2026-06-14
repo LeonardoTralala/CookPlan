@@ -20,7 +20,6 @@ const MEALS = [
   { key: 'dinner', label: 'Makan Malam' }
 ];
 
-const TOTAL_SLOTS = DAYS.length * MEALS.length; // 21
 
 // Tanggal Senin–Minggu pada minggu berjalan (berdasarkan tanggal hari ini)
 function getWeekDates() {
@@ -37,7 +36,7 @@ function getWeekDates() {
 }
 
 
-function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onGenerateShoppingList }) {
+function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onGoToGenerate, onGenerateShoppingList }) {
   const { showToast, restoreSlot } = usePlan();
 
   // Slot yang sedang diisi: { day, meal } | null
@@ -97,14 +96,6 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
     return { filled, avgCalories, totalPrice, budgetImpact };
   }, [weeklyPlan]);
 
-  const progressPct = Math.round((stats.filled / TOTAL_SLOTS) * 100);
-
-  const budgetColor = {
-    Low: 'text-success-green',
-    Medium: 'text-warning',
-    High: 'text-error-light'
-  }[stats.budgetImpact];
-
   // Resep untuk picker (difilter pencarian)
   const pickerResults = useMemo(() => {
     if (pickerSearch.trim() === '') return recipes;
@@ -156,6 +147,28 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
                 Atur jadwal makan Anda untuk hidup yang lebih sehat dan teratur.
               </p>
             </div>
+
+            {/* CTA generate AI saat planner masih kosong */}
+            {stats.filled === 0 && (
+              <div className="mb-6 rounded-panel border border-primary/30 bg-primary/5 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+                <div className="flex-1">
+                  <h3 className="font-bold text-primary mb-1 flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+                    Bingung mau masak apa minggu ini?
+                  </h3>
+                  <p className="text-sm text-on-surface-variant">
+                    Biar AI menyusun menu sesuai budget dan preferensimu, lalu otomatis mengisi planner ini.
+                  </p>
+                </div>
+                <button
+                  onClick={onGoToGenerate}
+                  className="shrink-0 px-6 py-3 bg-primary text-white rounded-full font-bold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+                  Generate dengan AI
+                </button>
+              </div>
+            )}
 
             {/* Mobile Days Tabs */}
             <div className="md:hidden flex overflow-x-auto hide-scrollbar gap-2 mb-6 -mx-5 px-5 pb-2">
@@ -314,30 +327,44 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
               </button>
             </div>
 
-            {/* Weekly Progress */}
+            {/* Jadwal Pengiriman Bahan */}
             <div className="bg-primary-container text-on-primary-container rounded-panel p-6">
-              <h3 className="font-headline-md text-headline-md mb-2">Progres Mingguan</h3>
-              <p className="text-on-primary-container/80 text-sm mb-6">
-                {stats.filled} dari {TOTAL_SLOTS} slot makan terisi.
+              <h3 className="font-headline-md text-headline-md mb-1 flex items-center gap-2">
+                <span className="material-symbols-outlined text-[22px]">local_shipping</span>
+                Jadwal Pengiriman
+              </h3>
+              <p className="text-on-primary-container/80 text-sm mb-5">
+                Bahan segar diantar langsung ke rumahmu.
               </p>
-              <div className="h-3 bg-white/20 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-white rounded-full transition-all duration-1000 ease-out"
-                  style={{ width: `${progressPct}%` }}
-                ></div>
-              </div>
-              <div className="mt-8 flex items-center justify-between">
-                <div>
-                  <div className="text-2xl font-bold">
-                    {new Intl.NumberFormat('id-ID').format(stats.avgCalories)}
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-3 bg-white/15 rounded-2xl px-4 py-3">
+                  <span className="material-symbols-outlined text-[20px] shrink-0">bolt</span>
+                  <div>
+                    <p className="text-sm font-semibold">Pengiriman Hari Ini</p>
+                    <p className="text-xs opacity-70">Pesan sebelum pukul 12:00 WIB</p>
                   </div>
-                  <div className="text-[10px] uppercase opacity-70 tracking-tight">Rata-rata Kalori</div>
                 </div>
-                <div className="text-right">
-                  <div className={`text-2xl font-bold ${budgetColor}`}>{stats.budgetImpact}</div>
-                  <div className="text-[10px] uppercase opacity-70 tracking-tight">Dampak Budget</div>
+                <div className="flex items-center gap-3 bg-white/15 rounded-2xl px-4 py-3">
+                  <span className="material-symbols-outlined text-[20px] shrink-0">calendar_today</span>
+                  <div>
+                    <p className="text-sm font-semibold">Jadwal Besok</p>
+                    <p className="text-xs opacity-70">Pesan kapan saja hari ini</p>
+                  </div>
                 </div>
               </div>
+              {stats.filled > 0 ? (
+                <button
+                  onClick={handleGenerateShoppingList}
+                  className="mt-5 w-full py-3 bg-white/20 hover:bg-white/30 text-on-primary-container rounded-full font-bold text-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
+                  Pesan Bahan Sekarang
+                </button>
+              ) : (
+                <p className="mt-5 text-xs text-on-primary-container/70 text-center">
+                  Isi rencana makan dulu untuk mulai memesan bahan.
+                </p>
+              )}
             </div>
           </aside>
         </div>

@@ -7,10 +7,12 @@ import { supabase } from "../lib/supabase.js";
 // Input shape yang dikirim ke Edge Function:
 //   {
 //     periode: 3|7|14,           // jumlah hari
-//     porsi: number,             // porsi per menu
+//     porsi: number,             // porsi per jam makan (servings per slot, auto dikali jumlah waktu makan)
 //     diet: string[],            // ['vegetarian','halal',...]
 //     budget: number,            // IDR total
 //     pantry: [{name, amount?, unit?}],  // bahan tersedia di rumah
+//     variasiPerHari: number,    // 1..3 jumlah resep BERBEDA per hari (foodprep: dipakai ulang menutup 3 waktu makan)
+//     notes: string,             // catatan khusus user (opsional), max 300 char
 //     outputType: 'foodplan'|'foodprep'|'full'
 //   }
 //
@@ -42,18 +44,36 @@ export async function generatePlan(input) {
 }
 
 // Ambil history generate milik user (untuk halaman riwayat / dashboard).
-export async function getGeneratedHistory(limit = 10) {
+// successOnly: filter status='success' DI SERVER supaya limit menghitung hanya
+// hasil sukses — bila tidak, beberapa generate gagal terbaru bisa "menelan"
+// kuota limit dan membuat daftar tampak kosong padahal ada sukses lebih lama.
+export async function getGeneratedHistory(limit = 10, { successOnly = false } = {}) {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;
   if (!user) throw new Error("Belum login.");
-  const { data, error } = await supabase
+  let query = supabase
     .from("generated_plans")
     .select("id, input_json, output_type, model, status, created_at")
-    .eq("user_id", user.id)
+    .eq("user_id", user.id);
+  if (successOnly) query = query.eq("status", "success");
+  const { data, error } = await query
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) throw error;
   return data ?? [];
+}
+
+// Hapus satu hasil generate milik user (defense in depth: filter user_id eksplisit).
+export async function deleteGeneratedPlan(id) {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) throw new Error("Belum login.");
+  const { error } = await supabase
+    .from("generated_plans")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", user.id);
+  if (error) throw error;
 }
 
 // Ambil satu hasil generate by id (untuk render ulang hasil tersimpan).

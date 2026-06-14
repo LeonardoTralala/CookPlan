@@ -109,6 +109,38 @@ export async function setSlot(planId, recipe, day, mealType, servings) {
   if (error) throw error;
 }
 
+// Set banyak slot sekaligus (dipakai apply hasil generate AI ke planner).
+// Satu kali upsert supaya tidak menembak 21 request terpisah. Duplikat
+// (day, mealType) di-dedupe ambil yang terakhir — Postgres menolak ON CONFLICT
+// yang menyentuh baris yang sama dua kali dalam satu statement.
+export async function setSlots(planId, slots) {
+  const deduped = new Map();
+  for (const s of slots ?? []) {
+    if (!DAYS.includes(s.day) || !MEAL_TYPES.includes(s.mealType)) {
+      throw new Error("Hari atau jenis makan tidak valid.");
+    }
+    deduped.set(`${s.day}|${s.mealType}`, s);
+  }
+  if (deduped.size === 0) return;
+
+  const rows = [...deduped.values()].map(({ recipe, day, mealType, servings }) => ({
+    plan_id: planId,
+    recipe_id: recipe.id ?? recipe.recipeId,
+    day_of_week: day,
+    meal_type: mealType,
+    servings,
+    title: recipe.title,
+    image_url: recipe.imageUrl,
+    price_idr: recipe.priceIdr,
+    ready_in_minutes: recipe.readyInMinutes,
+    calories: recipe.calories,
+  }));
+  const { error } = await supabase
+    .from("meal_entries")
+    .upsert(rows, { onConflict: "plan_id,day_of_week,meal_type" });
+  if (error) throw error;
+}
+
 // Hapus satu slot.
 export async function removeSlot(planId, day, mealType) {
   const { error } = await supabase

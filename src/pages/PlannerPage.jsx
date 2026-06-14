@@ -13,6 +13,7 @@ export function PlannerPage() {
       onSetSlot={setSlot}
       onRemoveSlot={removeSlot}
       onGoToCatalog={() => navigate('/catalog')}
+      onGoToGenerate={() => navigate('/generate')}
       onGenerateShoppingList={() => navigate('/shopping')}
     />
   );

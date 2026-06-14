@@ -1,7 +1,9 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getGeneratedPlanById } from '../services/aiService.js';
 import { getRecipesByIds } from '../services/recipeService.js';
+import { usePlan } from '../hooks/usePlan.js';
+import { mapGeneratedPlanToWeek } from '../utils/planMapper.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 
 const MEAL_LABEL = { breakfast: 'Sarapan', lunch: 'Makan Siang', dinner: 'Makan Malam' };
@@ -15,6 +17,8 @@ function formatRupiah(n) {
 export function GenerateResult() {
   const { planId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const { applySlots, restoreSlot, showToast } = usePlan();
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -22,6 +26,34 @@ export function GenerateResult() {
   const [showReasoning, setShowReasoning] = useState(false);
   const [recipeIndex, setRecipeIndex] = useState(new Map());
   const [detailRecipe, setDetailRecipe] = useState(null);
+  const [applied, setApplied] = useState(false);
+  // true bila datang langsung dari halaman generate (bukan buka ulang dari history).
+  const autoApplyRef = useRef(Boolean(location.state?.autoApply));
+
+  // Terapkan plan ke Rencana Masak Mingguan (planner), dengan opsi Urungkan
+  // yang mengembalikan slot ke isi sebelumnya (termasuk yang tadinya kosong).
+  const applyToPlanner = useCallback((planData, index, auto = false) => {
+    const { slots, skippedDays } = mapGeneratedPlanToWeek(planData, index);
+    if (slots.length === 0) {
+      showToast('Tidak ada menu valid untuk dimasukkan ke planner.');
+      return;
+    }
+    const undoList = applySlots(slots);
+    setApplied(true);
+    const extra = skippedDays > 0 ? ' (7 hari pertama)' : '';
+    showToast(
+      auto
+        ? `${slots.length} menu otomatis masuk ke Rencana Mingguan${extra}! 🎉`
+        : `${slots.length} menu diterapkan ke Rencana Mingguan${extra}!`,
+      {
+        onUndo: () => {
+          for (const u of undoList) restoreSlot(u.day, u.mealType, u.prev);
+          setApplied(false);
+          showToast('Perubahan di planner diurungkan.');
+        },
+      }
+    );
+  }, [applySlots, restoreSlot, showToast]);
 
   // Muat hasil: utamakan sessionStorage (baru di-generate), fallback DB.
   useEffect(() => {
@@ -46,7 +78,17 @@ export function GenerateResult() {
         }
         if (ids.size > 0) {
           const recipes = await getRecipesByIds([...ids]);
-          if (active) setRecipeIndex(new Map(recipes.map((r) => [r.id, r])));
+          if (!active) return;
+          const index = new Map(recipes.map((r) => [r.id, r]));
+          setRecipeIndex(index);
+
+          // Auto-apply ke planner sekali, hanya saat baru selesai generate.
+          if (autoApplyRef.current) {
+            autoApplyRef.current = false;
+            applyToPlanner(data.plan, index, true);
+            // Bersihkan state navigasi supaya refresh tidak menerapkan ulang.
+            navigate(location.pathname, { replace: true, state: null });
+          }
         }
       } catch (e) {
         if (active) setError(e.message || 'Gagal memuat hasil.');
@@ -55,7 +97,7 @@ export function GenerateResult() {
       }
     })();
     return () => { active = false; };
-  }, [planId]);
+  }, [planId, applyToPlanner, navigate, location.pathname]);
 
   const plan = result?.plan;
   const showShopping = useMemo(() => {
@@ -102,6 +144,22 @@ export function GenerateResult() {
           </p>
         )}
       </div>
+
+      {/* Status: sudah diterapkan ke planner (persisten, tidak hilang seperti toast) */}
+      {applied && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-success-green/10 border border-success-green/30 px-4 py-3">
+          <p className="text-sm text-on-surface flex items-center gap-2">
+            <span className="material-symbols-outlined text-success-green text-[20px]">check_circle</span>
+            Menu sudah masuk ke Rencana Masak Mingguan.
+          </p>
+          <button
+            onClick={() => navigate('/planner')}
+            className="text-sm font-bold text-primary whitespace-nowrap hover:underline cursor-pointer"
+          >
+            Lihat Planner →
+          </button>
+        </div>
+      )}
 
       {/* Warnings */}
       {(plan.warnings?.length ?? 0) > 0 && (
@@ -210,15 +268,26 @@ export function GenerateResult() {
         </section>
       )}
 
-      {/* Action: order (full mode = Core Offer) */}
+      {/* Action: apply ke planner + order (full mode = Core Offer) */}
       <div className="flex flex-col sm:flex-row gap-3 pt-2">
-        <button onClick={() => navigate('/generate')} className="px-6 py-3 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm hover:bg-surface-container-low transition cursor-pointer">
+        <button
+          onClick={() => navigate('/generate')}
+          className="flex-1 px-6 py-3 border border-primary text-on-surface-variant rounded-full font-semibold text-sm hover:bg-surface-container-low active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-outlined text-[20px]">refresh</span>
           Generate Lagi
+        </button>
+        <button
+          onClick={() => (applied ? navigate('/planner') : applyToPlanner(plan, recipeIndex))}
+          className="flex-1 px-6 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-outlined text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
+          {applied ? 'Lihat Rencana Mingguan' : 'Terapkan ke Planner'}
         </button>
         {showShopping && (
           <button
             onClick={() => navigate(`/order/${planId}`)}
-            className="flex-1 px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+            className="flex-1 px-6 py-3 border border-primary bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-[20px]">shopping_cart_checkout</span>
             Pesan Paket Belanja
