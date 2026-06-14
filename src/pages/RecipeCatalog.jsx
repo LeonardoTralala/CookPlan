@@ -3,6 +3,15 @@ import { getRecipes } from '../services/recipeService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 
+function shuffle(arr) {
+  const result = [...arr];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+
 function RecipeCatalog({ onAddToPlan }) {
   const { showToast, weeklyPlan } = usePlan();
 
@@ -48,7 +57,7 @@ function RecipeCatalog({ onAddToPlan }) {
   useEffect(() => {
     let active = true;
     getRecipes()
-      .then((data) => { if (active) { setRecipes(data); setLoadError(''); } })
+      .then((data) => { if (active) { setRecipes(shuffle(data)); setLoadError(''); } })
       .catch((err) => { if (active) setLoadError(err.message || 'Gagal memuat resep.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -154,14 +163,14 @@ function RecipeCatalog({ onAddToPlan }) {
   return (
     <div className="bg-canvas-white min-h-dvh font-sans text-on-surface pb-24">
       {/* Hero header */}
-      <section className="pt-16 pb-8 px-6 max-w-container-max mx-auto text-center">
-        <h2 className="font-headline-xl text-headline-lg md:text-headline-xl text-primary tracking-tight mb-8">
+      <section className="pt-8 pb-4 px-4 max-w-container-max mx-auto text-center">
+        <h2 className="font-headline-md text-headline-md text-primary tracking-tight mb-4">
           Inspirasi Masakan Hari Ini
         </h2>
 
         {/* Search Input */}
-        <div className="max-w-2xl mx-auto relative group mb-8">
-          <span className="material-symbols-outlined absolute left-6 top-1/2 -translate-y-1/2 text-on-surface-variant text-2xl group-focus-within:text-primary transition-colors">
+        <div className="max-w-2xl mx-auto relative group mb-4">
+          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-xl group-focus-within:text-primary transition-colors">
             search
           </span>
           <input
@@ -169,7 +178,7 @@ function RecipeCatalog({ onAddToPlan }) {
             inputMode="search"
             enterKeyHint="search"
             autoComplete="off"
-            className="w-full pl-14 pr-6 py-4 rounded-full border border-outline-variant bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-sm transition-all text-base font-medium"
+            className="w-full pl-11 pr-6 py-2.5 rounded-full border border-outline-variant bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-sm transition-all text-sm font-medium"
             placeholder="Cari resep sehat untuk keluarga..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -327,7 +336,7 @@ function RecipeCatalog({ onAddToPlan }) {
       </section>
 
       {/* Catalog Grid */}
-      <section className="px-6 max-w-container-max mx-auto">
+      <section className="px-4 max-w-container-max mx-auto">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant">
             <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-3" aria-hidden="true">progress_activity</span>
@@ -356,11 +365,11 @@ function RecipeCatalog({ onAddToPlan }) {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {filteredRecipes.map((recipe) => (
               <div
                 key={recipe.id}
-                className="recipe-card-shadow bg-surface-container rounded-3xl overflow-hidden group cursor-pointer hover:-translate-y-1 transition-all duration-300 flex flex-col focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary"
+                className="recipe-card-shadow bg-surface-container rounded-2xl overflow-hidden group cursor-pointer hover:-translate-y-0.5 transition-all duration-300 flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                 onClick={() => setSelectedRecipeForDetail(recipe)}
                 role="button"
                 tabIndex={0}
@@ -372,7 +381,7 @@ function RecipeCatalog({ onAddToPlan }) {
                 }}
               >
                 {/* Image Section */}
-                <div className="relative h-40 sm:h-52 md:h-64 overflow-hidden">
+                <div className="relative h-24 sm:h-32 md:h-36 overflow-hidden">
                   <img
                     src={recipe.imageUrl}
                     alt={recipe.title}
@@ -380,44 +389,41 @@ function RecipeCatalog({ onAddToPlan }) {
                     onError={(e) => { e.currentTarget.src = '/img/recipe-placeholder.svg'; }}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
-                  {/* Badges Overlay */}
-                  <div className="absolute top-4 left-4">
-                    <span className="px-3 py-1 rounded-full bg-white/95 text-primary font-bold text-[10px] shadow-sm tracking-wide">
-                      {recipe.badges?.[0]}
-                    </span>
-                  </div>
+                  {recipe.badges?.[0] && (
+                    <div className="absolute top-2 left-2">
+                      <span className="px-2 py-0.5 rounded-full bg-white/95 text-primary font-bold text-[9px] shadow-sm tracking-wide">
+                        {recipe.badges[0]}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Content Section */}
-                <div className="p-4 md:p-6 flex-1 flex flex-col justify-between">
-                  <div className="flex justify-between items-center gap-3 mb-4">
-                    <h3 className="font-headline-md text-headline-md text-on-surface hover:text-primary transition-colors leading-tight line-clamp-2">
+                <div className="p-2.5 md:p-3 flex-1 flex flex-col justify-between">
+                  <div className="flex justify-between items-start gap-1.5 mb-1.5">
+                    <h3 className="text-xs md:text-sm font-bold text-on-surface hover:text-primary transition-colors leading-tight line-clamp-2 flex-1">
                       {recipe.title}
                     </h3>
-                    {/* Add Button */}
                     <button
                       onClick={(e) => {
-                        e.stopPropagation(); // prevent opening detail modal
+                        e.stopPropagation();
                         setSelectedRecipeForPlan(recipe);
                       }}
-                      className="w-11 h-11 rounded-full bg-primary text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-md shrink-0 cursor-pointer"
+                      className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-sm shrink-0 cursor-pointer"
                       title="Tambah ke Rencana Mingguan"
                       aria-label="Tambah ke Rencana Mingguan"
                     >
-                      <span className="material-symbols-outlined text-xl" aria-hidden="true">add</span>
+                      <span className="material-symbols-outlined text-sm" aria-hidden="true">add</span>
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-4 text-on-surface-variant text-xs md:text-sm font-semibold">
-                    {/* Cooking Time */}
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[18px]">schedule</span>
-                      <span>{recipe.readyInMinutes} min</span>
+                  <div className="flex items-center gap-2 text-on-surface-variant text-[11px] font-semibold">
+                    <div className="flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[14px]">schedule</span>
+                      <span>{recipe.readyInMinutes}m</span>
                     </div>
-
-                    {/* Calories */}
-                    <div className="flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[18px]">whatshot</span>
+                    <div className="flex items-center gap-0.5">
+                      <span className="material-symbols-outlined text-[14px]">whatshot</span>
                       <span>{recipe.calories} kcal</span>
                     </div>
                   </div>
