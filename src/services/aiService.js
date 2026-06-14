@@ -43,6 +43,31 @@ export async function generatePlan(input) {
   return data;
 }
 
+// Regenerate menu SATU hari dari sebuah plan. Memanggil Edge Function
+// `regenerate-day`. AI menyusun ulang menu hari itu (opsional dengan catatan
+// preferensi user), server menghitung ulang daftar belanja seluruh plan.
+//   planId   : id baris generated_plans
+//   dayIndex : index hari di plan.days (0-based)
+//   opts     : { note?: string, mealType?: 'breakfast'|'lunch'|'dinner' }
+// Return: { plan, dayIndex, day, meta, planId }
+export async function regenerateDay(planId, dayIndex, { note = "", mealType = null } = {}) {
+  const body = { planId, dayIndex };
+  if (note) body.note = note;
+  if (mealType) body.mealType = mealType;
+  const { data, error } = await supabase.functions.invoke("regenerate-day", { body });
+  if (error) {
+    let detail = error.message || "Gagal regenerate hari.";
+    try {
+      const ctx = await error.context?.json?.();
+      if (ctx?.error) detail = ctx.error;
+    } catch {
+      // ignore
+    }
+    throw new Error(detail);
+  }
+  return data;
+}
+
 // Ambil history generate milik user (untuk halaman riwayat / dashboard).
 // successOnly: filter status='success' DI SERVER supaya limit menghitung hanya
 // hasil sukses — bila tidak, beberapa generate gagal terbaru bisa "menelan"

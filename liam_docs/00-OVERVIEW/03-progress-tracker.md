@@ -75,6 +75,18 @@ last-updated: 2026-06-11
 
 ---
 
+## Phase 11 — Regenerate Menu Harian + Catatan ✅ (2026-06-14)
+- ✅ Edge Function baru `regenerate-day` (susun ulang menu 1 hari + catatan opsional)
+- ✅ `_shared/shoppingList.ts` — recompute daftar belanja deterministik dari `recipe_ingredients`
+- ✅ `_shared/prompt.ts` — `REGENERATE_DAY_SYSTEM_PROMPT`, `buildRegenerateDayMessage`, `sanitizeNote` (anti prompt-injection); utang tipe `buildUserMessage` dirapikan
+- ✅ `regenerateDay()` di `aiService.js` + UI tombol "Ganti Menu" + editor catatan per kartu hari (`GenerateResult.jsx`)
+- ✅ Sync planner otomatis bila plan sudah di-apply; rate limit berbagi kuota 20/hari
+- ✅ Lint + build + `deno check` (3 Edge Function) bersih
+- ✅ **Uji end-to-end PRODUCTION lulus** (deploy ke prod, generate→regenerate dgn/tanpa catatan, mealType-only, edge case, rate-limit log; user test dihapus, prod bersih)
+- 📄 Lihat: `03-PHASES/phase-11-regenerate-day/` & ADR-013
+
+---
+
 ## Yang Perlu Dilakukan User/Tim (di luar coding)
 1. ⬜ Set min 1 user admin di prod (`update profiles set role='admin' where id='<uuid>'`)
 2. ⬜ Verifikasi API key AI di tabel `ai_providers` (key produksi yang valid, bukan placeholder)

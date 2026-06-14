@@ -240,3 +240,49 @@ Drift kosmetik (kolom extra harmless, policy duplikat dengan efek sama) **dibiar
   potensial putus integrasi tak terlihat.
 - Sync penuh skema lewat `supabase db diff --linked` lalu apply → risiko ubah
   hal yang tidak perlu.
+
+---
+
+## ADR-013 — Regenerate Per Hari: Edge Function Terpisah + Shopping List Deterministik
+
+**Tanggal:** 2026-06-14
+**Status:** Accepted
+
+**Konteks:** Fitur "Ganti Menu Harian" — user bisa menyusun ulang menu satu hari
+dari hasil generate, dengan catatan preferensi opsional ("pengen ayam"). Pertanyaan
+desain: bikin Edge Function baru atau pakai `generate-plan`? Bagaimana daftar belanja
+(yang agregat seluruh hari) tetap konsisten? Bagaimana sinkronisasi ke planner?
+
+**Keputusan:**
+1. **Edge Function terpisah `regenerate-day`** (bukan menambah mode ke `generate-plan`).
+   Caching `generate-plan` berbasis `input_hash` seluruh plan; mencampur regenerate
+   parsial akan mengotori jalur cache itu. Fungsi terpisah lebih bersih & mudah diuji.
+2. **Shopping list di-recompute DETERMINISTIK di server** dari `recipe_ingredients`
+   (`_shared/shoppingList.ts`), bukan diminta ulang dari AI. Akurat, tanpa biaya token,
+   dan jadi fondasi reusable untuk fitur "Belanja Sendiri vs Belanja di Kami".
+3. **Cakupan: seluruh hari (3 waktu makan)**, tapi backend menerima param `mealType`
+   opsional → siap untuk regenerate per-waktu-makan tanpa ubah Edge Function lagi.
+4. **Update `output_json` baris `generated_plans` yang sama** — planId & URL tetap,
+   tidak ada tabel/kolom baru.
+5. **Rate limit berbagi kuota** dengan generate-plan (20/hari, `endpoint='regenerate-day'`).
+6. **Sync planner otomatis** bila plan sudah di-apply (re-apply seluruh plan via `applySlots`).
+7. **Catatan user di-sanitasi** (buang char kontrol, clamp 200) + di-frame sebagai DATA
+   preferensi di dalam delimiter, bukan instruksi sistem (anti prompt-injection, selaras
+   pola `notes` di buildUserMessage).
+
+**Alasan:**
+- Memisahkan jalur cache full-plan dari regenerate parsial menghindari bug halus.
+- Recompute deterministik = satu sumber kebenaran harga, hemat token, konsisten.
+- Param `mealType` opsional = ekstensi murah (vision per-waktu-makan) tanpa rework.
+
+**Konsekuensi:**
+- Metodologi harga berbeda antara generate awal (harga dari AI) dan setelah regenerate
+  (recompute dari `recipe_ingredients`) → angka belanja bisa sedikit bergeser setelah
+  regenerate pertama. Diterima karena lebih akurat; akan diseragamkan saat fitur belanja.
+- Edge Function tidak otomatis ter-type-check di CI (CI hanya eslint + vite build);
+  verifikasi `deno check` dilakukan manual.
+
+**Alternatif ditolak:**
+- Tambah mode `regenerateDayIndex` ke `generate-plan` → mengotori caching input_hash.
+- Minta AI menghitung ulang shopping_list → boros token & rawan tidak konsisten.
+- Tabel baru untuk menyimpan versi hari → overkill; cukup update `output_json`.

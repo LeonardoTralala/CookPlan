@@ -77,11 +77,12 @@ Fitur AI generate. `generatePlan` manggil Edge Function `generate-plan`. Sisanya
 | Fungsi | Signature | Return | Deskripsi |
 |---|---|---|---|
 | `generatePlan` | `generatePlan(input)` | `Promise<{ plan, reasoning, meta, planId }>` | Invoke Edge Function `generate-plan`. Ekstrak pesan error ramah dari `error.context.json()`. |
-| `getGeneratedHistory` | `getGeneratedHistory(limit = 10)` | `Promise<Plan[]>` | History generate milik user, urut terbaru. Field: `id, input_json, output_type, model, status, created_at`. |
+| `regenerateDay` | `regenerateDay(planId, dayIndex, { note?, mealType? })` | `Promise<{ plan, dayIndex, day, meta, planId }>` | Invoke Edge Function `regenerate-day`. Susun ulang menu 1 hari + catatan opsional; server recompute shopping_list. |
+| `getGeneratedHistory` | `getGeneratedHistory(limit = 10, { successOnly = false })` | `Promise<Plan[]>` | History generate milik user, urut terbaru. `successOnly` filter `status='success'` di server. Field: `id, input_json, output_type, model, status, created_at`. |
 | `getGeneratedPlanById` | `getGeneratedPlanById(id)` | `Promise<Plan>` | Satu hasil generate by id (`select *`). |
 | `getTodayUsageCount` | `getTodayUsageCount()` | `Promise<number>` | Jumlah pemakaian AI hari ini (sisa kuota buat UI). |
 
-`input` untuk `generatePlan`: `{ periode, porsi, diet[], budget, pantry[], outputType }` (lihat `02-edge-functions-api.md`).
+`input` untuk `generatePlan`: `{ periode, porsi, diet[], budget, pantry[], variasiPerHari, notes, outputType }` (lihat `02-edge-functions-api.md`).
 
 ---
 

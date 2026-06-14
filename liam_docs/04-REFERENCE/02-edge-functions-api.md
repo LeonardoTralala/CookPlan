@@ -6,16 +6,18 @@ last-updated: 2026-06-11
 
 # Spec API Edge Functions
 
-CookPlan punya 2 Edge Function (Deno, Supabase Functions). Keduanya cuma terima `POST` (plus `OPTIONS` buat CORS preflight). CORS-nya `Access-Control-Allow-Origin: *`.
+CookPlan punya 3 Edge Function (Deno, Supabase Functions). Semuanya cuma terima `POST` (plus `OPTIONS` buat CORS preflight). CORS-nya `Access-Control-Allow-Origin: *`.
 
 ```
 supabase/functions/
   generate-plan/index.ts     # proxy AI provider-agnostic
   admin-providers/index.ts   # CRUD ai_providers (admin only)
+  regenerate-day/index.ts    # regenerate menu 1 hari dari plan + catatan opsional
   _shared/
-    prompt.ts                # SYSTEM_PROMPT + buildUserMessage
+    prompt.ts                # SYSTEM_PROMPT + buildUserMessage + REGENERATE_DAY_* + sanitizeNote
     aiAdapter.ts             # callProvider, safeJsonExtract, estimateCost
-    validate.ts              # validateInput, validateOutput, subtractPantry
+    validate.ts              # validateInput, validateOutput, enforceVariety, subtractPantry
+    shoppingList.ts          # buildShoppingList (recompute deterministik dari recipe_ingredients)
 ```
 
 ---
@@ -153,3 +155,72 @@ Pas `update`, kalau `api_key` yang dikirim mengandung `"••"` (masih masked) 
 ### Constraint penting
 
 Karena ada unique partial index (`is_active`/`is_fallback` cuma 1 yang true), action `set_active`/`set_fallback` selalu matiin dulu semua baris lain (`update {col:false}.neq(id)`) sebelum nyalain target — biar gak nabrak unique index.
+
+---
+
+## 3. `regenerate-day`
+
+Susun ulang menu **satu hari** dari sebuah plan yang sudah di-generate, dengan **catatan preferensi opsional** dari user. Tidak menyentuh hari lain. Daftar belanja seluruh plan di-recompute deterministik di server (bukan dari AI). Lihat ADR-013.
+
+### Flow
+
+```
+auth → rate limit (20/hari, berbagi kuota dgn generate-plan) → parse body
+  → ambil generated_plans milik user → validasi dayIndex
+  → retrieve resep (diet-filtered via recipes.diet) → provider (chain/legacy)
+  → AI (REGENERATE_DAY_SYSTEM_PROMPT + buildRegenerateDayMessage) → parse 1 hari (retry 1x)
+  → validasi recipe_id ∈ bank → enforceVariety → ganti days[dayIndex]
+  → buildShoppingList (recompute SELURUH plan) → update output_json → log → return
+```
+
+### Request
+
+`POST /functions/v1/regenerate-day` (header `Authorization: Bearer <jwt>` wajib).
+
+```jsonc
+{
+  "planId": 134,        // id baris generated_plans (wajib, integer > 0)
+  "dayIndex": 3,        // index hari di plan.days, 0-based (wajib, >= 0)
+  "note": "pengen ayam", // catatan preferensi (opsional, di-sanitasi + clamp 200 char)
+  "mealType": "lunch"   // opsional: ganti 1 waktu makan saja (breakfast|lunch|dinner)
+                        //   default null = ganti seluruh hari (3 waktu makan)
+}
+```
+
+### Response (200)
+
+```jsonc
+{
+  "plan": { "...": "output_json plan lengkap setelah hari diganti + shopping_list & total ter-recompute" },
+  "dayIndex": 3,
+  "day": { "day": "Kamis", "meals": [ { "meal_type": "breakfast", "recipe_id": 7, "servings": 2 } ] },
+  "meta": { "model": "...", "provider": "...", "latency_ms": 8421, "est_cost_usd": 0.01 },
+  "planId": 134
+}
+```
+
+### Error Code
+
+| HTTP | Kondisi | Pesan |
+|---|---|---|
+| 401 | JWT gak ada / invalid | `Tidak terautentikasi.` |
+| 429 | Kuota 20 generate/hari habis | `Batas 20 generate per hari tercapai. Coba lagi besok.` |
+| 400 | Body gak bisa di-parse | `Body invalid.` |
+| 400 | `planId` bukan integer > 0 | `planId tidak valid.` |
+| 400 | `dayIndex` bukan integer >= 0 | `dayIndex tidak valid.` |
+| 400 | `mealType` di luar enum | `mealType tidak valid.` |
+| 400 | `dayIndex` di luar rentang plan | `Hari yang diminta di luar rentang plan.` |
+| 404 | Plan gak ada / bukan milik user | `Plan tidak ditemukan.` |
+| 422 | Bank resep kosong | `Bank resep kosong. Tambahkan resep dulu.` |
+| 503 | Belum ada provider aktif | `Belum ada AI provider aktif. Atur di Admin.` |
+| 502 | Semua provider gagal | `Semua provider AI gagal: <detail>` |
+| 502 | Output AI tidak valid | `AI menghasilkan output tidak valid. Coba lagi.` |
+| 502 | recipe_id hasil di luar bank | `Output AI tidak lolos validasi: recipe_id <id> tidak ada di bank resep.` |
+| 500 | Gagal baca / simpan plan | `Gagal memuat plan.` / `Gagal menyimpan hasil regenerate.` |
+| 405 | Method bukan POST | `Method not allowed` |
+
+### Catatan
+
+- **Selalu** menulis ke `ai_usage_log` (`endpoint='regenerate-day'`) baik sukses maupun gagal, supaya regenerate tetap kena rate limit (filosofi sama audit H2).
+- Mengupdate `output_json` baris yang sama (planId tetap) — frontend cukup mengganti `result.plan` & sessionStorage.
+- `buildShoppingList()` (di `_shared/shoppingList.ts`) mengagregasi `recipe_ingredients` seluruh plan, skala per `servings / base_servings`, lalu kurangi pantry via `subtractPantry`. Item dengan unit berbeda TIDAK digabung (konversi satuan di luar scope).

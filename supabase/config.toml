@@ -395,6 +395,10 @@ verify_jwt = false
 [functions.admin-providers]
 verify_jwt = false
 
+# regenerate-day menangani auth sendiri (getUser) — sama pola generate-plan.
+[functions.regenerate-day]
+verify_jwt = false
+
 [analytics]
 enabled = true
 port = 54327

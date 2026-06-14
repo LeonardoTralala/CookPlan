@@ -51,6 +51,28 @@ Kumpulan semua pesan error + HTTP code di CookPlan, dari Edge Function sampai se
 
 ---
 
+## Edge Function: `regenerate-day`
+
+| HTTP | Pesan | Kondisi |
+|---|---|---|
+| 405 | `Method not allowed` | method bukan POST |
+| 401 | `Tidak terautentikasi.` | JWT gak ada / invalid |
+| 429 | `Batas 20 generate per hari tercapai. Coba lagi besok.` | kuota harian habis (berbagi dgn generate-plan) |
+| 400 | `Body invalid.` | body gak bisa di-`json()` |
+| 400 | `planId tidak valid.` | planId bukan integer > 0 |
+| 400 | `dayIndex tidak valid.` | dayIndex bukan integer >= 0 |
+| 400 | `mealType tidak valid.` | mealType di luar breakfast/lunch/dinner |
+| 400 | `Hari yang diminta di luar rentang plan.` | dayIndex >= jumlah hari di plan |
+| 404 | `Plan tidak ditemukan.` | plan gak ada / bukan milik user |
+| 422 | `Bank resep kosong. Tambahkan resep dulu.` | gak ada resep aktif |
+| 503 | `Belum ada AI provider aktif. Atur di Admin.` | gak ada provider |
+| 502 | `Semua provider AI gagal: <detail>` | semua provider error |
+| 502 | `AI menghasilkan output tidak valid. Coba lagi.` | output bukan objek hari valid setelah retry |
+| 502 | `Output AI tidak lolos validasi: recipe_id <id> tidak ada di bank resep.` | AI mengarang resep |
+| 500 | `Gagal memuat plan.` / `Gagal menyimpan hasil regenerate.` | error DB baca/tulis |
+
+---
+
 ## Service Layer (frontend)
 
 Pesan ini di-throw sebagai `Error` dari fungsi service. UI nangkap lewat try/catch.
