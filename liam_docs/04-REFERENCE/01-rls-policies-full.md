@@ -162,3 +162,19 @@ Ini lapisan keamanan inti: API key gak akan pernah bocor ke klien dalam kondisi 
 | `generate_order_id()` | SECURITY DEFINER, `search_path=''` | grant ke authenticated (migration 0005), revoke dari anon |
 
 `search_path` dikunci di semua fungsi buat cegah search_path hijacking (advisor 0011).
+
+---
+
+## RLS Phase 12 — Paket "Belanja di Kami"
+
+| Tabel | Policy | Operasi | Role | Aturan |
+|---|---|---|---|---|
+| `packages` | `packages_read_public` | SELECT | anon, authenticated | `is_active = true` |
+| `packages` | `packages_admin_write` | ALL | authenticated | `is_admin()` (using + check) |
+| `package_meals` | `package_meals_read_public` | SELECT | anon, authenticated | `true` |
+| `package_meals` | `package_meals_admin_write` | ALL | authenticated | `is_admin()` |
+| `saved_shopping_lists` | `saved_lists_owner` | ALL | authenticated | `auth.uid() = user_id` (using + check) |
+
+Pola sama `recipes`/`diet_tags` (read publik + admin write) & `weekly_plans`
+(owner-only). Diuji: anon baca `saved_shopping_lists` → `[]` (RLS blokir), user
+hanya lihat miliknya sendiri. Lihat `phase-12-paket-belanja/verification.md`.

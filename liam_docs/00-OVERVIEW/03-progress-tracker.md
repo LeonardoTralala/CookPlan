@@ -75,6 +75,18 @@ last-updated: 2026-06-11
 
 ---
 
+## Phase 12 — Paket "Belanja di Kami" + 2 Tab Belanja + Simpan Daftar ✅ (2026-06-14)
+- ✅ Migrasi `packages` + `package_meals` + `saved_shopping_lists` + RLS + seed 3 paket (applied ke prod via Mgmt API)
+- ✅ Halaman Belanja jadi 2 tab: "Belanja Sendiri" (planner) & "Belanja di Kami" (paket → order WA)
+- ✅ Harga paket = agregasi `recipe_ingredients` (skala porsi yg di-request)
+- ✅ Fitur simpan daftar belanja (snapshot per user) + lihat/hapus daftar tersimpan
+- ✅ Service: packageService, shoppingListService, util buildShoppingList bersama
+- ✅ Lint + build bersih; uji E2E prod lulus (agregasi Rp297k, save/get/delete, RLS isolasi, cleanup)
+- 📄 Lihat: `03-PHASES/phase-12-paket-belanja/` & ADR-014
+- ⬜ (Tim) Smoke test klik via UI browser; admin UI kelola paket (fase lanjutan)
+
+---
+
 ## Yang Perlu Dilakukan User/Tim (di luar coding)
 1. ⬜ Set min 1 user admin di prod (`update profiles set role='admin' where id='<uuid>'`)
 2. ⬜ Verifikasi API key AI di tabel `ai_providers` (key produksi yang valid, bukan placeholder)

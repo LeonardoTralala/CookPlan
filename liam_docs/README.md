@@ -60,6 +60,7 @@ sistem order via WhatsApp — sesuai target MVP PKM-K 2026.
 | Phase 6 | [phase-6-admin-ui/](./03-PHASES/phase-6-admin-ui/) | Admin UI + role |
 | Phase 7 | [phase-7-mobile-responsive/](./03-PHASES/phase-7-mobile-responsive/) | Mobile responsive (fokus) |
 | Phase 8 | [phase-8-testing-polish/](./03-PHASES/phase-8-testing-polish/) | Testing & polish |
+| Phase 12 | [phase-12-paket-belanja/](./03-PHASES/phase-12-paket-belanja/) | Paket "Belanja di Kami" + 2 tab belanja + simpan daftar |
 
 ### 04 — REFERENCE
 | Dokumen | Isi |

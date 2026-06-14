@@ -341,3 +341,49 @@ didokumentasi di atas:
 Drift ini didiamkan saat remediasi 2026-06-11 karena project punya owner lain
 dan konsekuensi mengubah hal non-breaking lebih besar dari manfaatnya. Detail:
 `liam_docs/05-OPERATIONS/06-schema-drift-audit-2026-06-11.md`.
+
+---
+
+## Tabel Phase 12 — Paket "Belanja di Kami" (migrasi `20260615000000_create_packages.sql`)
+
+### `packages` — paket menu fiks yang bahannya kami stok
+| Kolom | Tipe | Catatan |
+|---|---|---|
+| id | serial PK | |
+| slug | text unique not null | key permanen |
+| name | text not null | |
+| description | text | |
+| periode_days | integer not null default 3 | jumlah hari menu fiks |
+| meals_per_day | integer not null default 3 | |
+| base_servings | integer not null default 2 | acuan skala harga saat porsi di-request |
+| price_idr | integer not null default 0 | harga tampilan opsional; harga asli = agregasi recipe_ingredients |
+| image_url | text | |
+| badges | text[] default '{}' | |
+| is_active | boolean not null default true | soft hide |
+| sort_order | integer not null default 0 | |
+| created_at / updated_at | timestamptz | trigger set_updated_at |
+
+### `package_meals` — menu fiks per hari (refer recipes katalog)
+| Kolom | Tipe | Catatan |
+|---|---|---|
+| id | serial PK | |
+| package_id | int not null → packages(id) on delete cascade | |
+| day_index | integer not null | 0-based |
+| meal_type | text check (breakfast/lunch/dinner) | |
+| recipe_id | int not null → recipes(id) on delete restrict | menu fiks |
+| UNIQUE (package_id, day_index, meal_type) | | |
+
+### `saved_shopping_lists` — simpan daftar belanja (notulen #13)
+| Kolom | Tipe | Catatan |
+|---|---|---|
+| id | serial PK | |
+| user_id | uuid not null → profiles(id) on delete cascade | |
+| title | text not null | |
+| source_type | text check (generate/package/planner) default 'planner' | |
+| source_ref | text | planId / packageId opsional |
+| items_json | jsonb not null default '[]' | snapshot item belanja |
+| total_idr | integer not null default 0 | |
+| created_at | timestamptz default now() | |
+
+> Harga paket dihitung dari agregasi `recipe_ingredients` (skala per porsi), bukan
+> kolom statis. Lihat ADR-014.

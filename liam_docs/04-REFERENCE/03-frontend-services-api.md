@@ -98,3 +98,40 @@ Admin UI provider AI. Semua lewat Edge Function `admin-providers` (karena `ai_pr
 | `setFallbackProvider` | `setFallbackProvider(id)` | `Promise<{ ok }>` | Set provider fallback. |
 | `deleteProvider` | `deleteProvider(id)` | `Promise<{ ok }>` | Hapus provider. |
 | `checkIsAdmin` | `checkIsAdmin()` | `Promise<boolean>` | Cek role user login (buat gating UI). Return `false` kalau gak login / error. |
+
+---
+
+## `packageService.js` (Phase 12)
+
+Paket "Belanja di Kami". Read-only via RLS (read publik untuk paket aktif). Embed
+menu fiks (`package_meals`) + resep + bahan (camelCase) supaya halaman bisa langsung
+agregasi daftar belanja.
+
+| Fungsi | Signature | Return | Deskripsi |
+|---|---|---|---|
+| `getPackages` | `getPackages()` | `Promise<Package[]>` | Semua paket aktif (sort_order), menu terurut (dayIndex, waktu makan). |
+| `getPackageById` | `getPackageById(id)` | `Promise<Package>` | Satu paket aktif by id. |
+
+Bentuk `Package`: `{ id, slug, name, description, periodeDays, mealsPerDay, baseServings, priceIdr, imageUrl, badges, meals:[{ dayIndex, mealType, recipe }] }`.
+
+## `shoppingListService.js` (Phase 12)
+
+Simpan daftar belanja (notulen #13). Tabel `saved_shopping_lists`, owner-only RLS.
+
+| Fungsi | Signature | Return | Deskripsi |
+|---|---|---|---|
+| `saveShoppingList` | `saveShoppingList({ title, sourceType, sourceRef?, items, totalIdr })` | `Promise<Row>` | Simpan snapshot daftar. sourceType: `generate`/`package`/`planner`. |
+| `getSavedShoppingLists` | `getSavedShoppingLists()` | `Promise<Row[]>` | Daftar tersimpan milik user (terbaru dulu). |
+| `deleteSavedShoppingList` | `deleteSavedShoppingList(id)` | `Promise<void>` | Hapus satu daftar (RLS pastikan milik sendiri). |
+
+## `utils/buildShoppingList.js` (Phase 12)
+
+Util agregasi daftar belanja (frontend), dipakai bersama tab planner & paket.
+
+| Fungsi | Deskripsi |
+|---|---|
+| `buildShoppingListFromSlots(slots)` | Agregasi `[{recipe, servings}]` → `{ sections, totalItems, estimatedCost }`. Skala per `servings/baseServings`, group per kategori. |
+| `slotsFromWeeklyPlan(weeklyPlan, recipeIndex)` | Bentuk slots dari shape PlanContext. |
+| `slotsFromPackageMeals(meals, servings)` | Bentuk slots dari menu paket. |
+| `flattenSections(sections)` | Ratakan jadi array item polos (snapshot simpan daftar). |
+| `formatRupiah`, `formatAmount`, `CATEGORY_META` | Helper tampilan. |

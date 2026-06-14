@@ -1,0 +1,210 @@
+import { useState, useEffect, useMemo } from 'react';
+import { getPackages } from '../services/packageService.js';
+import { createOrder, buildWhatsappUrl } from '../services/orderService.js';
+import {
+  buildShoppingListFromSlots, slotsFromPackageMeals, flattenSections,
+  formatRupiah, formatAmount,
+} from '../utils/buildShoppingList.js';
+import { usePlan } from '../hooks/usePlan.js';
+
+const DELIVERY_FEE = 15000;
+
+// Tab "Belanja di Kami": pilih paket (menu fiks, bahan kami stok), atur porsi,
+// lihat daftar belanja + harga (agregasi recipe_ingredients), order via WhatsApp.
+export function ShopWithUsTab({ onSave }) {
+  const { showToast } = usePlan();
+  const [packages, setPackages] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedId, setSelectedId] = useState(null);
+  const [servings, setServings] = useState(2);
+  const [ordering, setOrdering] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    getPackages()
+      .then((data) => {
+        if (!active) return;
+        setPackages(data);
+        if (data.length > 0) setSelectedId(data[0].id);
+      })
+      .catch((e) => { if (active) showToast(e.message || 'Gagal memuat paket.', { variant: 'error' }); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [showToast]);
+
+  const selected = useMemo(
+    () => packages.find((p) => p.id === selectedId) ?? null,
+    [packages, selectedId]
+  );
+
+  // Agregasi daftar belanja paket terpilih, skala sesuai porsi yang diminta.
+  const { sections, totalItems, estimatedCost } = useMemo(() => {
+    if (!selected) return { sections: [], totalItems: 0, estimatedCost: 0 };
+    const slots = slotsFromPackageMeals(selected.meals, servings);
+    return buildShoppingListFromSlots(slots);
+  }, [selected, servings]);
+
+  const total = estimatedCost + (totalItems > 0 ? DELIVERY_FEE : 0);
+
+  const handleOrder = async () => {
+    if (ordering || !selected || totalItems === 0) return;
+    setOrdering(true);
+    try {
+      const items = flattenSections(sections).map((it) => ({
+        name: it.name, amount: it.amount, unit: it.unit,
+        category: it.category, priceIdr: it.priceIdr,
+      }));
+      const order = await createOrder({
+        planId: null,
+        outputType: 'package',
+        items,
+        totalPrice: estimatedCost,
+        deliveryFee: DELIVERY_FEE,
+        notes: `Paket: ${selected.name} (${servings} porsi/menu, ${selected.periodeDays} hari)`,
+      });
+      const url = buildWhatsappUrl(order, items);
+      showToast(`Pesanan ${order.id} dibuat! Membuka WhatsApp…`);
+      window.location.href = url;
+    } catch (e) {
+      showToast(e.message || 'Gagal membuat pesanan.', { variant: 'error' });
+    } finally {
+      setOrdering(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!selected || totalItems === 0) return;
+    onSave?.({
+      title: `${selected.name} — ${servings} porsi`,
+      sourceType: 'package',
+      sourceRef: String(selected.id),
+      items: flattenSections(sections),
+      totalIdr: estimatedCost,
+    });
+  };
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant">
+        <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-3">progress_activity</span>
+        <p className="text-sm">Memuat paket…</p>
+      </div>
+    );
+  }
+
+  if (packages.length === 0) {
+    return (
+      <div className="text-center py-16 text-on-surface-variant">
+        <span className="material-symbols-outlined text-5xl text-primary mb-3">inventory_2</span>
+        <p className="text-sm">Belum ada paket tersedia. Cek lagi nanti ya!</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Pemilih paket */}
+      <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
+        {packages.map((p) => (
+          <button
+            key={p.id}
+            onClick={() => setSelectedId(p.id)}
+            className={`shrink-0 text-left rounded-2xl border p-4 w-56 transition-all cursor-pointer ${
+              p.id === selectedId
+                ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                : 'border-outline-variant hover:border-primary/50'
+            }`}
+          >
+            <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+              {(p.badges ?? []).map((b) => (
+                <span key={b} className="text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">{b}</span>
+              ))}
+            </div>
+            <p className="font-bold text-on-surface text-sm">{p.name}</p>
+            <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">{p.description}</p>
+            <p className="text-xs text-primary font-semibold mt-2">{p.periodeDays} hari · {p.mealsPerDay}× makan/hari</p>
+          </button>
+        ))}
+      </div>
+
+      {selected && (
+        <>
+          {/* Stepper porsi */}
+          <div className="flex items-center justify-between bg-surface-container-low rounded-2xl p-4">
+            <div>
+              <p className="font-semibold text-on-surface text-sm">Porsi per menu</p>
+              <p className="text-xs text-on-surface-variant">Atur sesuai jumlah orang.</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button onClick={() => setServings((s) => Math.max(1, s - 1))} aria-label="Kurangi porsi"
+                className="w-10 h-10 rounded-xl bg-white border border-outline-variant flex items-center justify-center text-primary cursor-pointer active:scale-95 transition">
+                <span className="material-symbols-outlined">remove</span>
+              </button>
+              <span className="font-bold text-lg text-primary w-10 text-center" aria-live="polite">{servings}</span>
+              <button onClick={() => setServings((s) => Math.min(20, s + 1))} aria-label="Tambah porsi"
+                className="w-10 h-10 rounded-xl bg-white border border-outline-variant flex items-center justify-center text-primary cursor-pointer active:scale-95 transition">
+                <span className="material-symbols-outlined">add</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Daftar belanja paket */}
+          {sections.map((section) => (
+            <section key={section.key}>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="material-symbols-outlined text-primary text-2xl">{section.meta.icon}</span>
+                <h3 className="font-headline-md text-headline-md text-on-surface">{section.meta.label}</h3>
+                <span className="ml-auto text-sm text-outline">{section.items.length} bahan</span>
+              </div>
+              <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant divide-y divide-outline-variant/40 overflow-hidden">
+                {section.items.map((item) => (
+                  <div key={item.id} className="flex items-center justify-between p-4">
+                    <span className="text-sm text-on-surface">{item.name}</span>
+                    <div className="text-right">
+                      <span className="text-sm font-semibold text-on-surface">{formatAmount(item.amount)} {item.unit}</span>
+                      {item.priceIdr > 0 && (
+                        <span className="block text-xs text-primary font-bold">{formatRupiah(Math.round(item.priceIdr))}</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ))}
+
+          {/* Ringkasan + aksi */}
+          <div className="bg-surface-cream rounded-2xl p-5 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-on-surface-variant">Total Bahan ({totalItems} item)</span>
+              <span className="font-semibold text-on-surface">{formatRupiah(estimatedCost)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-on-surface-variant">Biaya Pengantaran</span>
+              <span className="font-semibold text-on-surface">{formatRupiah(DELIVERY_FEE)}</span>
+            </div>
+            <div className="flex justify-between pt-2 border-t border-outline/20">
+              <span className="font-bold text-primary">Total</span>
+              <span className="font-bold text-primary text-lg">{formatRupiah(total)}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button onClick={handleSave} disabled={totalItems === 0}
+              className="px-5 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 transition cursor-pointer disabled:opacity-50 inline-flex items-center justify-center gap-2">
+              <span className="material-symbols-outlined text-[20px]">bookmark_add</span>
+              Simpan Daftar
+            </button>
+            <button onClick={handleOrder} disabled={ordering || totalItems === 0}
+              className="flex-1 px-6 py-3.5 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2">
+              {ordering ? (
+                <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Memproses…</>
+              ) : (
+                <><span className="material-symbols-outlined text-[20px]">chat</span> Pesan via WhatsApp</>
+              )}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
