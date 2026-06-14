@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect } from 'react';
 import { getRecipes } from '../services/recipeService.js';
 import {
-  buildShoppingListFromSlots, slotsFromWeeklyPlan, flattenSections,
+  buildShoppingListFromSlots, buildMenuListFromSlots, slotsFromWeeklyPlan, flattenSections,
   formatRupiah, formatAmount,
 } from '../utils/buildShoppingList.js';
 import { usePlan } from '../hooks/usePlan.js';
@@ -11,10 +11,12 @@ const DELIVERY_FEE = 15000;
 // Tab "Belanja Sendiri": daftar belanja dari Weekly Planner (menu hasil generate /
 // pilihan sendiri). Bahannya belum tentu kami sediakan → checklist + estimasi,
 // tanpa order ke kami. Bisa disimpan sebagai daftar.
+// Dua mode tampilan: per-bahan (gabung & checklist) atau per-menu (kelompok resep).
 export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
   const { showToast } = usePlan();
   const [checkedItems, setCheckedItems] = useState(() => new Set());
   const [recipes, setRecipes] = useState([]);
+  const [view, setView] = useState('bahan'); // 'bahan' | 'menu'
 
   useEffect(() => {
     let active = true;
@@ -33,10 +35,15 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     return m;
   }, [recipes]);
 
-  const { sections, totalItems, estimatedCost } = useMemo(() => {
-    const slots = slotsFromWeeklyPlan(weeklyPlan, recipeIndex);
-    return buildShoppingListFromSlots(slots);
-  }, [weeklyPlan, recipeIndex]);
+  const slots = useMemo(
+    () => slotsFromWeeklyPlan(weeklyPlan, recipeIndex),
+    [weeklyPlan, recipeIndex]
+  );
+  const { sections, totalItems, estimatedCost } = useMemo(
+    () => buildShoppingListFromSlots(slots),
+    [slots]
+  );
+  const menus = useMemo(() => buildMenuListFromSlots(slots), [slots]);
 
   const toggleItem = (id) => {
     setCheckedItems((prev) => {
@@ -81,8 +88,25 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-      <div className="lg:col-span-8 space-y-8">
-        {sections.map((section) => (
+      <div className="lg:col-span-8 space-y-6">
+        {/* Toggle tampilan: per bahan (checklist) vs per menu (kelompok resep) */}
+        <div className="inline-flex p-1 bg-surface-container-low rounded-full">
+          <button onClick={() => setView('bahan')}
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+              view === 'bahan' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
+            <span className="material-symbols-outlined text-[18px]">checklist</span>
+            Per Bahan
+          </button>
+          <button onClick={() => setView('menu')}
+            className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+              view === 'menu' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
+            <span className="material-symbols-outlined text-[18px]">restaurant_menu</span>
+            Per Menu
+          </button>
+        </div>
+
+        {/* ---- VIEW PER BAHAN (checklist, group kategori) ---- */}
+        {view === 'bahan' && sections.map((section) => (
           <section key={section.key}>
             <div className="flex items-center gap-3 mb-4">
               <span className="material-symbols-outlined text-primary text-2xl">{section.meta.icon}</span>
@@ -118,6 +142,39 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
                   </button>
                 );
               })}
+            </div>
+          </section>
+        ))}
+
+        {/* ---- VIEW PER MENU (kelompok resep) ---- */}
+        {view === 'menu' && menus.map((menu) => (
+          <section key={menu.recipeId}>
+            <div className="flex items-center gap-3 mb-3">
+              {menu.imageUrl && (
+                <img src={menu.imageUrl} alt="" loading="lazy"
+                  onError={(e) => { e.currentTarget.src = '/img/recipe-placeholder.svg'; }}
+                  className="w-11 h-11 rounded-xl object-cover shrink-0" />
+              )}
+              <div className="min-w-0">
+                <h3 className="font-bold text-on-surface truncate">{menu.title}</h3>
+                <p className="text-xs text-on-surface-variant">
+                  {menu.count}× di plan · {menu.totalServings} porsi total · {menu.items.length} bahan
+                </p>
+              </div>
+              <span className="ml-auto text-sm font-bold text-primary whitespace-nowrap">{formatRupiah(menu.subtotal)}</span>
+            </div>
+            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden">
+              {menu.items.map((item, i) => (
+                <div key={i} className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-outline-variant/60 last:border-0">
+                  <span className="text-sm text-on-surface">{item.name}</span>
+                  <div className="text-right shrink-0 pl-3">
+                    <span className="text-sm font-semibold text-on-surface">{formatAmount(item.amount)} {item.unit}</span>
+                    {item.priceIdr > 0 && (
+                      <span className="block text-xs text-primary font-bold">{formatRupiah(Math.round(item.priceIdr))}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         ))}

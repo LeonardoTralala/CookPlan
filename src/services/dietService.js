@@ -15,3 +15,25 @@ export async function getActiveDietTags() {
   if (error) throw error;
   return data ?? [];
 }
+
+// Acak urutan array (Fisher-Yates) tanpa mengubah array asal.
+export function shuffle(arr) {
+  const a = [...(arr ?? [])];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Ambil `n` preferensi diet acak dari pool, tapi PASTIKAN item di `keep` (mis.
+// yang sedang dipilih user) selalu ikut muncul supaya tidak hilang saat di-shuffle.
+// Dipakai wizard untuk menampilkan pilihan yang segar/berbeda tiap kali (notulen #6/#7).
+export function sampleDietTags(pool, n = 8, keep = []) {
+  const keepSet = new Set(keep);
+  const kept = (pool ?? []).filter((d) => keepSet.has(d.value));
+  const rest = shuffle((pool ?? []).filter((d) => !keepSet.has(d.value)));
+  const merged = [...kept, ...rest].slice(0, Math.max(n, kept.length));
+  // Acak lagi posisi gabungan supaya yang "keep" tidak selalu di depan.
+  return shuffle(merged);
+}

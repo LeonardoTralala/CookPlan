@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generatePlan, getGeneratedHistory, getTodayUsageCount, deleteGeneratedPlan } from '../services/aiService.js';
-import { getActiveDietTags } from '../services/dietService.js';
+import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { usePlan } from '../hooks/usePlan.js';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
@@ -58,7 +58,10 @@ export function GeneratePlan() {
   const [error, setError] = useState('');
   const [history, setHistory] = useState([]);
   const [usageCount, setUsageCount] = useState(null);
-  const [dietOptions, setDietOptions] = useState(DEFAULT_DIET_OPTIONS);
+  // dietPool = semua preferensi (dari diet_tags). dietSample = subset acak yang
+  // ditampilkan di chip (notulen #6/#7: pilihan variatif & segar, tidak hardcode).
+  const [dietPool, setDietPool] = useState(DEFAULT_DIET_OPTIONS);
+  const [dietSample, setDietSample] = useState(() => DEFAULT_DIET_OPTIONS.slice(0, 8));
 
   // Riwayat generate + kuota harian (info, bukan blocker — server tetap validasi).
   // Opsi diet di-fetch dari diet_tags; gagal → tetap pakai fallback konstanta.
@@ -71,10 +74,18 @@ export function GeneratePlan() {
       .then((n) => { if (active) setUsageCount(n); })
       .catch(() => { /* idem */ });
     getActiveDietTags()
-      .then((rows) => { if (active && rows.length) setDietOptions(rows); })
+      .then((rows) => {
+        if (active && rows.length) {
+          setDietPool(rows);
+          setDietSample(sampleDietTags(rows, 8, ['halal']));
+        }
+      })
       .catch(() => { /* pakai DEFAULT_DIET_OPTIONS */ });
     return () => { active = false; };
   }, []);
+
+  // Tampilkan kombinasi preferensi diet acak lain (yang sedang dipilih tetap muncul).
+  const reshuffleDiet = () => setDietSample(sampleDietTags(dietPool, 8, diet));
 
   const toggleDiet = (value) => {
     setDiet((prev) => prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value]);
@@ -244,12 +255,23 @@ export function GeneratePlan() {
         <div className="space-y-7 animate-fade-in">
           <Field label="Preferensi diet (boleh pilih >1)">
             <div className="flex flex-wrap gap-2">
-              {dietOptions.map((opt) => (
+              {dietSample.map((opt) => (
                 <Chip key={opt.value} active={diet.includes(opt.value)} onClick={() => toggleDiet(opt.value)}>
                   {opt.label}
                 </Chip>
               ))}
+              <button
+                type="button"
+                onClick={reshuffleDiet}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-semibold border border-dashed border-primary/50 text-primary hover:bg-primary/5 active:scale-95 transition cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">casino</span>
+                Pilihan lain
+              </button>
             </div>
+            <p className="text-xs text-on-surface-variant mt-2">
+              Pilih yang sesuai seleramu. Klik <strong>Pilihan lain</strong> buat lihat preferensi berbeda.
+            </p>
           </Field>
 
           <Field label="Budget total">
@@ -332,7 +354,7 @@ export function GeneratePlan() {
               label="Variasi menu"
               value={`${variasiPerHari} variasi/hari${variasiPerHari === 1 ? ' (masak sekali, seharian)' : ''}`}
             />
-            <SummaryRow label="Diet" value={diet.length ? diet.join(', ') : 'Tidak ada'} />
+            <SummaryRow label="Diet" value={diet.length ? diet.map((v) => dietPool.find((d) => d.value === v)?.label ?? v).join(', ') : 'Tidak ada'} />
             <SummaryRow label="Budget" value={formatRupiah(budget)} />
             <SummaryRow label="Bahan di rumah" value={`${pantry.length} item`} />
             {notes.trim() && <SummaryRow label="Catatan khusus" value={notes.trim()} />}
@@ -401,13 +423,15 @@ function Chip({ active, onClick, children }) {
 
 function Stepper({ value, onDec, onInc, suffix }) {
   return (
-    <div className="flex items-center gap-4 bg-surface-container-low border border-outline-variant p-2 rounded-2xl justify-between max-w-xs">
-      <button onClick={onDec} aria-label="Kurangi" className="w-11 h-11 rounded-xl bg-white border border-outline-variant flex items-center justify-center text-primary cursor-pointer active:scale-95 transition">
-        <span className="material-symbols-outlined">remove</span>
+    <div className="inline-flex items-center gap-2 bg-white border border-outline-variant p-1.5 rounded-2xl">
+      <button onClick={onDec} aria-label="Kurangi" className="w-11 h-11 rounded-xl bg-surface-container-low hover:bg-surface-container flex items-center justify-center text-primary cursor-pointer active:scale-95 transition">
+        <span className="material-symbols-outlined text-[22px]">remove</span>
       </button>
-      <span className="font-bold text-lg text-primary" aria-live="polite">{value} {suffix}</span>
-      <button onClick={onInc} aria-label="Tambah" className="w-11 h-11 rounded-xl bg-white border border-outline-variant flex items-center justify-center text-primary cursor-pointer active:scale-95 transition">
-        <span className="material-symbols-outlined">add</span>
+      <span className="min-w-24 text-center font-bold text-lg text-primary tabular-nums" aria-live="polite">
+        {value} <span className="text-sm font-semibold text-on-surface-variant">{suffix}</span>
+      </span>
+      <button onClick={onInc} aria-label="Tambah" className="w-11 h-11 rounded-xl bg-surface-container-low hover:bg-surface-container flex items-center justify-center text-primary cursor-pointer active:scale-95 transition">
+        <span className="material-symbols-outlined text-[22px]">add</span>
       </button>
     </div>
   );

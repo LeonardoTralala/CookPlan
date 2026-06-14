@@ -124,3 +124,50 @@ export function flattenSections(sections) {
   }
   return items;
 }
+
+// Kelompokkan daftar belanja PER MENU (resep), bukan per kategori bahan.
+// Resep yang sama muncul beberapa kali di plan → digabung, total porsi dijumlah.
+// Return [{ recipeId, title, imageUrl, totalServings, count, items:[{name,amount,unit,priceIdr}], subtotal }].
+export function buildMenuListFromSlots(slots) {
+  const menuMap = new Map(); // recipeId -> { recipe, totalServings, count }
+  for (const slot of slots ?? []) {
+    const r = slot?.recipe;
+    if (!r) continue;
+    const ex = menuMap.get(r.id);
+    if (ex) {
+      ex.totalServings += slot.servings || (r.baseServings || DEFAULT_BASE_SERVINGS);
+      ex.count += 1;
+    } else {
+      menuMap.set(r.id, {
+        recipe: r,
+        totalServings: slot.servings || (r.baseServings || DEFAULT_BASE_SERVINGS),
+        count: 1,
+      });
+    }
+  }
+
+  const menus = [];
+  for (const { recipe, totalServings, count } of menuMap.values()) {
+    const base = recipe.baseServings && recipe.baseServings > 0 ? recipe.baseServings : DEFAULT_BASE_SERVINGS;
+    const factor = totalServings / base;
+    const items = (recipe.ingredients ?? []).map((ing) => ({
+      name: ing.name,
+      unit: ing.unit,
+      amount: (Number(ing.amount) || 0) * factor,
+      priceIdr: (Number(ing.priceIdr) || 0) * factor,
+      category: ing.category,
+    }));
+    const subtotal = Math.round(items.reduce((s, i) => s + (i.priceIdr || 0), 0));
+    menus.push({
+      recipeId: recipe.id,
+      title: recipe.title,
+      imageUrl: recipe.imageUrl,
+      totalServings,
+      count,
+      items,
+      subtotal,
+    });
+  }
+  menus.sort((a, b) => a.title.localeCompare(b.title, 'id'));
+  return menus;
+}
