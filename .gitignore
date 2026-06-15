@@ -37,6 +37,9 @@ backups
 # Graphify
 graphify-out/
 
+# Preview email yang di-generate lokal (lihat scripts/preview-email.mjs)
+scripts/.preview/
+
 # Claude Code project guidance (local only)
 CLAUDE.md
 .claude
