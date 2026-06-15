@@ -52,3 +52,60 @@ export async function getRecipesByIds(ids) {
   if (error) throw error;
   return data ?? [];
 }
+
+// --- Resep tersimpan (saved_recipes) -----------------------------------------
+// Semua fungsi mengandalkan RLS (owner-only). getUser() dipakai sebagai
+// defense-in-depth + untuk mengisi user_id saat insert.
+
+async function requireUser() {
+  const { data } = await supabase.auth.getUser();
+  if (!data?.user) throw new Error("Belum login.");
+  return data.user;
+}
+
+// Ambil resep tersimpan milik user (objek resep lengkap, terbaru dulu).
+export async function getSavedRecipes() {
+  await requireUser();
+  const { data, error } = await supabase
+    .from("saved_recipes")
+    .select(`created_at, recipe:recipes (${RECIPE_SELECT})`)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  // Buang baris yatim (resep non-aktif/terhapus → recipe null).
+  return (data ?? []).map((row) => row.recipe).filter(Boolean);
+}
+
+// Ambil hanya id resep tersimpan (ringan, untuk menandai status simpan di UI).
+export async function getSavedRecipeIds() {
+  await requireUser();
+  const { data, error } = await supabase
+    .from("saved_recipes")
+    .select("recipe_id");
+
+  if (error) throw error;
+  return (data ?? []).map((row) => row.recipe_id);
+}
+
+// Simpan satu resep. Idempoten: duplikat (PK gabungan) di-upsert tanpa error.
+export async function saveRecipe(recipeId) {
+  const user = await requireUser();
+  const { error } = await supabase
+    .from("saved_recipes")
+    .upsert(
+      { user_id: user.id, recipe_id: recipeId },
+      { onConflict: "user_id,recipe_id", ignoreDuplicates: true }
+    );
+  if (error) throw error;
+}
+
+// Hapus satu resep dari tersimpan.
+export async function unsaveRecipe(recipeId) {
+  const user = await requireUser();
+  const { error } = await supabase
+    .from("saved_recipes")
+    .delete()
+    .eq("user_id", user.id)
+    .eq("recipe_id", recipeId);
+  if (error) throw error;
+}

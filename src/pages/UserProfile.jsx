@@ -1,8 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
-import { getRecipes } from '../services/recipeService.js';
+import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
+import { updateProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
+import { Modal } from '../components/Modal.jsx';
 
 // Item navigasi pada sidebar Settings (desktop)
 const SETTINGS_NAV = [
@@ -24,30 +26,97 @@ function UserProfile() {
   const [activeNav, setActiveNav] = useState('saved');
   const [activeFilter, setActiveFilter] = useState('Semua Resep');
   const [savedSearch, setSavedSearch] = useState('');
-  const [gender, setGender] = useState('');
+
+  // Nama mentah dari metadata (tanpa fallback email/'Pengguna') untuk prefill form edit.
+  const metaName = user?.user_metadata?.full_name || user?.user_metadata?.username || '';
+  const metaGender = user?.user_metadata?.gender || '';
+
+  // Jenis kelamin di-persist ke user_metadata. metaGender adalah sumber kebenaran;
+  // override lokal hanya dipakai untuk tampilan optimistic selama proses simpan.
+  const [genderOverride, setGenderOverride] = useState(null);
+  const [savingGender, setSavingGender] = useState(false);
+  const gender = genderOverride ?? metaGender;
+
+  const handleGenderChange = async (value) => {
+    setGenderOverride(value); // optimistic
+    setSavingGender(true);
+    try {
+      await updateProfile({ gender: value });
+      showToast('Jenis kelamin diperbarui.');
+      setGenderOverride(null); // metadata kini jadi sumber kebenaran
+    } catch (err) {
+      setGenderOverride(null); // rollback ke nilai metadata
+      showToast(err.message || 'Gagal memperbarui jenis kelamin.');
+    } finally {
+      setSavingGender(false);
+    }
+  };
+
+  // Modal Edit Profil (nama lengkap + jenis kelamin).
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editGender, setEditGender] = useState('');
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  const openEdit = () => {
+    setEditName(metaName);
+    setEditGender(metaGender);
+    setEditOpen(true);
+  };
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (editName.trim() === '') {
+      showToast('Nama tidak boleh kosong.');
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      await updateProfile({ fullName: editName, gender: editGender });
+      showToast('Profil berhasil diperbarui.');
+      setEditOpen(false);
+    } catch (err) {
+      showToast(err.message || 'Gagal memperbarui profil.');
+    } finally {
+      setSavingProfile(false);
+    }
+  };
 
   // Data identitas dari sesi login (bukan hardcode). Fallback aman bila kosong.
-  const displayName = user?.user_metadata?.full_name || user?.user_metadata?.username
-    || user?.email?.split('@')[0] || 'Pengguna';
+  const displayName = metaName || user?.email?.split('@')[0] || 'Pengguna';
   const displayEmail = user?.email || '-';
   const joinedAt = user?.created_at
     ? new Date(user.created_at).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })
     : null;
 
-  // Ambil sebagian resep dari katalog sebagai "resep tersimpan" milik pengguna
-  const [allRecipes, setAllRecipes] = useState([]);
+  // Resep tersimpan milik pengguna (dari tabel saved_recipes via RLS).
+  const [savedRecipes, setSavedRecipes] = useState([]);
+  const [loadingSaved, setLoadingSaved] = useState(true);
   useEffect(() => {
     let active = true;
-    getRecipes()
-      .then((data) => { if (active) setAllRecipes(data); })
+    getSavedRecipes()
+      .then((data) => { if (active) setSavedRecipes(data); })
       .catch((err) => {
         // Log gagal fetch supaya tidak silent (audit Copilot). UI fallback ke
         // state kosong, jadi user tetap bisa lihat profil tanpa Resep Tersimpan.
-        console.error("Gagal memuat resep:", err);
-      });
+        console.error("Gagal memuat resep tersimpan:", err);
+      })
+      .finally(() => { if (active) setLoadingSaved(false); });
     return () => { active = false; };
   }, []);
-  const savedRecipes = useMemo(() => allRecipes.slice(0, 6), [allRecipes]);
+
+  // Hapus resep dari tersimpan (optimistic + rollback bila gagal).
+  const handleRemoveSaved = async (recipeId) => {
+    const prev = savedRecipes;
+    setSavedRecipes((list) => list.filter((r) => r.id !== recipeId));
+    try {
+      await unsaveRecipe(recipeId);
+      showToast('Resep dihapus dari tersimpan.');
+    } catch (err) {
+      setSavedRecipes(prev); // rollback
+      showToast(err.message || 'Gagal menghapus resep.');
+    }
+  };
 
   const filteredSaved = useMemo(() => {
     if (savedSearch.trim() === '') return savedRecipes;
@@ -134,8 +203,9 @@ function UserProfile() {
                   Jenis Kelamin:
                   <select
                     value={gender}
-                    onChange={(e) => setGender(e.target.value)}
-                    className="bg-transparent border-none p-0 pr-1 focus:ring-0 text-xs font-semibold cursor-pointer outline-none"
+                    onChange={(e) => handleGenderChange(e.target.value)}
+                    disabled={savingGender}
+                    className="bg-transparent border-none p-0 pr-1 focus:ring-0 text-xs font-semibold cursor-pointer outline-none disabled:opacity-60 disabled:cursor-wait"
                   >
                     <option value="" disabled>Pilih</option>
                     <option value="male">Laki-laki</option>
@@ -146,7 +216,7 @@ function UserProfile() {
             </div>
 
             <button
-              onClick={() => soon('Edit Profil')}
+              onClick={openEdit}
               className="hidden md:flex items-center justify-center px-6 py-3 bg-primary text-white rounded-full text-sm font-semibold hover:bg-surface-tint transition-colors shadow-sm cursor-pointer"
             >
               Edit Profil
@@ -200,7 +270,20 @@ function UserProfile() {
               })}
             </div>
 
-            {filteredSaved.length === 0 ? (
+            {loadingSaved ? (
+              <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
+                <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-2" aria-hidden="true">progress_activity</span>
+                <p className="text-sm">Memuat resep tersimpan…</p>
+              </div>
+            ) : savedRecipes.length === 0 ? (
+              <div className="text-center py-12 text-on-surface-variant">
+                <span className="material-symbols-outlined text-5xl text-outline-variant mb-2 block">
+                  bookmark_border
+                </span>
+                <p className="text-sm">Belum ada resep tersimpan.</p>
+                <p className="text-xs mt-1">Simpan resep favoritmu dari halaman Katalog.</p>
+              </div>
+            ) : filteredSaved.length === 0 ? (
               <div className="text-center py-12 text-on-surface-variant">
                 <span className="material-symbols-outlined text-5xl text-outline-variant mb-2 block">
                   sentiment_dissatisfied
@@ -232,7 +315,7 @@ function UserProfile() {
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
                       <button
-                        onClick={() => soon('Hapus dari Tersimpan')}
+                        onClick={(e) => { e.stopPropagation(); handleRemoveSaved(recipe.id); }}
                         className="absolute top-2 right-2 w-11 h-11 flex items-center justify-center bg-white/80 backdrop-blur-md rounded-full text-error hover:bg-white transition-colors cursor-pointer"
                         aria-label="Hapus resep tersimpan"
                       >
@@ -382,6 +465,76 @@ function UserProfile() {
           </section>
         </div>
       </div>
+
+      {/* ---------------- Modal Edit Profil ---------------- */}
+      <Modal isOpen={editOpen} onClose={() => setEditOpen(false)}>
+        <form
+          onSubmit={handleSaveProfile}
+          className="bg-canvas-white rounded-panel p-8 max-w-md w-full shadow-2xl border border-outline-variant/30 relative space-y-6"
+        >
+          <button
+            type="button"
+            onClick={() => setEditOpen(false)}
+            className="absolute top-4 right-4 material-symbols-outlined text-on-surface-variant hover:bg-surface-container-low p-2 rounded-full cursor-pointer"
+            aria-label="Tutup"
+          >
+            close
+          </button>
+
+          <div>
+            <h3 className="font-headline-md text-headline-md text-primary">Edit Profil</h3>
+            <p className="text-sm text-on-surface-variant mt-1">Perbarui nama dan jenis kelamin Anda.</p>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="edit-name" className="block text-sm font-medium text-on-surface">
+              Nama Lengkap
+            </label>
+            <input
+              id="edit-name"
+              type="text"
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              placeholder="Masukkan nama lengkap"
+              autoFocus
+              className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="edit-gender" className="block text-sm font-medium text-on-surface">
+              Jenis Kelamin
+            </label>
+            <select
+              id="edit-gender"
+              value={editGender}
+              onChange={(e) => setEditGender(e.target.value)}
+              className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            >
+              <option value="">Tidak disebutkan</option>
+              <option value="male">Laki-laki</option>
+              <option value="female">Perempuan</option>
+            </select>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setEditOpen(false)}
+              className="px-5 py-3 rounded-full text-sm font-semibold text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={savingProfile}
+              className="px-6 py-3 bg-primary text-on-primary rounded-full text-sm font-semibold hover:bg-surface-tint transition-colors shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+            >
+              {savingProfile ? 'Menyimpan...' : 'Simpan'}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
