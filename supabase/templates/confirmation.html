@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Konfirmasi Pendaftaran CookPlan</title>
+  </head>
+  <body style="margin:0;padding:0;background-color:#efffd9;font-family:'Plus Jakarta Sans','Segoe UI',Helvetica,Arial,sans-serif;">
+    <!-- Preheader (tersembunyi, muncul di preview inbox) -->
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#efffd9;font-size:1px;line-height:1px;">
+      Satu langkah lagi untuk mulai merencanakan menu mingguanmu di CookPlan.
+    </div>
+
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#efffd9;">
+      <tr>
+        <td align="center" style="padding:32px 16px;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #d7e9c0;">
+
+            <!-- Header -->
+            <tr>
+              <td align="center" style="background-color:#375219;padding:32px 24px;">
+                <div style="font-size:40px;line-height:1;">🍳</div>
+                <div style="margin-top:8px;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;">CookPlan</div>
+                <div style="margin-top:4px;color:#c8eaa0;font-size:13px;">Rencana Menu Mingguan &amp; Belanja Otomatis</div>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:36px 32px 24px;">
+                <h1 style="margin:0 0 16px;color:#121f06;font-size:22px;font-weight:700;">Selamat datang di CookPlan! 👋</h1>
+                <p style="margin:0 0 16px;color:#44483d;font-size:15px;line-height:1.7;">
+                  Terima kasih sudah mendaftar. Tinggal satu langkah lagi sebelum kamu bisa mulai menyusun
+                  menu mingguan, bikin daftar belanja otomatis, dan dapat rekomendasi menu dari AI.
+                </p>
+                <p style="margin:0 0 28px;color:#44483d;font-size:15px;line-height:1.7;">
+                  Klik tombol di bawah untuk mengonfirmasi alamat emailmu:
+                </p>
+
+                <!-- CTA Button -->
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                  <tr>
+                    <td align="center" style="border-radius:10px;background-color:#375219;">
+                      <a href="{{ .ConfirmationURL }}"
+                         style="display:inline-block;padding:14px 36px;color:#ffffff;font-size:16px;font-weight:600;text-decoration:none;border-radius:10px;">
+                        Konfirmasi Email
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin:28px 0 8px;color:#74796c;font-size:13px;line-height:1.6;">
+                  Atau salin &amp; tempel tautan ini ke browser:
+                </p>
+                <p style="margin:0;word-break:break-all;">
+                  <a href="{{ .ConfirmationURL }}" style="color:#4e6b2f;font-size:13px;">{{ .ConfirmationURL }}</a>
+                </p>
+              </td>
+            </tr>
+
+            <!-- Divider -->
+            <tr><td style="padding:0 32px;"><div style="height:1px;background-color:#d7e9c0;"></div></td></tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding:24px 32px 32px;">
+                <p style="margin:0 0 6px;color:#74796c;font-size:12px;line-height:1.6;">
+                  Kamu menerima email ini karena ada pendaftaran dengan alamat <strong style="color:#44483d;">{{ .Email }}</strong>.
+                  Jika ini bukan kamu, abaikan saja email ini.
+                </p>
+                <p style="margin:12px 0 0;color:#a0a59a;font-size:12px;">© 2026 CookPlan · PKM-K 2026</p>
+              </td>
+            </tr>
+
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
