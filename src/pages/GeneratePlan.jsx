@@ -172,6 +172,38 @@ export function GeneratePlan() {
       {/* STEP 1 */}
       {step === 1 && (
         <div className="space-y-7 animate-fade-in">
+          {/* Pilihan mode belanja (notulen: di page generate ada pilihan belanja sendiri / di kami). */}
+          <div className="bg-surface-container-low rounded-2xl p-5">
+            <p className="text-sm font-semibold text-on-surface mb-3">Mau belanja gimana?</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-xl border-2 border-primary bg-primary/5 p-4">
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="material-symbols-outlined text-primary text-xl">shopping_cart</span>
+                  <span className="font-bold text-primary text-sm">Belanja Sendiri</span>
+                </div>
+                <p className="text-xs text-on-surface-variant">AI susun menu, kamu belanja sendiri bahannya di pasar/toko.</p>
+                <p className="text-[11px] text-primary font-semibold mt-2 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                  Sedang dipilih
+                </p>
+              </div>
+              <button
+                onClick={() => navigate('/shopping?tab=kami')}
+                className="rounded-xl border border-outline-variant hover:border-primary/50 p-4 text-left transition-colors cursor-pointer group"
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary text-xl">local_shipping</span>
+                  <span className="font-bold text-on-surface text-sm">Belanja di Kami</span>
+                </div>
+                <p className="text-xs text-on-surface-variant">Pilih paket menu fiks, bahan kami siapkan & antar.</p>
+                <p className="text-[11px] text-on-surface-variant font-semibold mt-2 flex items-center gap-1 group-hover:text-primary">
+                  <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                  Lihat paket
+                </p>
+              </button>
+            </div>
+          </div>
+
           <Field label="Periode plan">
             <Stepper
               value={periode}

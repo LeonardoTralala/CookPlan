@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { ShopSelfTab } from '../components/ShopSelfTab.jsx';
 import { ShopWithUsTab } from '../components/ShopWithUsTab.jsx';
 import { SavedListsSection } from '../components/SavedListsSection.jsx';
@@ -13,9 +14,11 @@ import { formatRupiah, formatAmount } from '../utils/buildShoppingList.js';
 //   - Belanja Sendiri : daftar dari Weekly Planner (bahan belanja sendiri).
 //   - Belanja di Kami : paket menu fiks yang bahannya kami stok → order WA.
 // Plus fitur simpan daftar belanja (notulen #13) + daftar tersimpan.
+// Query param ?tab=kami → langsung buka tab "Belanja di Kami" dari halaman Generate.
 function ShoppingList({ weeklyPlan, onGoToPlanner }) {
   const { showToast } = usePlan();
-  const [tab, setTab] = useState('self'); // 'self' | 'us'
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => searchParams.get('tab') === 'kami' ? 'us' : 'self'); // 'self' | 'us'
   const [savedLists, setSavedLists] = useState([]);
   const [viewList, setViewList] = useState(null); // daftar tersimpan yang dibuka
 
