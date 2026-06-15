@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
-import { updateProfile } from '../services/profileService.js';
+import { getProfile, updateProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
@@ -27,12 +27,23 @@ function UserProfile() {
   const [activeFilter, setActiveFilter] = useState('Semua Resep');
   const [savedSearch, setSavedSearch] = useState('');
 
-  // Nama mentah dari metadata (tanpa fallback email/'Pengguna') untuk prefill form edit.
-  const metaName = user?.user_metadata?.full_name || user?.user_metadata?.username || '';
-  const metaGender = user?.user_metadata?.gender || '';
+  // Profil dimuat dari tabel public.profiles (sumber kebenaran). Diperbarui
+  // lokal setiap kali updateProfile mengembalikan baris terbaru.
+  const [profile, setProfile] = useState(null);
+  useEffect(() => {
+    let active = true;
+    getProfile()
+      .then((p) => { if (active) setProfile(p); })
+      .catch((err) => { console.error('Gagal memuat profil:', err); });
+    return () => { active = false; };
+  }, []);
 
-  // Jenis kelamin di-persist ke user_metadata. metaGender adalah sumber kebenaran;
-  // override lokal hanya dipakai untuk tampilan optimistic selama proses simpan.
+  // Nilai dari profil (tanpa fallback email/'Pengguna') untuk prefill form edit.
+  const metaName = profile?.fullName || '';
+  const metaGender = profile?.gender || '';
+
+  // profile.gender adalah sumber kebenaran; override lokal hanya untuk tampilan
+  // optimistic selama proses simpan.
   const [genderOverride, setGenderOverride] = useState(null);
   const [savingGender, setSavingGender] = useState(false);
   const gender = genderOverride ?? metaGender;
@@ -41,11 +52,12 @@ function UserProfile() {
     setGenderOverride(value); // optimistic
     setSavingGender(true);
     try {
-      await updateProfile({ gender: value });
+      const updated = await updateProfile({ gender: value });
+      setProfile(updated);     // profil kini jadi sumber kebenaran
+      setGenderOverride(null);
       showToast('Jenis kelamin diperbarui.');
-      setGenderOverride(null); // metadata kini jadi sumber kebenaran
     } catch (err) {
-      setGenderOverride(null); // rollback ke nilai metadata
+      setGenderOverride(null); // rollback ke nilai profil
       showToast(err.message || 'Gagal memperbarui jenis kelamin.');
     } finally {
       setSavingGender(false);
@@ -72,7 +84,8 @@ function UserProfile() {
     }
     setSavingProfile(true);
     try {
-      await updateProfile({ fullName: editName, gender: editGender });
+      const updated = await updateProfile({ fullName: editName, gender: editGender });
+      setProfile(updated);
       showToast('Profil berhasil diperbarui.');
       setEditOpen(false);
     } catch (err) {
@@ -82,11 +95,12 @@ function UserProfile() {
     }
   };
 
-  // Data identitas dari sesi login (bukan hardcode). Fallback aman bila kosong.
+  // Data identitas. Nama dari profil; email & tanggal gabung dari sesi/auth.
   const displayName = metaName || user?.email?.split('@')[0] || 'Pengguna';
   const displayEmail = user?.email || '-';
-  const joinedAt = user?.created_at
-    ? new Date(user.created_at).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })
+  const joinedAtSource = profile?.createdAt || user?.created_at;
+  const joinedAt = joinedAtSource
+    ? new Date(joinedAtSource).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })
     : null;
 
   // Resep tersimpan milik pengguna (dari tabel saved_recipes via RLS).
