@@ -72,14 +72,20 @@ Deno.serve(async (req) => {
   }
 
   // 4. Cache check — PROMPT_VERSION ikut di-hash supaya perubahan prompt
-  // otomatis membatalkan cache hasil prompt lama.
+  //    otomatis membatalkan cache lama. TTL PENDEK (90 detik): cache cuma untuk
+  //    melindungi double-submit/refresh cepat. Generate ulang dgn input sama
+  //    SETELAH 90 detik = sengaja minta variasi baru → jangan kembalikan cache
+  //    (akar masalah "menu itu-itu aja"). Variasi dijamin shuffle bank resep + model.
+  const CACHE_TTL_MS = 90_000;
   const inputHash = await sha256(`${PROMPT_VERSION}:${JSON.stringify(input)}`);
+  const cacheSince = new Date(Date.now() - CACHE_TTL_MS).toISOString();
   const { data: cached } = await admin
     .from("generated_plans")
     .select("id, output_json, reasoning_content, model")
     .eq("user_id", userId)
     .eq("input_hash", inputHash)
     .eq("status", "success")
+    .gte("created_at", cacheSince)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -96,30 +102,33 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 5. Retrieve recipe context (filter berdasarkan diet bila ada tag cocok)
-  let recipeQuery = admin
-    .from("recipes")
-    .select("id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings")
-    .eq("is_active", true)
-    .limit(40);
-  // Filter diet: resep harus punya minimal satu slug diet yang cocok (overlap).
-  // Pakai kolom `recipes.diet` (controlled vocabulary), bukan `tags` yang nyampur bahan.
+  // 5. Retrieve recipe context (filter berdasarkan diet bila ada tag cocok).
+  //    Ambil SEMUA yang cocok (bukan 40 pertama), lalu ACAK & potong ke 40.
+  //    Kalau cuma 40 pertama yang dikirim, AI selalu lihat resep yang sama →
+  //    hasil "itu-itu aja". Shuffle bikin tiap generate beda kombinasi resep.
+  const RECIPE_COLS =
+    "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings";
+  const RECIPE_CAP = 40;
+
+  let recipeQuery = admin.from("recipes").select(RECIPE_COLS).eq("is_active", true);
   if (input.diet.length > 0) {
     recipeQuery = recipeQuery.overlaps("diet", input.diet);
   }
-  let { data: candidates } = await recipeQuery;
+  let { data: pool } = await recipeQuery;
   // Fallback: kalau filter diet menyisakan terlalu sedikit, ambil semua aktif.
-  if (!candidates || candidates.length < 3) {
-    const { data: allActive } = await admin
-      .from("recipes")
-      .select("id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings")
-      .eq("is_active", true)
-      .limit(40);
-    candidates = allActive ?? [];
+  if (!pool || pool.length < 3) {
+    const { data: allActive } = await admin.from("recipes").select(RECIPE_COLS).eq("is_active", true);
+    pool = allActive ?? [];
   }
-  if (candidates.length === 0) {
+  if (pool.length === 0) {
     return json({ error: "Bank resep kosong. Tambahkan resep dulu." }, 422);
   }
+  // Fisher-Yates shuffle lalu ambil maksimal RECIPE_CAP resep.
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  const candidates = pool.slice(0, RECIPE_CAP);
   const validIds = new Set(candidates.map((r) => r.id));
 
   // 6. Ambil provider untuk chain failover (service_role bypass RLS lockdown).

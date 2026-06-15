@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 landing_page_review.md
 poles-tampilan.md
+.commandcode
 
 # Environment
 .env

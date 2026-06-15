@@ -75,6 +75,30 @@ last-updated: 2026-06-11
 
 ---
 
+## Phase 11 — Regenerate Menu Harian + Catatan ✅ (2026-06-14)
+- ✅ Edge Function baru `regenerate-day` (susun ulang menu 1 hari + catatan opsional)
+- ✅ `_shared/shoppingList.ts` — recompute daftar belanja deterministik dari `recipe_ingredients`
+- ✅ `_shared/prompt.ts` — `REGENERATE_DAY_SYSTEM_PROMPT`, `buildRegenerateDayMessage`, `sanitizeNote` (anti prompt-injection); utang tipe `buildUserMessage` dirapikan
+- ✅ `regenerateDay()` di `aiService.js` + UI tombol "Ganti Menu" + editor catatan per kartu hari (`GenerateResult.jsx`)
+- ✅ Sync planner otomatis bila plan sudah di-apply; rate limit berbagi kuota 20/hari
+- ✅ Lint + build + `deno check` (3 Edge Function) bersih
+- ✅ **Uji end-to-end PRODUCTION lulus** (deploy ke prod, generate→regenerate dgn/tanpa catatan, mealType-only, edge case, rate-limit log; user test dihapus, prod bersih)
+- 📄 Lihat: `03-PHASES/phase-11-regenerate-day/` & ADR-013
+
+---
+
+## Phase 12 — Paket "Belanja di Kami" + 2 Tab Belanja + Simpan Daftar ✅ (2026-06-14)
+- ✅ Migrasi `packages` + `package_meals` + `saved_shopping_lists` + RLS + seed 3 paket (applied ke prod via Mgmt API)
+- ✅ Halaman Belanja jadi 2 tab: "Belanja Sendiri" (planner) & "Belanja di Kami" (paket → order WA)
+- ✅ Harga paket = agregasi `recipe_ingredients` (skala porsi yg di-request)
+- ✅ Fitur simpan daftar belanja (snapshot per user) + lihat/hapus daftar tersimpan
+- ✅ Service: packageService, shoppingListService, util buildShoppingList bersama
+- ✅ Lint + build bersih; uji E2E prod lulus (agregasi Rp297k, save/get/delete, RLS isolasi, cleanup)
+- 📄 Lihat: `03-PHASES/phase-12-paket-belanja/` & ADR-014
+- ⬜ (Tim) Smoke test klik via UI browser; admin UI kelola paket (fase lanjutan)
+
+---
+
 ## Yang Perlu Dilakukan User/Tim (di luar coding)
 1. ⬜ Set min 1 user admin di prod (`update profiles set role='admin' where id='<uuid>'`)
 2. ⬜ Verifikasi API key AI di tabel `ai_providers` (key produksi yang valid, bukan placeholder)
