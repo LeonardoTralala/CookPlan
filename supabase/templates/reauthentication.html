@@ -14,25 +14,31 @@
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#efffd9;">
       <tr>
         <td align="center" style="padding:32px 16px;">
-          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #d7e9c0;">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #d7e9c0;box-shadow:0 8px 24px rgba(55,82,25,0.08);">
+
+            <tr><td style="height:4px;background-color:#c8eaa0;font-size:0;line-height:0;">&nbsp;</td></tr>
 
             <tr>
-              <td align="center" style="background-color:#375219;padding:32px 24px;">
-                <div style="font-size:40px;line-height:1;">🍳</div>
-                <div style="margin-top:8px;color:#ffffff;font-size:24px;font-weight:700;letter-spacing:-0.5px;">CookPlan</div>
-                <div style="margin-top:4px;color:#c8eaa0;font-size:13px;">Rencana Menu Mingguan &amp; Belanja Otomatis</div>
+              <td align="center" style="background-color:#375219;padding:34px 24px 28px;">
+                <img src="{{ .SiteURL }}/email/cookplan-logo-white.png" width="160" alt="CookPlan"
+                     style="display:block;margin:0 auto;border:0;outline:none;text-decoration:none;width:160px;height:auto;" />
+                <div style="margin-top:14px;color:#c8eaa0;font-size:13px;letter-spacing:0.3px;">
+                  Rencana Menu Mingguan &amp; Belanja Otomatis
+                </div>
               </td>
             </tr>
 
             <tr>
-              <td style="padding:36px 32px 24px;">
-                <h1 style="margin:0 0 16px;color:#121f06;font-size:22px;font-weight:700;">Kode Verifikasi 🔐</h1>
-                <p style="margin:0 0 28px;color:#44483d;font-size:15px;line-height:1.7;">
+              <td style="padding:36px 32px 8px;">
+                <img src="{{ .SiteURL }}/email/icons/badge-reauthentication.png" width="56" height="56" alt=""
+                     style="display:block;margin:0 0 18px;border:0;outline:none;" />
+                <h1 style="margin:0 0 16px;color:#121f06;font-size:23px;font-weight:700;line-height:1.3;">Kode Verifikasi</h1>
+                <p style="margin:0 0 24px;color:#44483d;font-size:15px;line-height:1.7;">
                   Untuk mengonfirmasi tindakan ini, masukkan kode verifikasi berikut di aplikasi CookPlan:
                 </p>
 
                 <!-- OTP Code -->
-                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto;">
+                <table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 auto 8px;">
                   <tr>
                     <td align="center" style="background-color:#e8fad1;border:1px solid #c8eaa0;border-radius:12px;padding:18px 36px;">
                       <span style="color:#375219;font-size:36px;font-weight:700;letter-spacing:10px;font-family:'Courier New',monospace;">{{ .Token }}</span>
@@ -40,20 +46,25 @@
                   </tr>
                 </table>
 
-                <p style="margin:28px 0 0;text-align:center;color:#74796c;font-size:13px;line-height:1.6;">
+                <p style="margin:22px 0 0;text-align:center;color:#74796c;font-size:13px;line-height:1.6;">
                   Kode ini berlaku untuk waktu terbatas. Jangan bagikan ke siapa pun.
                 </p>
               </td>
             </tr>
 
-            <tr><td style="padding:0 32px;"><div style="height:1px;background-color:#d7e9c0;"></div></td></tr>
+            <tr><td style="padding:24px 32px 0;"><div style="height:1px;background-color:#d7e9c0;font-size:0;line-height:0;">&nbsp;</div></td></tr>
 
             <tr>
-              <td style="padding:24px 32px 32px;">
-                <p style="margin:0 0 6px;color:#74796c;font-size:12px;line-height:1.6;">
+              <td style="padding:22px 32px 30px;">
+                <p style="margin:0 0 12px;color:#74796c;font-size:12px;line-height:1.6;">
                   Jika kamu tidak meminta kode ini, abaikan email ini dan pertimbangkan untuk mengganti password akunmu.
                 </p>
-                <p style="margin:12px 0 0;color:#a0a59a;font-size:12px;">© 2026 CookPlan · PKM-K 2026</p>
+                <p style="margin:0 0 14px;">
+                  <a href="{{ .SiteURL }}/help" style="color:#4e6b2f;font-size:12px;text-decoration:none;">Bantuan</a>
+                  <span style="color:#c4c8b9;">&nbsp;·&nbsp;</span>
+                  <a href="{{ .SiteURL }}/privacy" style="color:#4e6b2f;font-size:12px;text-decoration:none;">Kebijakan Privasi</a>
+                </p>
+                <p style="margin:0;color:#a0a59a;font-size:12px;">© 2026 CookPlan · PKM-K 2026</p>
               </td>
             </tr>
 
