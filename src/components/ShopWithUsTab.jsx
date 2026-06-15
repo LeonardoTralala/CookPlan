@@ -37,6 +37,18 @@ export function ShopWithUsTab({ onSave }) {
     [packages, selectedId]
   );
 
+  const mealsByDay = useMemo(() => {
+    const grouped = new Map();
+    for (const meal of selected?.meals ?? []) {
+      const day = meal.dayIndex ?? 0;
+      if (!grouped.has(day)) grouped.set(day, []);
+      grouped.get(day).push(meal);
+    }
+    return [...grouped.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([dayIndex, meals]) => ({ dayIndex, meals }));
+  }, [selected]);
+
   // Agregasi daftar belanja paket terpilih, skala sesuai porsi yang diminta.
   const { sections, totalItems, estimatedCost } = useMemo(() => {
     if (!selected) return { sections: [], totalItems: 0, estimatedCost: 0 };
@@ -147,6 +159,48 @@ export function ShopWithUsTab({ onSave }) {
               </button>
             </div>
           </div>
+
+          {/* Menu paket: user bisa lihat menu fiks per hari, bukan cuma bahan. */}
+          <section className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary text-2xl">restaurant_menu</span>
+              <h3 className="font-headline-md text-headline-md text-on-surface">Menu Paket</h3>
+              <span className="ml-auto text-sm text-outline">{mealsByDay.length} hari</span>
+            </div>
+            <div className="space-y-3">
+              {mealsByDay.map(({ dayIndex, meals }) => (
+                <div key={dayIndex} className="rounded-2xl border border-outline-variant bg-white overflow-hidden">
+                  <div className="px-4 py-3 bg-surface-cream text-primary font-bold text-sm">
+                    Hari {dayIndex + 1}
+                  </div>
+                  <div className="divide-y divide-outline-variant/50">
+                    {meals.map((meal) => (
+                      <div key={`${dayIndex}-${meal.mealType}`} className="flex items-center gap-3 p-3">
+                        {meal.recipe?.imageUrl && (
+                          <img
+                            src={meal.recipe.imageUrl}
+                            alt=""
+                            loading="lazy"
+                            onError={(e) => { e.currentTarget.src = '/img/recipe-placeholder.svg'; }}
+                            className="w-12 h-12 rounded-xl object-cover shrink-0"
+                          />
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-[10px] font-bold uppercase tracking-wide text-on-surface-variant">
+                            {meal.mealType === 'breakfast' ? 'Sarapan' : meal.mealType === 'lunch' ? 'Makan Siang' : 'Makan Malam'}
+                          </span>
+                          <span className="block text-sm font-semibold text-on-surface truncate">
+                            {meal.recipe?.title || `Resep #${meal.recipe?.id}`}
+                          </span>
+                        </div>
+                        <span className="text-xs text-primary font-bold whitespace-nowrap">{servings} porsi</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
 
           {/* Daftar belanja paket */}
           {sections.map((section) => (
