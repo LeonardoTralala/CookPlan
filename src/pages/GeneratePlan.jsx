@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generatePlan, getGeneratedHistory, getTodayUsageCount, deleteGeneratedPlan } from '../services/aiService.js';
 import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
+import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
@@ -73,14 +74,20 @@ export function GeneratePlan() {
     getTodayUsageCount()
       .then((n) => { if (active) setUsageCount(n); })
       .catch(() => { /* idem */ });
-    getActiveDietTags()
-      .then((rows) => {
-        if (active && rows.length) {
-          setDietPool(rows);
-          setDietSample(sampleDietTags(rows, 8, ['halal']));
-        }
-      })
-      .catch(() => { /* pakai DEFAULT_DIET_OPTIONS */ });
+    // Opsi diet + preferensi tersimpan pengguna (profiles.diet_prefs) diambil
+    // bersamaan: preferensi profil jadi pilihan awal wizard, dan chip yang
+    // ditampilkan dijaga agar selalu memuat pilihan tersebut.
+    Promise.all([
+      getActiveDietTags().catch(() => []),
+      getProfile().catch(() => null),
+    ]).then(([rows, prof]) => {
+      if (!active) return;
+      const prefs = prof?.dietPrefs?.length ? prof.dietPrefs : null;
+      if (prefs) setDiet(prefs);
+      const pool = rows.length ? rows : DEFAULT_DIET_OPTIONS;
+      if (rows.length) setDietPool(rows);
+      setDietSample(sampleDietTags(pool, 8, prefs ?? ['halal']));
+    });
     return () => { active = false; };
   }, []);
 

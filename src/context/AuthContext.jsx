@@ -85,6 +85,15 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(() => supabase.auth.signOut(), []);
 
+  // Kirim ulang email konfirmasi pendaftaran (untuk akun yang belum verifikasi).
+  const resendVerification = useCallback((email) =>
+    supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${SITE_URL}/auth` },
+    }),
+  []);
+
   const value = useMemo(() => ({
     session,
     user: session?.user ?? null,
@@ -98,7 +107,8 @@ export function AuthProvider({ children }) {
     updatePassword,
     clearRecovery,
     signOut,
-  }), [session, loading, isRecovery, signUp, signIn, signInWithGoogle, resetPassword, updatePassword, clearRecovery, signOut]);
+    resendVerification,
+  }), [session, loading, isRecovery, signUp, signIn, signInWithGoogle, resetPassword, updatePassword, clearRecovery, signOut, resendVerification]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

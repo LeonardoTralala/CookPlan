@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { getRecipes } from '../services/recipeService.js';
+import { getRecipes, getSavedRecipeIds, saveRecipe, unsaveRecipe } from '../services/recipeService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 
@@ -53,6 +53,9 @@ function RecipeCatalog({ onAddToPlan }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedRecipeForDetail, selectedRecipeForPlan, showAdvancedFilters]);
 
+  // Set id resep yang sudah disimpan user (untuk menandai status bookmark).
+  const [savedIds, setSavedIds] = useState(() => new Set());
+
   // Muat bank resep dari Supabase saat mount.
   useEffect(() => {
     let active = true;
@@ -62,6 +65,37 @@ function RecipeCatalog({ onAddToPlan }) {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  // Muat daftar id resep tersimpan (gagal = diam, fitur simpan tetap bisa dipakai).
+  useEffect(() => {
+    let active = true;
+    getSavedRecipeIds()
+      .then((ids) => { if (active) setSavedIds(new Set(ids)); })
+      .catch((err) => { console.error('Gagal memuat resep tersimpan:', err); });
+    return () => { active = false; };
+  }, []);
+
+  // Toggle simpan/hapus resep (optimistic + rollback bila gagal).
+  const handleToggleSaved = async (recipe) => {
+    const id = recipe.id;
+    const wasSaved = savedIds.has(id);
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (wasSaved) next.delete(id); else next.add(id);
+      return next;
+    });
+    try {
+      if (wasSaved) await unsaveRecipe(id); else await saveRecipe(id);
+      showToast(wasSaved ? 'Resep dihapus dari tersimpan.' : `"${recipe.title}" disimpan.`);
+    } catch (err) {
+      setSavedIds((prev) => { // rollback
+        const next = new Set(prev);
+        if (wasSaved) next.add(id); else next.delete(id);
+        return next;
+      });
+      showToast(err.message || 'Gagal memperbarui resep tersimpan.');
+    }
+  };
 
   // Toggle quick filter tag
   const handleToggleFilter = (filterName) => {
@@ -575,6 +609,20 @@ function RecipeCatalog({ onAddToPlan }) {
 
             {/* Footer buttons */}
             <div className="p-4 bg-canvas-white border-t border-outline-variant flex items-center justify-end gap-3 shrink-0">
+              <button
+                onClick={() => handleToggleSaved(selectedRecipeForDetail)}
+                className={`px-5 py-2.5 rounded-full font-bold text-sm cursor-pointer flex items-center gap-1.5 transition-colors border ${
+                  savedIds.has(selectedRecipeForDetail.id)
+                    ? 'bg-error/10 border-error/30 text-error hover:bg-error/20'
+                    : 'border-outline-variant text-on-surface-variant hover:bg-secondary-container/20'
+                }`}
+                aria-pressed={savedIds.has(selectedRecipeForDetail.id)}
+              >
+                <span className="material-symbols-outlined text-lg" aria-hidden="true">
+                  {savedIds.has(selectedRecipeForDetail.id) ? 'favorite' : 'favorite_border'}
+                </span>
+                {savedIds.has(selectedRecipeForDetail.id) ? 'Tersimpan' : 'Simpan'}
+              </button>
               <button
                 onClick={() => setSelectedRecipeForDetail(null)}
                 className="px-5 py-2.5 border border-outline-variant text-on-surface-variant hover:bg-secondary-container/20 rounded-full font-bold text-sm cursor-pointer transition-colors"
