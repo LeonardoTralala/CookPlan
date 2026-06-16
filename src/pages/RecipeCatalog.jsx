@@ -4,6 +4,7 @@ import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
+import { CatalogGridSkeleton } from '../components/Skeleton.jsx';
 
 // Opsi diet untuk chip "Inspirasi Masakan Hari Ini" diambil dinamis dari diet_tags
 // (sama sumbernya dengan Generate step 2). Konstanta ini hanya FALLBACK bila fetch
@@ -14,6 +15,10 @@ const DEFAULT_DIET_OPTIONS = [
   { value: 'cepat', label: 'Cepat (< 30 mnt)' },
   { value: 'bahan-lokal', label: 'Bahan Lokal' },
 ];
+
+// Jumlah resep yang ditampilkan per "halaman" (pagination sisi-klien). Tombol
+// "Muat Lebih Banyak" menambah sebanyak ini; menjaga DOM awal tetap ringan.
+const RECIPES_PER_PAGE = 12;
 
 // Cocokkan satu resep dengan satu preferensi diet (slug diet_tags.value).
 // Kunci utama: recipe.tags (berisi slug). Fallback: badge label (case-insensitive),
@@ -54,6 +59,8 @@ function RecipeCatalog({ onAddToPlan }) {
   const [maxTime, setMaxTime] = useState(120); // default max 120 minutes
   const [priceCategory, setPriceCategory] = useState('Semua'); // 'Semua', 'Hemat', 'Standar', 'Premium'
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  // Pagination sisi-klien: berapa banyak resep yang sedang ditampilkan.
+  const [visibleCount, setVisibleCount] = useState(RECIPES_PER_PAGE);
   const [selectedRecipeForDetail, setSelectedRecipeForDetail] = useState(null);
   const [selectedRecipeForPlan, setSelectedRecipeForPlan] = useState(null);
   
@@ -205,6 +212,19 @@ function RecipeCatalog({ onAddToPlan }) {
       return true;
     });
   }, [recipes, searchQuery, activeFilters, maxTime, priceCategory, dietLabelOf]);
+
+  // Reset pagination ke halaman pertama tiap kali kriteria filter berubah, agar
+  // user tidak "nyangkut" di posisi muat-banyak setelah memfilter. Pola adjust-
+  // state-during-render (lint-safe), sama seperti recoverySynced di AuthPage.
+  const filterSig = `${searchQuery}|${activeFilters.join(',')}|${maxTime}|${priceCategory}`;
+  const [lastFilterSig, setLastFilterSig] = useState(filterSig);
+  if (filterSig !== lastFilterSig) {
+    setLastFilterSig(filterSig);
+    setVisibleCount(RECIPES_PER_PAGE);
+  }
+
+  const visibleRecipes = filteredRecipes.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredRecipes.length;
 
   // Handle confirming "Add to Plan"
   const handleConfirmAddToPlan = () => {
@@ -401,10 +421,7 @@ function RecipeCatalog({ onAddToPlan }) {
       {/* Catalog Grid */}
       <section className="px-4 max-w-container-max mx-auto">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant">
-            <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-3" aria-hidden="true">progress_activity</span>
-            <p className="text-sm">Memuat resep…</p>
-          </div>
+          <CatalogGridSkeleton />
         ) : loadError ? (
           <div className="text-center py-20 bg-white rounded-3xl border border-error/30 p-8">
             <span className="material-symbols-outlined text-5xl text-error mb-4">error</span>
@@ -429,7 +446,7 @@ function RecipeCatalog({ onAddToPlan }) {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {filteredRecipes.map((recipe) => (
+            {visibleRecipes.map((recipe) => (
               <div
                 key={recipe.id}
                 className="recipe-card-shadow bg-surface-container rounded-2xl overflow-hidden group cursor-pointer hover:-translate-y-0.5 transition-all duration-300 flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -496,15 +513,18 @@ function RecipeCatalog({ onAddToPlan }) {
           </div>
         )}
 
-        {/* Load More Button */}
-        {filteredRecipes.length > 0 && (
-          <div className="mt-16 text-center">
+        {/* Muat lebih banyak — pagination sisi-klien (hilang bila semua tampil) */}
+        {hasMore && (
+          <div className="mt-12 text-center">
             <button
-              onClick={() => showToast('Lebih banyak resep akan segera ditambahkan!')}
+              onClick={() => setVisibleCount((c) => c + RECIPES_PER_PAGE)}
               className="px-8 py-3 rounded-full border border-secondary text-secondary font-bold hover:bg-secondary-container/20 transition-all cursor-pointer"
             >
               Muat Lebih Banyak Resep
             </button>
+            <p className="mt-3 text-xs text-on-surface-variant">
+              Menampilkan {visibleRecipes.length} dari {filteredRecipes.length} resep
+            </p>
           </div>
         )}
       </section>

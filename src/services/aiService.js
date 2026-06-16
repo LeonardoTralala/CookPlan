@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { notifySessionExpired, reportIfAuthError } from "../lib/session.js";
 
 // Service layer untuk fitur AI generate. Memanggil Edge Function `generate-plan`
 // yang jadi proxy provider-agnostic (lihat Phase 3). Frontend tidak pernah
@@ -38,6 +39,7 @@ export async function generatePlan(input) {
     } catch {
       // ignore
     }
+    reportIfAuthError(error); // sesi berakhir → redirect terpusat ke /auth
     throw new Error(detail);
   }
   return data;
@@ -63,6 +65,7 @@ export async function regenerateDay(planId, dayIndex, { note = "", mealType = nu
     } catch {
       // ignore
     }
+    reportIfAuthError(error); // sesi berakhir → redirect terpusat ke /auth
     throw new Error(detail);
   }
   return data;
@@ -75,7 +78,7 @@ export async function regenerateDay(planId, dayIndex, { note = "", mealType = nu
 export async function getGeneratedHistory(limit = 10, { successOnly = false } = {}) {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;
-  if (!user) throw new Error("Belum login.");
+  if (!user) { notifySessionExpired(); throw new Error("Belum login."); }
   let query = supabase
     .from("generated_plans")
     .select("id, input_json, output_type, model, status, created_at")
@@ -92,7 +95,7 @@ export async function getGeneratedHistory(limit = 10, { successOnly = false } = 
 export async function deleteGeneratedPlan(id) {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;
-  if (!user) throw new Error("Belum login.");
+  if (!user) { notifySessionExpired(); throw new Error("Belum login."); }
   const { error } = await supabase
     .from("generated_plans")
     .delete()
@@ -106,7 +109,7 @@ export async function deleteGeneratedPlan(id) {
 export async function getGeneratedPlanById(id) {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;
-  if (!user) throw new Error("Belum login.");
+  if (!user) { notifySessionExpired(); throw new Error("Belum login."); }
   const { data, error } = await supabase
     .from("generated_plans")
     .select("*")

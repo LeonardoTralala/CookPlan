@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { getRecipes } from '../services/recipeService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
+import { PlannerSkeleton } from '../components/Skeleton.jsx';
 
 // Hari (key data) + label singkat untuk header kolom
 const DAYS = [
@@ -36,8 +37,20 @@ function getWeekDates() {
 }
 
 
+// Ambil 3 resep acak untuk "Inspirasi Menu". Dipanggil di callback load (bukan
+// saat render) supaya bebas dari aturan purity React.
+function pickThree(list) {
+  if (list.length <= 3) return list;
+  const pool = [...list];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, 3);
+}
+
 function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onGoToGenerate, onGenerateShoppingList }) {
-  const { showToast, restoreSlot, clearAllSlots } = usePlan();
+  const { showToast, restoreSlot, clearAllSlots, loading: planLoading } = usePlan();
 
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -48,12 +61,14 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
   const [pickerServings, setPickerServings] = useState(2);
   const [activeMobileDay, setActiveMobileDay] = useState(DAYS[0].key);
 
-  // Bank resep dari DB (untuk picker & rekomendasi).
+  // Bank resep dari DB (untuk picker & inspirasi).
   const [recipes, setRecipes] = useState([]);
+  // Sampel acak untuk "Inspirasi Menu" — dihitung sekali saat resep dimuat.
+  const [recommended, setRecommended] = useState([]);
   useEffect(() => {
     let active = true;
     getRecipes()
-      .then((data) => { if (active) setRecipes(data); })
+      .then((data) => { if (active) { setRecipes(data); setRecommended(pickThree(data)); } })
       .catch((err) => {
         // Audit Copilot: kegagalan jangan silent — log supaya bisa didiagnosis,
         // UI fallback tetap aman karena setRecipes default []
@@ -105,9 +120,6 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
     return recipes.filter((r) => r.title.toLowerCase().includes(q));
   }, [recipes, pickerSearch]);
 
-  const recommended = recipes.slice(0, 3);
-  const recommendCaptions = ['Terpopuler minggu ini', 'Berdasarkan pesananmu sebelumnya', 'Favorit di wilayahmu'];
-
   const handlePickRecipe = (recipe) => {
     setPickerSelectedRecipe(recipe);
     setPickerServings(2);
@@ -150,6 +162,10 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
               </p>
             </div>
 
+            {planLoading && stats.filled === 0 ? (
+              <PlannerSkeleton />
+            ) : (
+            <>
             {/* CTA generate AI saat planner masih kosong */}
             {stats.filled === 0 && (
               <div className="mb-6 rounded-panel border border-primary/30 bg-primary/5 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
@@ -290,6 +306,8 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
                 ))}
               </div>
             </div>
+            </>
+            )}
           </div>
 
           {/* ---------------- Sidebar ---------------- */}
@@ -345,14 +363,14 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
               </div>
             )}
 
-            {/* Recommended for you */}
+            {/* Inspirasi menu — sampel resep untuk mengisi planner */}
             <div className="bg-surface-cream/40 border border-outline-variant rounded-panel p-6">
-              <h3 className="font-headline-md text-headline-md text-primary mb-2">Rekomendasi untuk Anda</h3>
+              <h3 className="font-headline-md text-headline-md text-primary mb-2">Inspirasi Menu</h3>
               <p className="text-on-surface-variant text-sm mb-6">
-                Rekomendasi pilihan berdasarkan tren populer dan riwayat pesanan Anda.
+                Beberapa pilihan resep untuk mengisi rencana mingguanmu.
               </p>
               <div className="space-y-4">
-                {recommended.map((recipe, idx) => (
+                {recommended.map((recipe) => (
                   <div key={recipe.id} className="flex items-center gap-4 group">
                     <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 recipe-card-shadow">
                       <img
@@ -367,7 +385,9 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
                       <h4 className="font-bold text-sm text-on-surface leading-tight line-clamp-1">
                         {recipe.title}
                       </h4>
-                      <span className="text-xs text-on-surface-variant">{recommendCaptions[idx]}</span>
+                      <span className="text-xs text-on-surface-variant">
+                        {recipe.readyInMinutes} mnt · {recipe.calories} kkal
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -376,7 +396,7 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
                 onClick={onGoToCatalog}
                 className="mt-6 w-full py-2.5 rounded-full border border-secondary text-secondary font-bold text-sm hover:bg-secondary-container/30 transition-all cursor-pointer"
               >
-                Lihat Semua Rekomendasi
+                Jelajahi Katalog Resep
               </button>
             </div>
 

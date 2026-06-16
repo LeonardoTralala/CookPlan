@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from './Logo.jsx';
+import { Modal } from './Modal.jsx';
+import { RouteFallback } from './RouteFallback.jsx';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 
@@ -20,11 +22,15 @@ export function AppShell({ children }) {
   const { plannedCount } = usePlan();
   const { signOut } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+  // Konfirmasi sebelum keluar: tombol Keluar ada di zona jempol (mobile),
+  // cegah logout tak sengaja (audit UX destructive-nav).
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleSignOut = async () => {
     setSigningOut(true);
     try {
       await signOut();
+      setConfirmOpen(false);
       navigate('/');
     } catch (err) {
       // Biarkan user tetap di halaman saat ini bila signOut gagal — supaya
@@ -71,9 +77,8 @@ export function AppShell({ children }) {
           </div>
 
           <button
-            onClick={handleSignOut}
-            disabled={signingOut}
-            className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:text-error transition-colors cursor-pointer disabled:opacity-60"
+            onClick={() => setConfirmOpen(true)}
+            className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:text-error transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
             Keluar
@@ -81,10 +86,9 @@ export function AppShell({ children }) {
 
           {/* Mobile: hanya logout di header (nav utama di bottom) */}
           <button
-            onClick={handleSignOut}
-            disabled={signingOut}
+            onClick={() => setConfirmOpen(true)}
             aria-label="Keluar"
-            className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-error transition-colors cursor-pointer disabled:opacity-60"
+            className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-error transition-colors cursor-pointer"
           >
             <span className="material-symbols-outlined" aria-hidden="true">logout</span>
           </button>
@@ -92,7 +96,9 @@ export function AppShell({ children }) {
       </header>
 
       <main id="main-content" tabIndex={-1} className="flex-grow outline-none pb-20 md:pb-0">
-        {children}
+        <Suspense fallback={<RouteFallback variant="content" />}>
+          {children}
+        </Suspense>
       </main>
 
       {/* Bottom nav (mobile) */}
@@ -125,6 +131,35 @@ export function AppShell({ children }) {
           ))}
         </div>
       </nav>
+
+      {/* Konfirmasi keluar */}
+      <Modal isOpen={confirmOpen} onClose={() => !signingOut && setConfirmOpen(false)}>
+        <div className="w-full max-w-sm bg-canvas-white rounded-3xl p-6 shadow-xl">
+          <div className="flex flex-col items-center text-center gap-1">
+            <span className="material-symbols-outlined text-error text-[32px] mb-1" aria-hidden="true">logout</span>
+            <h2 className="text-lg font-bold text-on-surface">Keluar dari akun?</h2>
+            <p className="text-sm text-on-surface-variant">
+              Kamu perlu masuk lagi untuk mengakses rencana menumu.
+            </p>
+          </div>
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={() => setConfirmOpen(false)}
+              disabled={signingOut}
+              className="flex-1 min-h-11 rounded-full text-sm font-semibold text-on-surface-variant bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer disabled:opacity-60"
+            >
+              Batal
+            </button>
+            <button
+              onClick={handleSignOut}
+              disabled={signingOut}
+              className="flex-1 min-h-11 rounded-full text-sm font-semibold text-white bg-error hover:opacity-90 transition-opacity cursor-pointer disabled:opacity-60"
+            >
+              {signingOut ? 'Keluar…' : 'Keluar'}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

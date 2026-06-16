@@ -5,6 +5,7 @@ import {
   formatRupiah, formatAmount,
 } from '../utils/buildShoppingList.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { ShoppingListSkeleton } from './Skeleton.jsx';
 
 const DELIVERY_FEE = 15000;
 
@@ -13,9 +14,10 @@ const DELIVERY_FEE = 15000;
 // tanpa order ke kami. Bisa disimpan sebagai daftar.
 // Dua mode tampilan: per-bahan (gabung & checklist) atau per-menu (kelompok resep).
 export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
-  const { showToast } = usePlan();
+  const { showToast, loading: planLoading } = usePlan();
   const [checkedItems, setCheckedItems] = useState(() => new Set());
   const [recipes, setRecipes] = useState([]);
+  const [recipesLoading, setRecipesLoading] = useState(true);
   const [view, setView] = useState('bahan'); // 'bahan' | 'menu'
 
   useEffect(() => {
@@ -25,9 +27,17 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
       .catch((err) => {
         console.error('Gagal memuat resep:', err);
         if (active) showToast('Gagal memuat katalog resep. Coba refresh halaman.', { variant: 'error' });
-      });
+      })
+      .finally(() => { if (active) setRecipesLoading(false); });
     return () => { active = false; };
   }, [showToast]);
+
+  // Apakah plan punya slot terisi? Dihitung dari weeklyPlan (tak tergantung resep)
+  // supaya bisa membedakan "plan kosong" vs "bahan belum termuat".
+  const hasPlannedSlots = useMemo(
+    () => Object.values(weeklyPlan ?? {}).some((day) => day && Object.values(day).some(Boolean)),
+    [weeklyPlan]
+  );
 
   const recipeIndex = useMemo(() => {
     const m = new Map();
@@ -66,6 +76,13 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
       totalIdr: estimatedCost,
     });
   };
+
+  // Tampilkan skeleton saat plan masih dihidrasi dari DB, atau saat bahan (resep)
+  // belum termuat padahal plan punya slot — mencegah flash "empty-state" yang
+  // bikin user bingung mengira rencananya kosong.
+  if (planLoading || (recipesLoading && hasPlannedSlots)) {
+    return <ShoppingListSkeleton />;
+  }
 
   if (totalItems === 0) {
     return (

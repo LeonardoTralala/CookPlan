@@ -41,6 +41,9 @@ export function PlanProvider({ children }) {
   // toast pakai counter id agar dua pesan identik tetap me-reset timer (audit #16).
   const [toast, setToast] = useState({ id: 0, message: "", onUndo: null, variant: "success" });
   const [weeklyPlan, setWeeklyPlan] = useState(loadLocalPlan);
+  // true saat plan user sedang dihidrasi dari DB (dipakai Planner & Belanja untuk
+  // menampilkan skeleton, bukan flash empty-state). Guest pakai localStorage → false.
+  const [loading, setLoading] = useState(false);
 
   // planId DB minggu berjalan (null saat belum login / belum dimuat).
   const planIdRef = useRef(null);
@@ -48,11 +51,15 @@ export function PlanProvider({ children }) {
   const pendingRef = useRef([]);
 
   const showToast = useCallback((message, options = {}) => {
+    const onUndo = options.onUndo ?? null;
     setToast((prev) => ({
       id: prev.id + 1,
       message,
-      onUndo: options.onUndo ?? null,
+      onUndo,
       variant: options.variant ?? "success",
+      // Toast ber-"Urungkan" hidup lebih lama: butuh waktu baca + putuskan + tap,
+      // apalagi di mobile (audit UX). Bisa di-override lewat options.duration.
+      duration: options.duration ?? (onUndo ? 7000 : 3000),
     }));
   }, []);
 
@@ -60,10 +67,10 @@ export function PlanProvider({ children }) {
     if (!toast.message) return undefined;
     const timer = setTimeout(
       () => setToast((prev) => ({ ...prev, message: "", onUndo: null })),
-      3000
+      toast.duration ?? 3000
     );
     return () => clearTimeout(timer);
-  }, [toast.id, toast.message]);
+  }, [toast.id, toast.message, toast.duration]);
 
   // Persist helper: tulis ke DB bila login (planId siap), kalau belum siap antri,
   // kalau guest tulis localStorage. Dipanggil DI LUAR updater setState (audit #5).
@@ -99,11 +106,13 @@ export function PlanProvider({ children }) {
     let active = true;
     if (!isAuthenticated) {
       planIdRef.current = null;
-      queueMicrotask(() => { if (active) setWeeklyPlan(loadLocalPlan()); });
+      // setState ditunda (queueMicrotask) agar tidak sinkron di body effect.
+      queueMicrotask(() => { if (active) { setLoading(false); setWeeklyPlan(loadLocalPlan()); } });
       return () => { active = false; };
     }
 
     (async () => {
+      setLoading(true);
       try {
         const { planId, plan } = await planService.getCurrentPlan();
         if (!active) return;
@@ -152,6 +161,8 @@ export function PlanProvider({ children }) {
       } catch (e) {
         console.error("muat plan gagal:", e.message);
         if (active) setWeeklyPlan(loadLocalPlan());
+      } finally {
+        if (active) setLoading(false);
       }
     })();
 
@@ -291,13 +302,14 @@ export function PlanProvider({ children }) {
     showToast,
     isInPlan,
     weeklyPlan,
+    loading,
     setSlot,
     applySlots,
     removeSlot,
     restoreSlot,
     clearAllSlots,
     plannedCount,
-  }), [toast, showToast, isInPlan, weeklyPlan, setSlot, applySlots, removeSlot, restoreSlot, clearAllSlots, plannedCount]);
+  }), [toast, showToast, isInPlan, weeklyPlan, loading, setSlot, applySlots, removeSlot, restoreSlot, clearAllSlots, plannedCount]);
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
 }

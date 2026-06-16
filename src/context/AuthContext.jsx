@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabase.js";
+import { onSessionExpired } from "../lib/session.js";
 import { AuthContext } from "./auth-context.js";
 
 // URL tujuan redirect untuk OAuth & email (konfirmasi / reset password).
@@ -43,9 +44,19 @@ export function AuthProvider({ children }) {
       setSession(newSession);
     });
 
+    // Penanganan terpusat sesi berakhir: paksa signOut agar session→null,
+    // sehingga ProtectedRoute mengarahkan ke /auth (sekali pintu keluar).
+    const unsubExpiry = onSessionExpired(() => {
+      supabase.auth.signOut().catch(() => {
+        // Bila signOut gagal, biarkan — storage lokal akan dibersihkan & UI
+        // tetap mengandalkan redirect dari status sesi.
+      });
+    });
+
     return () => {
       active = false;
       sub.subscription.unsubscribe();
+      unsubExpiry();
     };
   }, []);
 
