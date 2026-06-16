@@ -1,7 +1,30 @@
 import { useState, useMemo, useEffect } from 'react';
 import { getRecipes, getSavedRecipeIds, saveRecipe, unsaveRecipe } from '../services/recipeService.js';
+import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
+import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
+
+// Opsi diet untuk chip "Inspirasi Masakan Hari Ini" diambil dinamis dari diet_tags
+// (sama sumbernya dengan Generate step 2). Konstanta ini hanya FALLBACK bila fetch
+// gagal supaya filter tidak pernah kosong.
+const DEFAULT_DIET_OPTIONS = [
+  { value: 'vegetarian', label: 'Vegetarian' },
+  { value: 'halal', label: 'Halal' },
+  { value: 'cepat', label: 'Cepat (< 30 mnt)' },
+  { value: 'bahan-lokal', label: 'Bahan Lokal' },
+];
+
+// Cocokkan satu resep dengan satu preferensi diet (slug diet_tags.value).
+// Kunci utama: recipe.tags (berisi slug). Fallback: badge label (case-insensitive),
+// plus heuristik waktu/harga untuk slug 'cepat'/'hemat' (selaras perilaku lama).
+function recipeMatchesDiet(recipe, slug, label) {
+  if ((recipe.tags ?? []).includes(slug)) return true;
+  if (label && (recipe.badges ?? []).some((b) => b.toLowerCase() === label.toLowerCase())) return true;
+  if (slug === 'cepat' && recipe.readyInMinutes <= 30) return true;
+  if (slug === 'hemat' && recipe.priceIdr <= 30000) return true;
+  return false;
+}
 
 function shuffle(arr) {
   const result = [...arr];
@@ -21,7 +44,13 @@ function RecipeCatalog({ onAddToPlan }) {
   const [loadError, setLoadError] = useState('');
 
   const [searchQuery, setSearchQuery] = useState('');
+  // activeFilters menyimpan slug diet_tags.value (mis. 'vegetarian', 'serba-ayam').
+  // Diisi awal dari preferensi diet tersimpan user (profiles.diet_prefs).
   const [activeFilters, setActiveFilters] = useState([]);
+  // dietPool = semua preferensi aktif (diet_tags). dietSample = subset acak yang
+  // ditampilkan sebagai chip (selaras Generate step 2: variatif + "Pilihan lain").
+  const [dietPool, setDietPool] = useState(DEFAULT_DIET_OPTIONS);
+  const [dietSample, setDietSample] = useState(() => DEFAULT_DIET_OPTIONS.slice(0, 8));
   const [maxTime, setMaxTime] = useState(120); // default max 120 minutes
   const [priceCategory, setPriceCategory] = useState('Semua'); // 'Semua', 'Hemat', 'Standar', 'Premium'
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -75,6 +104,37 @@ function RecipeCatalog({ onAddToPlan }) {
     return () => { active = false; };
   }, []);
 
+  // Opsi diet (chip) + preferensi tersimpan user — sama sumbernya dengan Generate
+  // step 2: chip dari diet_tags, pilihan awal dari profiles.diet_prefs. Gagal fetch
+  // → tetap pakai fallback konstanta, dan user belum login → tanpa pra-pilih.
+  useEffect(() => {
+    let active = true;
+    Promise.all([
+      getActiveDietTags().catch(() => []),
+      getProfile().catch(() => null),
+    ]).then(([rows, prof]) => {
+      if (!active) return;
+      const pool = rows.length ? rows : DEFAULT_DIET_OPTIONS;
+      setDietPool(pool);
+      // Hanya pra-pilih pref yang ada di pool agar tiap filter aktif punya chip.
+      const poolValues = new Set(pool.map((d) => d.value));
+      const prefs = (prof?.dietPrefs ?? []).filter((v) => poolValues.has(v));
+      setActiveFilters(prefs);
+      setDietSample(sampleDietTags(pool, 8, prefs));
+    });
+    return () => { active = false; };
+  }, []);
+
+  // Peta slug → label untuk pencocokan & tampilan.
+  const dietLabelOf = useMemo(() => {
+    const m = new Map();
+    for (const d of dietPool) m.set(d.value, d.label);
+    return m;
+  }, [dietPool]);
+
+  // Tampilkan kombinasi preferensi diet acak lain (yang sedang dipilih tetap muncul).
+  const reshuffleDiet = () => setDietSample(sampleDietTags(dietPool, 8, activeFilters));
+
   // Toggle simpan/hapus resep (optimistic + rollback bila gagal).
   const handleToggleSaved = async (recipe) => {
     const id = recipe.id;
@@ -126,24 +186,11 @@ function RecipeCatalog({ onAddToPlan }) {
         if (!matchesTitle && !matchesIngredients) return false;
       }
 
-      // 2. Quick Filter Chips
+      // 2. Preferensi diet (chip) — cocokkan slug ke recipe.tags / badges.
       if (activeFilters.length > 0) {
-        const badges = recipe.badges ?? [];
-        const matchesAllActive = activeFilters.every((filter) => {
-          if (filter === 'Vegetarian') {
-            return badges.includes('Vegetarian');
-          }
-          if (filter === 'Cepat') {
-            return recipe.readyInMinutes <= 30 || badges.includes('Cepat');
-          }
-          if (filter === 'Bahan Lokal') {
-            return badges.includes('Bahan Lokal');
-          }
-          if (filter === 'Hemat Budget') {
-            return recipe.priceIdr <= 30000 || badges.includes('Hemat Budget');
-          }
-          return true;
-        });
+        const matchesAllActive = activeFilters.every((slug) =>
+          recipeMatchesDiet(recipe, slug, dietLabelOf.get(slug))
+        );
         if (!matchesAllActive) return false;
       }
 
@@ -157,7 +204,7 @@ function RecipeCatalog({ onAddToPlan }) {
 
       return true;
     });
-  }, [recipes, searchQuery, activeFilters, maxTime, priceCategory]);
+  }, [recipes, searchQuery, activeFilters, maxTime, priceCategory, dietLabelOf]);
 
   // Handle confirming "Add to Plan"
   const handleConfirmAddToPlan = () => {
@@ -228,47 +275,29 @@ function RecipeCatalog({ onAddToPlan }) {
           )}
         </div>
 
-        {/* Quick Filter Tag Buttons */}
+        {/* Chip preferensi diet — dinamis dari diet_tags (sama dgn Generate step 2),
+            pra-pilih dari preferensi tersimpan user. */}
         <div className="flex flex-wrap justify-center items-center gap-3">
+          {dietSample.map((opt) => (
+            <button
+              key={opt.value}
+              onClick={() => handleToggleFilter(opt.value)}
+              className={`px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
+                activeFilters.includes(opt.value)
+                  ? 'bg-primary text-white border-primary shadow-sm'
+                  : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
           <button
-            onClick={() => handleToggleFilter('Vegetarian')}
-            className={`px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
-              activeFilters.includes('Vegetarian')
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
-            }`}
+            type="button"
+            onClick={reshuffleDiet}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs md:text-sm font-semibold border border-dashed border-primary/50 text-primary hover:bg-primary/5 active:scale-95 transition cursor-pointer"
           >
-            Vegetarian
-          </button>
-          <button
-            onClick={() => handleToggleFilter('Cepat')}
-            className={`px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
-              activeFilters.includes('Cepat')
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
-            }`}
-          >
-            Cepat (&lt; 30 mnt)
-          </button>
-          <button
-            onClick={() => handleToggleFilter('Bahan Lokal')}
-            className={`px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
-              activeFilters.includes('Bahan Lokal')
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
-            }`}
-          >
-            Bahan Lokal
-          </button>
-          <button
-            onClick={() => handleToggleFilter('Hemat Budget')}
-            className={`px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
-              activeFilters.includes('Hemat Budget')
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
-            }`}
-          >
-            Hemat Budget
+            <span className="material-symbols-outlined text-[18px]">casino</span>
+            Pilihan lain
           </button>
 
           {/* Toggle Advanced Filters Button */}
