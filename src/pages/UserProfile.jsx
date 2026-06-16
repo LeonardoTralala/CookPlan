@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
-import { getProfile, updateProfile } from '../services/profileService.js';
+import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
@@ -95,6 +95,33 @@ function UserProfile() {
     }
   };
 
+  // Foto profil: input file tersembunyi dipicu lewat klik avatar. URL disimpan
+  // di profiles.avatar_url; fallback ke placeholder bila kosong / gagal muat.
+  const avatarInputRef = useRef(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const avatarSrc = profile?.avatarUrl || AVATAR_URL;
+
+  const handleAvatarPick = () => {
+    if (uploadingAvatar) return;
+    avatarInputRef.current?.click();
+  };
+
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // reset agar pilih file yang sama lagi tetap memicu onChange
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      const updated = await uploadAvatar(file);
+      setProfile(updated);
+      showToast('Foto profil diperbarui.');
+    } catch (err) {
+      showToast(err.message || 'Gagal mengunggah foto profil.');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   // Data identitas. Nama dari profil; email & tanggal gabung dari sesi/auth.
   const displayName = metaName || user?.email?.split('@')[0] || 'Pengguna';
   const displayEmail = user?.email || '-';
@@ -185,17 +212,42 @@ function UserProfile() {
         <div className="col-span-1 md:col-span-9 space-y-12">
           {/* User Header */}
           <section className="flex flex-col md:flex-row items-center md:items-start gap-6 bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant shadow-[0_8px_24px_-8px_rgba(44,58,30,0.04)]">
-            <div className="relative group cursor-pointer" onClick={() => soon('Ubah Foto Profil')}>
+            <div
+              className="relative group cursor-pointer"
+              onClick={handleAvatarPick}
+              role="button"
+              tabIndex={0}
+              aria-label="Ubah foto profil"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  handleAvatarPick();
+                }
+              }}
+            >
               <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-4 border-surface-cream bg-surface-variant flex items-center justify-center shadow-sm">
                 <img
-                  src={AVATAR_URL}
+                  src={avatarSrc}
                   alt={displayName}
+                  onError={(e) => { e.currentTarget.src = AVATAR_URL; }}
                   className="w-full h-full object-cover"
                 />
               </div>
-              <div className="absolute inset-0 bg-primary/20 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity rounded-full backdrop-blur-sm">
-                <span className="material-symbols-outlined text-white">photo_camera</span>
+              <div
+                className={`absolute inset-0 bg-primary/20 flex items-center justify-center rounded-full backdrop-blur-sm transition-opacity ${uploadingAvatar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                  }`}
+              >
+                <span className={`material-symbols-outlined text-white ${uploadingAvatar ? 'animate-spin' : ''}`}>
+                  {uploadingAvatar ? 'progress_activity' : 'photo_camera'}
+                </span>
               </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
             </div>
 
             <div className="flex-grow text-center md:text-left space-y-2 mt-2 md:mt-4">

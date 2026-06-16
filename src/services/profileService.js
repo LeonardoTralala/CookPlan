@@ -63,3 +63,39 @@ export async function updateProfile(patch = {}) {
 
   return getProfile();
 }
+
+// --- Foto profil (Supabase Storage: bucket "avatars") ------------------------
+const AVATAR_BUCKET = "avatars";
+const MAX_AVATAR_BYTES = 2 * 1024 * 1024; // 2 MB, samakan dengan limit bucket
+const ALLOWED_AVATAR_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+// Unggah foto profil lalu simpan URL-nya ke profiles.avatar_url.
+// Validasi tipe & ukuran di sisi klien (UX cepat); RLS + limit bucket menjaga
+// di sisi server. Path tetap "{user_id}/avatar" (upsert) → satu file per user,
+// sehingga ganti foto tidak menumpuk file lama.
+export async function uploadAvatar(file) {
+  if (!file) throw new Error("File tidak ditemukan.");
+  if (!ALLOWED_AVATAR_TYPES.includes(file.type)) {
+    throw new Error("Format foto harus JPG, PNG, atau WebP.");
+  }
+  if (file.size > MAX_AVATAR_BYTES) {
+    throw new Error("Ukuran foto maksimal 2 MB.");
+  }
+
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) throw new Error("Belum login.");
+
+  const path = `${user.id}/avatar`;
+  const { error: uploadError } = await supabase.storage
+    .from(AVATAR_BUCKET)
+    .upload(path, file, { upsert: true, contentType: file.type });
+  if (uploadError) throw uploadError;
+
+  const { data: pub } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+  // Nama file tetap, jadi tambahkan cache-buster waktu agar <img> & browser
+  // memuat versi terbaru, bukan foto lama dari cache.
+  const avatarUrl = `${pub.publicUrl}?t=${Date.now()}`;
+
+  return updateProfile({ avatarUrl });
+}
