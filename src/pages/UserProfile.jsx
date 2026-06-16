@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
 import { getActiveDietTags } from '../services/dietService.js';
@@ -30,7 +30,7 @@ const COMING_SOON = {
 // Daftar navigasi Pengaturan + blok Bantuan & Legal. Dipakai di sidebar desktop
 // (asTablist: tab ARIA penuh + navigasi panah) dan di dalam SettingsDrawer mobile
 // (asTablist=false: menu navigasi biasa, hindari duplikasi id tab di DOM).
-function SettingsNavList({ activeNav, onSelect, onSoon, asTablist = false }) {
+function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = false, asTablist = false }) {
   const tabRefs = useRef({});
 
   // Navigasi panah antar-tab (roving tabindex) — hanya pada mode tablist desktop.
@@ -100,6 +100,18 @@ function SettingsNavList({ activeNav, onSelect, onSoon, asTablist = false }) {
           Kebijakan Privasi
         </button>
       </div>
+      <div className="pt-4 mt-4 border-t border-outline-variant">
+        <button
+          onClick={onLogout}
+          disabled={signingOut}
+          className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-left text-error hover:bg-error/10 transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+        >
+          <span className={`material-symbols-outlined ${signingOut ? 'animate-spin' : ''}`}>
+            {signingOut ? 'progress_activity' : 'logout'}
+          </span>
+          {signingOut ? 'Keluar…' : 'Keluar'}
+        </button>
+      </div>
     </>
   );
 }
@@ -126,7 +138,8 @@ function ComingSoonPanel({ icon, title, desc }) {
 
 function UserProfile() {
   const { showToast } = usePlan();
-  const { user, updatePassword } = useAuth();
+  const { user, updatePassword, signOut, resendVerification } = useAuth();
+  const navigate = useNavigate();
   const soon = (fitur) => showToast(`Fitur ${fitur} sedang dikembangkan oleh rekan tim!`);
 
   // Tab aktif disimpan di URL (?tab=...) supaya refresh, bookmark, dan tombol
@@ -160,27 +173,13 @@ function UserProfile() {
   const metaName = profile?.fullName || '';
   const metaGender = profile?.gender || '';
 
-  // profile.gender adalah sumber kebenaran; override lokal hanya untuk tampilan
-  // optimistic selama proses simpan.
-  const [genderOverride, setGenderOverride] = useState(null);
-  const [savingGender, setSavingGender] = useState(false);
-  const gender = genderOverride ?? metaGender;
-
-  const handleGenderChange = async (value) => {
-    setGenderOverride(value); // optimistic
-    setSavingGender(true);
-    try {
-      const updated = await updateProfile({ gender: value });
-      setProfile(updated);     // profil kini jadi sumber kebenaran
-      setGenderOverride(null);
-      showToast('Jenis kelamin diperbarui.');
-    } catch (err) {
-      setGenderOverride(null); // rollback ke nilai profil
-      showToast(err.message || 'Gagal memperbarui jenis kelamin.');
-    } finally {
-      setSavingGender(false);
-    }
-  };
+  // Jenis kelamin hanya ditampilkan di header (read-only); satu-satunya tempat
+  // mengeditnya adalah modal Edit Profil — hindari dua kontrol untuk field sama.
+  const genderLabel = metaGender === 'male'
+    ? 'Laki-laki'
+    : metaGender === 'female'
+      ? 'Perempuan'
+      : 'Belum diisi';
 
   // Modal Edit Profil (nama lengkap + jenis kelamin).
   const [editOpen, setEditOpen] = useState(false);
@@ -372,6 +371,36 @@ function UserProfile() {
     }
   };
 
+  // Keluar akun: pola sama dengan AppShell (signOut → kembali ke landing).
+  const [signingOut, setSigningOut] = useState(false);
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+      navigate('/');
+    } catch (err) {
+      console.error('Sign out gagal:', err);
+      showToast('Gagal keluar. Coba lagi.');
+    } finally {
+      setSigningOut(false);
+    }
+  };
+
+  // Kirim ulang email verifikasi (hanya relevan bila email belum terverifikasi).
+  const [resending, setResending] = useState(false);
+  const handleResendVerification = async () => {
+    setResending(true);
+    try {
+      const { error } = await resendVerification(displayEmail);
+      if (error) throw error;
+      showToast('Email verifikasi telah dikirim. Cek kotak masuk Anda.');
+    } catch (err) {
+      showToast(err.message || 'Gagal mengirim email verifikasi.');
+    } finally {
+      setResending(false);
+    }
+  };
+
   // Pilih item nav: set panel aktif & tutup drawer (no-op di desktop).
   const handleSelectNav = (id) => {
     setActiveNav(id);
@@ -496,6 +525,15 @@ function UserProfile() {
                   <p className={`text-xs font-semibold ${emailVerified ? 'text-success-green' : 'text-on-surface-variant'}`}>
                     {emailVerified ? 'Email terverifikasi' : 'Email belum terverifikasi'}
                   </p>
+                  {!emailVerified && (
+                    <button
+                      onClick={handleResendVerification}
+                      disabled={resending}
+                      className="mt-1 text-xs font-semibold text-primary hover:underline cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                    >
+                      {resending ? 'Mengirim…' : 'Kirim ulang verifikasi'}
+                    </button>
+                  )}
                 </div>
               </div>
               {/* Google */}
@@ -696,17 +734,7 @@ function UserProfile() {
               )}
               <span className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-low border border-outline-variant text-on-surface-variant rounded-full text-xs font-semibold">
                 <span className="material-symbols-outlined text-[14px]">wc</span>
-                Jenis Kelamin:
-                <select
-                  value={gender}
-                  onChange={(e) => handleGenderChange(e.target.value)}
-                  disabled={savingGender}
-                  className="bg-transparent border-none p-0 pr-1 focus:ring-0 text-xs font-semibold cursor-pointer outline-none disabled:opacity-60 disabled:cursor-wait"
-                >
-                  <option value="" disabled>Pilih</option>
-                  <option value="male">Laki-laki</option>
-                  <option value="female">Perempuan</option>
-                </select>
+                Jenis Kelamin: {genderLabel}
               </span>
             </div>
           </div>
@@ -740,7 +768,7 @@ function UserProfile() {
           {/* ---------------- Sidebar Settings (desktop) ---------------- */}
           <aside className="hidden md:block col-span-3 space-y-2 sticky top-[100px] self-start">
             <h2 className="font-headline-md text-headline-md text-primary mb-6">Pengaturan</h2>
-            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} asTablist />
+            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} onLogout={handleSignOut} signingOut={signingOut} asTablist />
           </aside>
 
           {/* ---------------- Panel aktif ---------------- */}
@@ -758,7 +786,7 @@ function UserProfile() {
 
       {/* ---------------- Drawer navigasi (mobile) ---------------- */}
       <SettingsDrawer isOpen={navDrawerOpen} onClose={() => setNavDrawerOpen(false)}>
-        <SettingsNavList activeNav={activeNav} onSelect={handleSelectNav} onSoon={handleDrawerSoon} />
+        <SettingsNavList activeNav={activeNav} onSelect={handleSelectNav} onSoon={handleDrawerSoon} onLogout={handleSignOut} signingOut={signingOut} />
       </SettingsDrawer>
 
       {/* ---------------- Modal Edit Profil ---------------- */}
