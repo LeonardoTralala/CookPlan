@@ -114,7 +114,8 @@ export function ShopWithUsTab({ onSave }) {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+    <div className="space-y-6 pb-32 sm:pb-0">
       {/* Pemilih paket */}
       <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
         {packages.map((p) => (
@@ -226,8 +227,8 @@ export function ShopWithUsTab({ onSave }) {
             </section>
           ))}
 
-          {/* Ringkasan + aksi */}
-          <div className="bg-surface-cream rounded-2xl p-5 space-y-2">
+          {/* Ringkasan + aksi - disembunyikan di mobile (lihat sticky bar di bawah) */}
+          <div className="hidden sm:block bg-surface-cream rounded-2xl p-5 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-on-surface-variant">Total Bahan ({totalItems} item)</span>
               <span className="font-semibold text-on-surface">{formatRupiah(estimatedCost)}</span>
@@ -242,7 +243,7 @@ export function ShopWithUsTab({ onSave }) {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="hidden sm:flex flex-col sm:flex-row gap-3">
             <button onClick={handleSave} disabled={totalItems === 0}
               className="px-5 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 transition cursor-pointer disabled:opacity-50 inline-flex items-center justify-center gap-2">
               <span className="material-symbols-outlined text-[20px]">bookmark_add</span>
@@ -260,5 +261,31 @@ export function ShopWithUsTab({ onSave }) {
         </>
       )}
     </div>
+
+    {/* Sticky bar mobile: total + CTA melayang di atas nav bawah */}
+    {selected && totalItems > 0 && (
+      <div className="sm:hidden fixed bottom-above-nav left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-outline-variant shadow-xl px-4 py-3">
+        <div className="flex items-center gap-2 mb-2.5">
+          <span className="text-xs text-on-surface-variant flex-1">{totalItems} bahan</span>
+          <span className="font-bold text-primary">{formatRupiah(total)}</span>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={handleSave} disabled={totalItems === 0}
+            className="flex-1 py-2.5 border border-primary text-primary rounded-full font-semibold text-sm transition cursor-pointer disabled:opacity-50 inline-flex items-center justify-center gap-1.5 active:scale-95">
+            <span className="material-symbols-outlined text-[18px]">bookmark_add</span>
+            Simpan
+          </button>
+          <button onClick={handleOrder} disabled={ordering || totalItems === 0}
+            className="flex-1 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm transition cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-1.5 active:scale-95">
+            {ordering ? (
+              <><span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> Proses…</>
+            ) : (
+              <><span className="material-symbols-outlined text-[18px]">chat</span> Pesan WA</>
+            )}
+          </button>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
