@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
@@ -26,29 +27,60 @@ const COMING_SOON = {
   preferences: { icon: 'tune', title: 'Preferensi', desc: 'Atur preferensi diet, alergi, dan porsi rencana makan.' }
 };
 
-const RECIPE_FILTERS = ['Semua Resep', 'Sarapan Cepat', 'Favorit Vegetarian', 'Makan Malam Tradisional'];
-
 // Daftar navigasi Pengaturan + blok Bantuan & Legal. Dipakai di sidebar desktop
-// dan di dalam SettingsDrawer (mobile); onSelect membedakan keduanya.
-function SettingsNavList({ activeNav, onSelect, onSoon }) {
+// (asTablist: tab ARIA penuh + navigasi panah) dan di dalam SettingsDrawer mobile
+// (asTablist=false: menu navigasi biasa, hindari duplikasi id tab di DOM).
+function SettingsNavList({ activeNav, onSelect, onSoon, asTablist = false }) {
+  const tabRefs = useRef({});
+
+  // Navigasi panah antar-tab (roving tabindex) — hanya pada mode tablist desktop.
+  const handleKeyDown = (e, idx) => {
+    if (!asTablist) return;
+    let nextIdx = null;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') nextIdx = (idx + 1) % SETTINGS_NAV.length;
+    else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') nextIdx = (idx - 1 + SETTINGS_NAV.length) % SETTINGS_NAV.length;
+    else if (e.key === 'Home') nextIdx = 0;
+    else if (e.key === 'End') nextIdx = SETTINGS_NAV.length - 1;
+    if (nextIdx === null) return;
+    e.preventDefault();
+    const nextId = SETTINGS_NAV[nextIdx].id;
+    onSelect(nextId);
+    tabRefs.current[nextId]?.focus();
+  };
+
   return (
     <>
-      {SETTINGS_NAV.map((item) => {
-        const active = activeNav === item.id;
-        return (
-          <button
-            key={item.id}
-            onClick={() => onSelect(item.id)}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-left transition-colors cursor-pointer ${active
-              ? 'bg-surface-cream text-primary font-bold shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)]'
-              : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary'
-              }`}
-          >
-            <span className={`material-symbols-outlined ${active ? 'fill' : ''}`}>{item.icon}</span>
-            {item.label}
-          </button>
-        );
-      })}
+      <div
+        role={asTablist ? 'tablist' : undefined}
+        aria-orientation={asTablist ? 'vertical' : undefined}
+        aria-label={asTablist ? 'Pengaturan' : undefined}
+        className="space-y-2"
+      >
+        {SETTINGS_NAV.map((item, idx) => {
+          const active = activeNav === item.id;
+          return (
+            <button
+              key={item.id}
+              ref={(el) => { tabRefs.current[item.id] = el; }}
+              onClick={() => onSelect(item.id)}
+              onKeyDown={(e) => handleKeyDown(e, idx)}
+              role={asTablist ? 'tab' : undefined}
+              id={asTablist ? `tab-${item.id}` : undefined}
+              aria-selected={asTablist ? active : undefined}
+              aria-controls={asTablist ? 'settings-panel' : undefined}
+              aria-current={!asTablist && active ? 'page' : undefined}
+              tabIndex={asTablist ? (active ? 0 : -1) : undefined}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-left transition-colors cursor-pointer ${active
+                ? 'bg-surface-cream text-primary font-bold shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)]'
+                : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary'
+                }`}
+            >
+              <span className={`material-symbols-outlined ${active ? 'fill' : ''}`}>{item.icon}</span>
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
       <div className="pt-6 mt-6 border-t border-outline-variant">
         <h3 className="text-xs font-semibold text-on-surface mb-3 px-4 uppercase tracking-widest">
           Bantuan &amp; Legal
@@ -96,9 +128,21 @@ function UserProfile() {
   const { showToast } = usePlan();
   const { user, updatePassword } = useAuth();
   const soon = (fitur) => showToast(`Fitur ${fitur} sedang dikembangkan oleh rekan tim!`);
-  const [activeNav, setActiveNav] = useState('saved');
+
+  // Tab aktif disimpan di URL (?tab=...) supaya refresh, bookmark, dan tombol
+  // back/forward browser konsisten. Nilai tak dikenal jatuh ke 'saved'.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeNav = SETTINGS_NAV.some((i) => i.id === tabParam) ? tabParam : 'saved';
+  const setActiveNav = (id) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', id);
+      return next;
+    });
+  };
+
   const [navDrawerOpen, setNavDrawerOpen] = useState(false);
-  const [activeFilter, setActiveFilter] = useState('Semua Resep');
   const [savedSearch, setSavedSearch] = useState('');
 
   // Profil dimuat dari tabel public.profiles (sumber kebenaran). Diperbarui
@@ -334,24 +378,6 @@ function UserProfile() {
                   <span className="material-symbols-outlined" aria-hidden="true">add</span>
                 </button>
               </div>
-            </div>
-
-            <div className="flex items-center gap-3 overflow-x-auto pb-2 hide-scrollbar">
-              {RECIPE_FILTERS.map((filter) => {
-                const active = activeFilter === filter;
-                return (
-                  <button
-                    key={filter}
-                    onClick={() => setActiveFilter(filter)}
-                    className={`px-4 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors cursor-pointer ${active
-                      ? 'bg-primary text-on-primary'
-                      : 'bg-surface-cream text-on-surface-variant hover:bg-surface-variant'
-                      }`}
-                  >
-                    {filter}
-                  </button>
-                );
-              })}
             </div>
 
             {loadingSaved ? (
@@ -622,11 +648,17 @@ function UserProfile() {
           {/* ---------------- Sidebar Settings (desktop) ---------------- */}
           <aside className="hidden md:block col-span-3 space-y-2 sticky top-[100px] self-start">
             <h2 className="font-headline-md text-headline-md text-primary mb-6">Pengaturan</h2>
-            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} />
+            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} asTablist />
           </aside>
 
           {/* ---------------- Panel aktif ---------------- */}
-          <div className="col-span-1 md:col-span-9">
+          <div
+            id="settings-panel"
+            role="tabpanel"
+            aria-labelledby={`tab-${activeNav}`}
+            tabIndex={0}
+            className="col-span-1 md:col-span-9 outline-none"
+          >
             {renderPanel()}
           </div>
         </div>
