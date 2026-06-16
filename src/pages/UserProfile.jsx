@@ -528,23 +528,15 @@ function UserProfile() {
             <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
               Manajemen Langganan
             </h3>
-            <div className="p-6 rounded-2xl border border-dashed border-outline-variant bg-surface-container-lowest flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-6">
-                <div className="w-16 h-16 rounded-2xl bg-surface-variant flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined text-[32px]">card_membership</span>
-                </div>
-                <div className="space-y-1 text-center md:text-left">
-                  <div className="flex items-center gap-2 justify-center md:justify-start">
-                    <p className="font-headline-md text-headline-md text-primary">Paket Langganan</p>
-                    <span className="px-2.5 py-0.5 bg-surface-cream text-primary rounded-full text-xs font-bold uppercase tracking-wide">
-                      Coming Soon
-                    </span>
-                  </div>
-                  <p className="text-base text-on-surface-variant">
-                    Paket premium &amp; benefitnya sedang kami siapkan. Untuk sekarang, semua fitur tersedia gratis.
-                  </p>
-                </div>
+            <div className="p-10 rounded-2xl border border-dashed border-outline-variant bg-surface-container-lowest flex flex-col items-center text-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-surface-cream flex items-center justify-center text-primary">
+                <span className="material-symbols-outlined text-[28px]">card_membership</span>
               </div>
+              <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-widest">
+                Coming Soon
+              </span>
+              <p className="font-headline-md text-headline-md text-primary">Paket Premium</p>
+              <p className="text-sm text-on-surface-variant">Segera hadir — semua fitur masih gratis.</p>
             </div>
           </section>
         </div>
