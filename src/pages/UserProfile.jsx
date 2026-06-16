@@ -21,7 +21,7 @@ const RECIPE_FILTERS = ['Semua Resep', 'Sarapan Cepat', 'Favorit Vegetarian', 'M
 
 function UserProfile() {
   const { showToast } = usePlan();
-  const { user } = useAuth();
+  const { user, updatePassword } = useAuth();
   const soon = (fitur) => showToast(`Fitur ${fitur} sedang dikembangkan oleh rekan tim!`);
   const [activeNav, setActiveNav] = useState('saved');
   const [activeFilter, setActiveFilter] = useState('Semua Resep');
@@ -119,6 +119,49 @@ function UserProfile() {
       showToast(err.message || 'Gagal mengunggah foto profil.');
     } finally {
       setUploadingAvatar(false);
+    }
+  };
+
+  // Modal Ubah Kata Sandi. Memakai AuthContext.updatePassword (updateUser).
+  // Validasi sama dengan alur recovery di AuthPage: min 6 karakter + konfirmasi.
+  const [pwOpen, setPwOpen] = useState(false);
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [savingPw, setSavingPw] = useState(false);
+
+  const openPassword = () => {
+    setNewPw('');
+    setConfirmPw('');
+    setShowPw(false);
+    setPwOpen(true);
+  };
+
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (newPw.length < 6) {
+      showToast('Kata sandi minimal 6 karakter.');
+      return;
+    }
+    if (newPw !== confirmPw) {
+      showToast('Konfirmasi kata sandi tidak cocok.');
+      return;
+    }
+    setSavingPw(true);
+    try {
+      const { error } = await updatePassword(newPw);
+      if (error) throw error;
+      showToast('Kata sandi berhasil diperbarui.');
+      setPwOpen(false);
+    } catch (err) {
+      const msg = (err?.message || '').toLowerCase();
+      showToast(
+        msg.includes('should be at least')
+          ? 'Kata sandi minimal 6 karakter.'
+          : err?.message || 'Gagal memperbarui kata sandi.'
+      );
+    } finally {
+      setSavingPw(false);
     }
   };
 
@@ -444,7 +487,7 @@ function UserProfile() {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <button
-                onClick={() => soon('Ubah Kata Sandi')}
+                onClick={openPassword}
                 className="p-5 rounded-2xl border border-outline-variant bg-surface-container-lowest flex items-center justify-between hover:shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)] transition-all cursor-pointer group text-left"
               >
                 <div className="flex items-center gap-4">
@@ -572,6 +615,86 @@ function UserProfile() {
               className="px-6 py-3 bg-primary text-on-primary rounded-full text-sm font-semibold hover:bg-surface-tint transition-colors shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait"
             >
               {savingProfile ? 'Menyimpan...' : 'Simpan'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* ---------------- Modal Ubah Kata Sandi ---------------- */}
+      <Modal isOpen={pwOpen} onClose={() => setPwOpen(false)}>
+        <form
+          onSubmit={handleChangePassword}
+          className="bg-canvas-white rounded-panel p-8 max-w-md w-full shadow-2xl border border-outline-variant/30 relative space-y-6"
+        >
+          <button
+            type="button"
+            onClick={() => setPwOpen(false)}
+            className="absolute top-4 right-4 material-symbols-outlined text-on-surface-variant hover:bg-surface-container-low p-2 rounded-full cursor-pointer"
+            aria-label="Tutup"
+          >
+            close
+          </button>
+
+          <div>
+            <h3 className="font-headline-md text-headline-md text-primary">Ubah Kata Sandi</h3>
+            <p className="text-sm text-on-surface-variant mt-1">Masukkan kata sandi baru minimal 6 karakter.</p>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="new-password" className="block text-sm font-medium text-on-surface">
+              Kata Sandi Baru
+            </label>
+            <input
+              id="new-password"
+              type={showPw ? 'text' : 'password'}
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              placeholder="Minimal 6 karakter"
+              autoComplete="new-password"
+              autoFocus
+              className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="confirm-password" className="block text-sm font-medium text-on-surface">
+              Konfirmasi Kata Sandi
+            </label>
+            <input
+              id="confirm-password"
+              type={showPw ? 'text' : 'password'}
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              placeholder="Ulangi kata sandi baru"
+              autoComplete="new-password"
+              className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <label className="flex items-center gap-2 text-sm text-on-surface-variant cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showPw}
+              onChange={(e) => setShowPw(e.target.checked)}
+              className="accent-primary cursor-pointer"
+            />
+            Tampilkan kata sandi
+          </label>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setPwOpen(false)}
+              className="px-5 py-3 rounded-full text-sm font-semibold text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              type="submit"
+              disabled={savingPw}
+              className="px-6 py-3 bg-primary text-on-primary rounded-full text-sm font-semibold hover:bg-surface-tint transition-colors shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+            >
+              {savingPw ? 'Menyimpan...' : 'Simpan'}
             </button>
           </div>
         </form>
