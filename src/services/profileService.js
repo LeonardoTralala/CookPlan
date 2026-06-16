@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase.js";
 // avatar_url. Email tidak disimpan di profiles — selalu dibaca dari auth.users.
 // RLS owner-only (profiles_select_own / profiles_update_own) menjaga akses.
 
-const PROFILE_SELECT = "id, full_name, username, gender, avatar_url, created_at";
+const PROFILE_SELECT = "id, full_name, username, gender, avatar_url, created_at, diet_prefs";
 
 // Ambil profil pengguna aktif dalam bentuk camelCase yang siap dipakai UI.
 export async function getProfile() {
@@ -30,6 +30,7 @@ export async function getProfile() {
     gender: data.gender || "",        // NULL di DB → "" untuk UI
     avatarUrl: data.avatar_url || "",
     createdAt: data.created_at ?? user.created_at ?? null,
+    dietPrefs: data.diet_prefs ?? [], // array slug diet_tags.value
   };
 }
 
@@ -52,6 +53,11 @@ export async function updateProfile(patch = {}) {
     updates.gender = patch.gender === "" ? null : patch.gender;
   }
   if (patch.avatarUrl !== undefined) updates.avatar_url = patch.avatarUrl;
+  if (patch.dietPrefs !== undefined) {
+    if (!Array.isArray(patch.dietPrefs)) throw new Error("Preferensi diet tidak valid.");
+    // Normalisasi: hanya string, buang duplikat & kosong.
+    updates.diet_prefs = [...new Set(patch.dietPrefs.filter((v) => typeof v === "string" && v))];
+  }
 
   if (Object.keys(updates).length === 0) return getProfile();
 

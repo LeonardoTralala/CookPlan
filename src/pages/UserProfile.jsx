@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
+import { getActiveDietTags } from '../services/dietService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
@@ -23,8 +24,7 @@ const SETTINGS_NAV = [
 // dengan kartu Manajemen Langganan.
 const COMING_SOON = {
   orders: { icon: 'receipt_long', title: 'Riwayat Pesanan', desc: 'Lacak pesanan bahan & paket masakanmu di sini.' },
-  addresses: { icon: 'location_on', title: 'Alamat', desc: 'Simpan alamat pengiriman untuk checkout lebih cepat.' },
-  preferences: { icon: 'tune', title: 'Preferensi', desc: 'Atur preferensi diet, alergi, dan porsi rencana makan.' }
+  addresses: { icon: 'location_on', title: 'Alamat', desc: 'Simpan alamat pengiriman untuk checkout lebih cepat.' }
 };
 
 // Daftar navigasi Pengaturan + blok Bantuan & Legal. Dipakai di sidebar desktop
@@ -334,6 +334,44 @@ function UserProfile() {
     return savedRecipes.filter((r) => r.title.toLowerCase().includes(q));
   }, [savedRecipes, savedSearch]);
 
+  // Preferensi diet: pool referensi publik (diet_tags) + pilihan tersimpan
+  // pengguna (profiles.diet_prefs). Toggle persist optimistic; dipakai untuk
+  // prefill wizard generate-plan.
+  const [dietTags, setDietTags] = useState([]);
+  const [loadingDietTags, setLoadingDietTags] = useState(true);
+  useEffect(() => {
+    let active = true;
+    getActiveDietTags()
+      .then((rows) => { if (active) setDietTags(rows); })
+      .catch((err) => { console.error('Gagal memuat opsi preferensi diet:', err); })
+      .finally(() => { if (active) setLoadingDietTags(false); });
+    return () => { active = false; };
+  }, []);
+
+  // profile.dietPrefs adalah sumber kebenaran; override lokal hanya untuk tampilan
+  // optimistic selama proses simpan (pola sama dengan genderOverride).
+  const [dietOverride, setDietOverride] = useState(null);
+  const [savingDiet, setSavingDiet] = useState(false);
+  const dietPrefs = dietOverride ?? (profile?.dietPrefs ?? []);
+
+  const handleToggleDiet = async (value) => {
+    const next = dietPrefs.includes(value)
+      ? dietPrefs.filter((v) => v !== value)
+      : [...dietPrefs, value];
+    setDietOverride(next); // optimistic
+    setSavingDiet(true);
+    try {
+      const updated = await updateProfile({ dietPrefs: next });
+      setProfile(updated);   // profil kini jadi sumber kebenaran
+      setDietOverride(null);
+    } catch (err) {
+      setDietOverride(null); // rollback ke nilai profil
+      showToast(err.message || 'Gagal menyimpan preferensi.');
+    } finally {
+      setSavingDiet(false);
+    }
+  };
+
   // Pilih item nav: set panel aktif & tutup drawer (no-op di desktop).
   const handleSelectNav = (id) => {
     setActiveNav(id);
@@ -518,6 +556,60 @@ function UserProfile() {
                 </span>
               </button>
             </div>
+          </section>
+        );
+
+      case 'preferences':
+        return (
+          <section className="space-y-6">
+            <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
+              Preferensi Diet
+            </h3>
+            <p className="text-sm text-on-surface-variant -mt-2">
+              Pilihanmu tersimpan otomatis dan dipakai sebagai bawaan saat membuat rencana makan dengan AI.
+            </p>
+
+            {loadingDietTags ? (
+              <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
+                <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-2" aria-hidden="true">progress_activity</span>
+                <p className="text-sm">Memuat preferensi…</p>
+              </div>
+            ) : dietTags.length === 0 ? (
+              <div className="text-center py-12 text-on-surface-variant">
+                <span className="material-symbols-outlined text-5xl text-outline-variant mb-2 block">tune</span>
+                <p className="text-sm">Opsi preferensi belum tersedia.</p>
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {dietTags.map((tag) => {
+                    const active = dietPrefs.includes(tag.value);
+                    return (
+                      <button
+                        key={tag.value}
+                        onClick={() => handleToggleDiet(tag.value)}
+                        disabled={savingDiet}
+                        aria-pressed={active}
+                        className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait ${active
+                          ? 'bg-primary text-on-primary'
+                          : 'bg-surface-cream text-on-surface-variant hover:bg-surface-variant'
+                          }`}
+                      >
+                        <span className={`material-symbols-outlined text-[18px] ${active ? 'fill' : ''}`} aria-hidden="true">
+                          {active ? 'check_circle' : 'add'}
+                        </span>
+                        {tag.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-on-surface-variant">
+                  {dietPrefs.length > 0
+                    ? `${dietPrefs.length} preferensi dipilih.`
+                    : 'Belum ada preferensi dipilih.'}
+                </p>
+              </>
+            )}
           </section>
         );
 
