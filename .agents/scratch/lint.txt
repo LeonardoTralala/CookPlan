@@ -1,0 +1,10 @@
+
+> cookplan@0.0.0 lint
+> eslint .
+
+
+C:\Users\Zilfi Alvin\Desktop\PKM 2026\CookPlan PIMNAS\CookPlan\.agents\scratch\login_scr.js
+  78:3  error  'process' is not defined  no-undef
+
+✖ 1 problem (1 error, 0 warnings)
+

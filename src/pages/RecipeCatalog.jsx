@@ -259,7 +259,7 @@ function RecipeCatalog({ onAddToPlan }) {
             inputMode="search"
             enterKeyHint="search"
             autoComplete="off"
-            className="w-full pl-11 pr-6 py-2.5 rounded-full border border-outline-variant bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-sm transition-all text-sm font-medium"
+            className="w-full pl-11 pr-6 py-2.5 rounded-full border border-outline-variant bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-sm transition-all text-base md:text-sm font-medium"
             placeholder="Cari resep sehat untuk keluarga..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -282,7 +282,7 @@ function RecipeCatalog({ onAddToPlan }) {
             <button
               key={opt.value}
               onClick={() => handleToggleFilter(opt.value)}
-              className={`px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
+              className={`inline-flex items-center justify-center min-h-[44px] px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
                 activeFilters.includes(opt.value)
                   ? 'bg-primary text-white border-primary shadow-sm'
                   : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
@@ -294,7 +294,7 @@ function RecipeCatalog({ onAddToPlan }) {
           <button
             type="button"
             onClick={reshuffleDiet}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs md:text-sm font-semibold border border-dashed border-primary/50 text-primary hover:bg-primary/5 active:scale-95 transition cursor-pointer"
+            className="inline-flex items-center justify-center min-h-[44px] gap-1.5 px-4 py-2 rounded-full text-xs md:text-sm font-semibold border border-dashed border-primary/50 text-primary hover:bg-primary/5 active:scale-95 transition cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">casino</span>
             Pilihan lain
@@ -303,7 +303,7 @@ function RecipeCatalog({ onAddToPlan }) {
           {/* Toggle Advanced Filters Button */}
           <button
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`px-4 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`min-h-[44px] px-4 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               showAdvancedFilters
                 ? 'bg-primary text-white border-primary'
                 : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/20'
@@ -316,7 +316,7 @@ function RecipeCatalog({ onAddToPlan }) {
           {(searchQuery || activeFilters.length > 0 || maxTime < 120 || priceCategory !== 'Semua') && (
             <button
               onClick={handleResetFilters}
-              className="text-xs md:text-sm font-bold text-error hover:text-error/80 transition-colors flex items-center gap-1 cursor-pointer pl-2"
+              className="min-h-[44px] text-xs md:text-sm font-bold text-error hover:text-error/80 transition-colors flex items-center gap-1 cursor-pointer pl-2"
             >
               <span className="material-symbols-outlined text-base">restart_alt</span>
               Atur Ulang
@@ -358,7 +358,7 @@ function RecipeCatalog({ onAddToPlan }) {
                     <button
                       key={opt.value}
                       onClick={() => setMaxTime(opt.value)}
-                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+                      className={`inline-flex items-center justify-center min-h-[44px] px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
                         maxTime === opt.value
                           ? 'bg-primary text-white border-primary shadow-sm'
                           : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/30'
@@ -380,7 +380,7 @@ function RecipeCatalog({ onAddToPlan }) {
                     <button
                       key={cat}
                       onClick={() => setPriceCategory(cat)}
-                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+                      className={`inline-flex items-center justify-center min-h-[44px] px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
                         priceCategory === cat
                           ? 'bg-primary text-white border-primary shadow-sm'
                           : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/30'

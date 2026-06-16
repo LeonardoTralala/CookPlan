@@ -1,0 +1,18 @@
+
+> cookplan@0.0.0 build
+> vite build
+
+[36mvite v8.0.14 [32mbuilding client environment for production...[36m[39m
+[2Ktransforming...✓ 124 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   2.69 kB │ gzip:   1.22 kB
+dist/assets/index-C_1TI079.css   75.26 kB │ gzip:  12.42 kB
+dist/assets/index-BLZsaqHf.js   664.37 kB │ gzip: 179.37 kB
+
+[32m✓ built in 1.20s[39m
+[33m[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
