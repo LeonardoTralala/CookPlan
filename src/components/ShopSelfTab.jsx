@@ -87,7 +87,8 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-24 lg:pb-0">
       <div className="lg:col-span-8 space-y-6">
         {/* Toggle tampilan: per bahan (checklist) vs per menu (kelompok resep) */}
         <div className="inline-flex p-1 bg-surface-container-low rounded-full">
@@ -180,7 +181,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
         ))}
       </div>
 
-      <div className="lg:col-span-4">
+      <div className="hidden lg:block lg:col-span-4">
         <div className="sticky top-24 space-y-4">
           <div className="bg-surface-cream p-6 rounded-panel shadow-sm">
             <h3 className="font-headline-md text-headline-md text-primary mb-5">Ringkasan</h3>
@@ -210,6 +211,22 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+
+      {/* Sticky bar mobile: total + CTA melayang di atas nav bawah */}
+      <div className="lg:hidden fixed bottom-above-nav left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-outline-variant shadow-xl px-4 py-3">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-on-surface-variant leading-tight">{checkedCount} dari {totalItems} dibeli</p>
+            <p className="font-bold text-primary text-base leading-tight">{formatRupiah(total)}</p>
+          </div>
+          <button onClick={handleSave}
+            className="shrink-0 bg-primary text-on-primary px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 active:scale-95 transition cursor-pointer">
+            <span className="material-symbols-outlined text-[18px]">bookmark_add</span>
+            Simpan Daftar
+          </button>
+        </div>
+      </div>
+    </>
   );
 }

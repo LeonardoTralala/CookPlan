@@ -10,25 +10,36 @@ import {
 } from '../services/shoppingListService.js';
 import { formatRupiah, formatAmount } from '../utils/buildShoppingList.js';
 
-// Halaman Belanja dengan 2 tab (notulen #5):
-//   - Belanja Sendiri : daftar dari Weekly Planner (bahan belanja sendiri).
-//   - Belanja di Kami : paket menu fiks yang bahannya kami stok → order WA.
-// Plus fitur simpan daftar belanja (notulen #13) + daftar tersimpan.
-// Query param ?tab=kami → langsung buka tab "Belanja di Kami" dari halaman Generate.
+const SOURCE_LABEL = {
+  generate: 'Hasil Generate',
+  package: 'Paket Kami',
+  planner: 'Rencana Mingguan',
+};
+
 function ShoppingList({ weeklyPlan, onGoToPlanner }) {
   const { showToast } = usePlan();
   const [searchParams] = useSearchParams();
-  const [tab, setTab] = useState(() => searchParams.get('tab') === 'kami' ? 'us' : 'self'); // 'self' | 'us'
+  const [tab, setTab] = useState(() => searchParams.get('tab') === 'kami' ? 'us' : 'self');
   const [savedLists, setSavedLists] = useState([]);
-  const [viewList, setViewList] = useState(null); // daftar tersimpan yang dibuka
+  const [viewList, setViewList] = useState(null);
+  const [showSavedDrawer, setShowSavedDrawer] = useState(false);
 
   const refreshSaved = useCallback(() => {
     getSavedShoppingLists()
       .then(setSavedLists)
-      .catch(() => { /* opsional, jangan ganggu halaman */ });
+      .catch(() => {});
   }, []);
 
   useEffect(() => { refreshSaved(); }, [refreshSaved]);
+
+  // Tutup drawer otomatis jika semua daftar dihapus
+  useEffect(() => {
+    if (savedLists.length === 0) {
+      queueMicrotask(() => {
+        setShowSavedDrawer(false);
+      });
+    }
+  }, [savedLists.length]);
 
   const handleSave = useCallback(async (payload) => {
     try {
@@ -80,10 +91,72 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
           ? <ShopSelfTab weeklyPlan={weeklyPlan} onGoToPlanner={onGoToPlanner} onSave={handleSave} />
           : <ShopWithUsTab onSave={handleSave} />}
 
+        {/* Daftar tersimpan di bawah konten — tetap ada untuk desktop/scroll */}
         <SavedListsSection lists={savedLists} onDelete={handleDelete} onOpen={setViewList} />
       </main>
 
-      {/* Modal lihat isi daftar tersimpan */}
+      {/* Floating chip — akses cepat daftar tersimpan tanpa scroll */}
+      {savedLists.length > 0 && (
+        <button
+          onClick={() => setShowSavedDrawer(true)}
+          aria-label={`Lihat ${savedLists.length} daftar belanja tersimpan`}
+          className="fixed right-4 bottom-above-cta z-40 flex items-center gap-2 bg-white border border-outline-variant rounded-full shadow-lg px-4 py-2.5 text-sm font-bold text-on-surface hover:shadow-xl active:scale-95 transition cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-primary text-[20px]">bookmarks</span>
+          <span className="hidden sm:inline text-on-surface">Tersimpan</span>
+          <span className="min-w-[1.25rem] h-5 flex items-center justify-center bg-primary text-on-primary text-[11px] font-bold px-1.5 rounded-full">
+            {savedLists.length}
+          </span>
+        </button>
+      )}
+
+      {/* Drawer: daftar tersimpan (buka dari floating chip) */}
+      {showSavedDrawer && (
+        <ModalSheet
+          onClose={() => setShowSavedDrawer(false)}
+          labelledBy="saved-drawer-title"
+          panelClassName="max-w-lg max-h-[80dvh] flex flex-col"
+        >
+          <div className="px-6 pb-6 overflow-y-auto flex-1">
+            <h3 id="saved-drawer-title" className="font-headline-md text-headline-md text-primary mb-4 pt-2 flex items-center gap-2">
+              <span className="material-symbols-outlined">bookmarks</span>
+              Daftar Tersimpan
+            </h3>
+            <div className="grid grid-cols-1 gap-3">
+              {savedLists.map((l) => {
+                const items = Array.isArray(l.items_json) ? l.items_json : [];
+                return (
+                  <div key={l.id} className="rounded-2xl border border-outline-variant bg-white p-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <button
+                        onClick={() => { setShowSavedDrawer(false); setViewList(l); }}
+                        className="min-w-0 flex-1 text-left cursor-pointer"
+                      >
+                        <p className="font-semibold text-on-surface text-sm truncate">{l.title}</p>
+                        <p className="text-xs text-on-surface-variant mt-0.5">
+                          {SOURCE_LABEL[l.source_type] || l.source_type} · {items.length} bahan · {formatRupiah(l.total_idr)}
+                        </p>
+                        <p className="text-[11px] text-on-surface-variant/70 mt-0.5">
+                          {new Date(l.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => handleDelete(l.id)}
+                        aria-label="Hapus daftar"
+                        className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-on-surface-variant hover:text-error hover:bg-error/5 transition cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </ModalSheet>
+      )}
+
+      {/* Modal detail isi daftar tersimpan */}
       {viewList && (
         <ModalSheet onClose={() => setViewList(null)} labelledBy="sl-title" panelClassName="max-w-lg max-h-[85dvh] flex flex-col">
           <div className="p-6 overflow-y-auto">

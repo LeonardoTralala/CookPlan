@@ -380,46 +380,6 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
               </button>
             </div>
 
-            {/* Jadwal Pengiriman Bahan */}
-            <div className="bg-primary-container text-on-primary-container rounded-panel p-6">
-              <h3 className="font-headline-md text-headline-md mb-1 flex items-center gap-2">
-                <span className="material-symbols-outlined text-[22px]">local_shipping</span>
-                Jadwal Pengiriman
-              </h3>
-              <p className="text-on-primary-container/80 text-sm mb-5">
-                Bahan segar diantar langsung ke rumahmu.
-              </p>
-              <div className="space-y-2.5">
-                <div className="flex items-center gap-3 bg-white/15 rounded-2xl px-4 py-3">
-                  <span className="material-symbols-outlined text-[20px] shrink-0">bolt</span>
-                  <div>
-                    <p className="text-sm font-semibold">Pengiriman Hari Ini</p>
-                    <p className="text-xs opacity-70">Pesan sebelum pukul 12:00 WIB</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 bg-white/15 rounded-2xl px-4 py-3">
-                  <span className="material-symbols-outlined text-[20px] shrink-0">calendar_today</span>
-                  <div>
-                    <p className="text-sm font-semibold">Jadwal Besok</p>
-                    <p className="text-xs opacity-70">Pesan kapan saja hari ini</p>
-                  </div>
-                </div>
-              </div>
-              {stats.filled > 0 ? (
-                <button
-                  onClick={handleGenerateShoppingList}
-                  className="mt-5 w-full py-3 bg-white/20 hover:bg-white/30 text-on-primary-container rounded-full font-bold text-sm transition active:scale-95 cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-[20px]">shopping_cart</span>
-                  Pesan Bahan Sekarang
-                </button>
-              ) : (
-                <p className="mt-5 text-xs text-on-primary-container/70 text-center">
-                  Isi rencana makan dulu untuk mulai memesan bahan.
-                </p>
-              )}
-            </div>
-
           </aside>
         </div>
       </main>
