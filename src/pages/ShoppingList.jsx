@@ -34,7 +34,11 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
 
   // Tutup drawer otomatis jika semua daftar dihapus
   useEffect(() => {
-    if (savedLists.length === 0) setShowSavedDrawer(false);
+    if (savedLists.length === 0) {
+      queueMicrotask(() => {
+        setShowSavedDrawer(false);
+      });
+    }
   }, [savedLists.length]);
 
   const handleSave = useCallback(async (payload) => {
