@@ -5,8 +5,9 @@ import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
 import { Modal } from '../components/Modal.jsx';
+import { SettingsDrawer } from '../components/SettingsDrawer.jsx';
 
-// Item navigasi pada sidebar Settings (desktop)
+// Item navigasi Pengaturan. Dipakai bersama oleh sidebar (desktop) & drawer (mobile).
 const SETTINGS_NAV = [
   { id: 'personal', icon: 'person', label: 'Info Personal' },
   { id: 'orders', icon: 'receipt_long', label: 'Riwayat Pesanan' },
@@ -17,13 +18,86 @@ const SETTINGS_NAV = [
   { id: 'subscription', icon: 'payments', label: 'Langganan' }
 ];
 
+// Panel yang kontennya belum dibangun — render placeholder Coming Soon konsisten
+// dengan kartu Manajemen Langganan.
+const COMING_SOON = {
+  orders: { icon: 'receipt_long', title: 'Riwayat Pesanan', desc: 'Lacak pesanan bahan & paket masakanmu di sini.' },
+  addresses: { icon: 'location_on', title: 'Alamat', desc: 'Simpan alamat pengiriman untuk checkout lebih cepat.' },
+  preferences: { icon: 'tune', title: 'Preferensi', desc: 'Atur preferensi diet, alergi, dan porsi rencana makan.' }
+};
+
 const RECIPE_FILTERS = ['Semua Resep', 'Sarapan Cepat', 'Favorit Vegetarian', 'Makan Malam Tradisional'];
+
+// Daftar navigasi Pengaturan + blok Bantuan & Legal. Dipakai di sidebar desktop
+// dan di dalam SettingsDrawer (mobile); onSelect membedakan keduanya.
+function SettingsNavList({ activeNav, onSelect, onSoon }) {
+  return (
+    <>
+      {SETTINGS_NAV.map((item) => {
+        const active = activeNav === item.id;
+        return (
+          <button
+            key={item.id}
+            onClick={() => onSelect(item.id)}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-left transition-colors cursor-pointer ${active
+              ? 'bg-surface-cream text-primary font-bold shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)]'
+              : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary'
+              }`}
+          >
+            <span className={`material-symbols-outlined ${active ? 'fill' : ''}`}>{item.icon}</span>
+            {item.label}
+          </button>
+        );
+      })}
+      <div className="pt-6 mt-6 border-t border-outline-variant">
+        <h3 className="text-xs font-semibold text-on-surface mb-3 px-4 uppercase tracking-widest">
+          Bantuan &amp; Legal
+        </h3>
+        <button
+          onClick={() => onSoon('Customer Service')}
+          className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
+        >
+          <span className="material-symbols-outlined text-[20px]">support_agent</span>
+          Layanan Pelanggan
+        </button>
+        <button
+          onClick={() => onSoon('Privacy Policy')}
+          className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
+        >
+          <span className="material-symbols-outlined text-[20px]">policy</span>
+          Kebijakan Privasi
+        </button>
+      </div>
+    </>
+  );
+}
+
+// Placeholder untuk panel yang fiturnya belum siap.
+function ComingSoonPanel({ icon, title, desc }) {
+  return (
+    <section className="space-y-6">
+      <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
+        {title}
+      </h3>
+      <div className="p-10 rounded-2xl border border-dashed border-outline-variant bg-surface-container-lowest flex flex-col items-center text-center gap-4">
+        <div className="w-14 h-14 rounded-2xl bg-surface-cream flex items-center justify-center text-primary">
+          <span className="material-symbols-outlined text-[28px]">{icon}</span>
+        </div>
+        <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-widest">
+          Coming Soon
+        </span>
+        <p className="text-sm text-on-surface-variant max-w-xs">{desc}</p>
+      </div>
+    </section>
+  );
+}
 
 function UserProfile() {
   const { showToast } = usePlan();
   const { user, updatePassword } = useAuth();
   const soon = (fitur) => showToast(`Fitur ${fitur} sedang dikembangkan oleh rekan tim!`);
   const [activeNav, setActiveNav] = useState('saved');
+  const [navDrawerOpen, setNavDrawerOpen] = useState(false);
   const [activeFilter, setActiveFilter] = useState('Semua Resep');
   const [savedSearch, setSavedSearch] = useState('');
 
@@ -216,131 +290,24 @@ function UserProfile() {
     return savedRecipes.filter((r) => r.title.toLowerCase().includes(q));
   }, [savedRecipes, savedSearch]);
 
-  return (
-    <div className="bg-canvas-white text-on-surface min-h-dvh">
-      <div className="w-full max-w-container-max mx-auto px-5 md:px-10 py-8 md:py-16 grid grid-cols-1 md:grid-cols-12 gap-6">
-        {/* ---------------- Sidebar Settings (desktop) ---------------- */}
-        <aside className="hidden md:block col-span-3 space-y-2 sticky top-[100px] self-start">
-          <h2 className="font-headline-md text-headline-md text-primary mb-6">Pengaturan</h2>
-          {SETTINGS_NAV.map((item) => {
-            const active = activeNav === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveNav(item.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium text-left transition-colors cursor-pointer ${active
-                  ? 'bg-surface-cream text-primary font-bold shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)]'
-                  : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary'
-                  }`}
-              >
-                <span className={`material-symbols-outlined ${active ? 'fill' : ''}`}>{item.icon}</span>
-                {item.label}
-              </button>
-            );
-          })}
-          <div className="pt-6 mt-6 border-t border-outline-variant">
-            <h3 className="text-xs font-semibold text-on-surface mb-3 px-4 uppercase tracking-widest">
-              Bantuan &amp; Legal
-            </h3>
-            <button
-              onClick={() => soon('Customer Service')}
-              className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
-            >
-              <span className="material-symbols-outlined text-[20px]">support_agent</span>
-              Layanan Pelanggan
-            </button>
-            <button
-              onClick={() => soon('Privacy Policy')}
-              className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
-            >
-              <span className="material-symbols-outlined text-[20px]">policy</span>
-              Kebijakan Privasi
-            </button>
-          </div>
-        </aside>
+  // Pilih item nav: set panel aktif & tutup drawer (no-op di desktop).
+  const handleSelectNav = (id) => {
+    setActiveNav(id);
+    setNavDrawerOpen(false);
+  };
+  const handleDrawerSoon = (fitur) => {
+    soon(fitur);
+    setNavDrawerOpen(false);
+  };
+  const activeLabel = SETTINGS_NAV.find((i) => i.id === activeNav)?.label ?? 'Pengaturan';
 
-        {/* ---------------- Content Area ---------------- */}
-        <div className="col-span-1 md:col-span-9 space-y-12">
-          {/* User Header */}
-          <section className="flex flex-col md:flex-row items-center md:items-start gap-6 bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant shadow-[0_8px_24px_-8px_rgba(44,58,30,0.04)]">
-            <div
-              className="relative group cursor-pointer"
-              onClick={handleAvatarPick}
-              role="button"
-              tabIndex={0}
-              aria-label="Ubah foto profil"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  handleAvatarPick();
-                }
-              }}
-            >
-              <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-4 border-surface-cream bg-surface-variant flex items-center justify-center shadow-sm">
-                <img
-                  src={avatarSrc}
-                  alt={displayName}
-                  onError={(e) => { e.currentTarget.src = AVATAR_URL; }}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <div
-                className={`absolute inset-0 bg-primary/20 flex items-center justify-center rounded-full backdrop-blur-sm transition-opacity ${uploadingAvatar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                  }`}
-              >
-                <span className={`material-symbols-outlined text-white ${uploadingAvatar ? 'animate-spin' : ''}`}>
-                  {uploadingAvatar ? 'progress_activity' : 'photo_camera'}
-                </span>
-              </div>
-              <input
-                ref={avatarInputRef}
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="hidden"
-                onChange={handleAvatarChange}
-              />
-            </div>
+  // Konten panel sesuai tab aktif. Section yang belum dibangun → ComingSoonPanel.
+  const renderPanel = () => {
+    if (COMING_SOON[activeNav]) return <ComingSoonPanel {...COMING_SOON[activeNav]} />;
 
-            <div className="flex-grow text-center md:text-left space-y-2 mt-2 md:mt-4">
-              <h1 className="font-headline-xl text-headline-lg md:text-headline-xl text-primary tracking-tight leading-tight">
-                {displayName}
-              </h1>
-              <p className="text-lg text-on-surface-variant">{displayEmail}</p>
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-2">
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary text-on-primary rounded-full text-xs font-semibold shadow-sm">
-                  <span className="material-symbols-outlined text-[14px] fill">verified</span> Akun Aktif
-                </span>
-                {joinedAt && (
-                  <span className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-lowest border border-outline-variant text-on-surface-variant rounded-full text-xs font-semibold">
-                    Bergabung {joinedAt}
-                  </span>
-                )}
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-low border border-outline-variant text-on-surface-variant rounded-full text-xs font-semibold">
-                  <span className="material-symbols-outlined text-[14px]">wc</span>
-                  Jenis Kelamin:
-                  <select
-                    value={gender}
-                    onChange={(e) => handleGenderChange(e.target.value)}
-                    disabled={savingGender}
-                    className="bg-transparent border-none p-0 pr-1 focus:ring-0 text-xs font-semibold cursor-pointer outline-none disabled:opacity-60 disabled:cursor-wait"
-                  >
-                    <option value="" disabled>Pilih</option>
-                    <option value="male">Laki-laki</option>
-                    <option value="female">Perempuan</option>
-                  </select>
-                </span>
-              </div>
-            </div>
-
-            <button
-              onClick={openEdit}
-              className="hidden md:flex items-center justify-center px-6 py-3 bg-primary text-white rounded-full text-sm font-semibold hover:bg-surface-tint transition-colors shadow-sm cursor-pointer"
-            >
-              Edit Profil
-            </button>
-          </section>
-
-          {/* Saved Recipes */}
+    switch (activeNav) {
+      case 'saved':
+        return (
           <section className="space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
@@ -446,8 +413,10 @@ function UserProfile() {
               </div>
             )}
           </section>
+        );
 
-          {/* Connected Accounts — status nyata dari sesi auth */}
+      case 'personal':
+        return (
           <section className="space-y-6">
             <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
               Akun Terhubung
@@ -479,9 +448,11 @@ function UserProfile() {
               </div>
             </div>
           </section>
+        );
 
-          {/* Account Security */}
-          <section className="space-y-6 pt-4">
+      case 'security':
+        return (
+          <section className="space-y-6">
             <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
               Keamanan Akun
             </h3>
@@ -522,9 +493,11 @@ function UserProfile() {
               </button>
             </div>
           </section>
+        );
 
-          {/* Subscription Management — biaya & benefit paket belum final */}
-          <section className="space-y-6 pt-4">
+      case 'subscription':
+        return (
+          <section className="space-y-6">
             <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
               Manajemen Langganan
             </h3>
@@ -539,8 +512,130 @@ function UserProfile() {
               <p className="text-sm text-on-surface-variant">Segera hadir — semua fitur masih gratis.</p>
             </div>
           </section>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="bg-canvas-white text-on-surface min-h-dvh">
+      <div className="w-full max-w-container-max mx-auto px-5 md:px-10 py-8 md:py-16 space-y-8">
+        {/* ---------------- Header profil (persisten, semua ukuran) ---------------- */}
+        <section className="flex flex-col md:flex-row items-center md:items-start gap-6 bg-surface-container-lowest p-6 rounded-3xl border border-outline-variant shadow-[0_8px_24px_-8px_rgba(44,58,30,0.04)]">
+          <div
+            className="relative group cursor-pointer"
+            onClick={handleAvatarPick}
+            role="button"
+            tabIndex={0}
+            aria-label="Ubah foto profil"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                handleAvatarPick();
+              }
+            }}
+          >
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden border-4 border-surface-cream bg-surface-variant flex items-center justify-center shadow-sm">
+              <img
+                src={avatarSrc}
+                alt={displayName}
+                onError={(e) => { e.currentTarget.src = AVATAR_URL; }}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div
+              className={`absolute inset-0 bg-primary/20 flex items-center justify-center rounded-full backdrop-blur-sm transition-opacity ${uploadingAvatar ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+            >
+              <span className={`material-symbols-outlined text-white ${uploadingAvatar ? 'animate-spin' : ''}`}>
+                {uploadingAvatar ? 'progress_activity' : 'photo_camera'}
+              </span>
+            </div>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleAvatarChange}
+            />
+          </div>
+
+          <div className="flex-grow text-center md:text-left space-y-2 mt-2 md:mt-4">
+            <h1 className="font-headline-xl text-headline-lg md:text-headline-xl text-primary tracking-tight leading-tight">
+              {displayName}
+            </h1>
+            <p className="text-lg text-on-surface-variant">{displayEmail}</p>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-2">
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-primary text-on-primary rounded-full text-xs font-semibold shadow-sm">
+                <span className="material-symbols-outlined text-[14px] fill">verified</span> Akun Aktif
+              </span>
+              {joinedAt && (
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-lowest border border-outline-variant text-on-surface-variant rounded-full text-xs font-semibold">
+                  Bergabung {joinedAt}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-low border border-outline-variant text-on-surface-variant rounded-full text-xs font-semibold">
+                <span className="material-symbols-outlined text-[14px]">wc</span>
+                Jenis Kelamin:
+                <select
+                  value={gender}
+                  onChange={(e) => handleGenderChange(e.target.value)}
+                  disabled={savingGender}
+                  className="bg-transparent border-none p-0 pr-1 focus:ring-0 text-xs font-semibold cursor-pointer outline-none disabled:opacity-60 disabled:cursor-wait"
+                >
+                  <option value="" disabled>Pilih</option>
+                  <option value="male">Laki-laki</option>
+                  <option value="female">Perempuan</option>
+                </select>
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={openEdit}
+            className="w-full md:w-auto flex items-center justify-center px-6 py-3 bg-primary text-white rounded-full text-sm font-semibold hover:bg-surface-tint transition-colors shadow-sm cursor-pointer shrink-0"
+          >
+            Edit Profil
+          </button>
+        </section>
+
+        {/* ---------------- Trigger Pengaturan (mobile saja) ---------------- */}
+        <button
+          onClick={() => setNavDrawerOpen(true)}
+          className="md:hidden w-full flex items-center justify-between gap-3 px-5 py-3 rounded-2xl border border-outline-variant bg-surface-container-lowest text-on-surface font-medium cursor-pointer"
+          aria-haspopup="dialog"
+          aria-expanded={navDrawerOpen}
+        >
+          <span className="flex items-center gap-3">
+            <span className="material-symbols-outlined text-primary">tune</span>
+            Pengaturan
+          </span>
+          <span className="flex items-center gap-1 text-sm text-on-surface-variant">
+            {activeLabel}
+            <span className="material-symbols-outlined text-[20px]">expand_more</span>
+          </span>
+        </button>
+
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+          {/* ---------------- Sidebar Settings (desktop) ---------------- */}
+          <aside className="hidden md:block col-span-3 space-y-2 sticky top-[100px] self-start">
+            <h2 className="font-headline-md text-headline-md text-primary mb-6">Pengaturan</h2>
+            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} />
+          </aside>
+
+          {/* ---------------- Panel aktif ---------------- */}
+          <div className="col-span-1 md:col-span-9">
+            {renderPanel()}
+          </div>
         </div>
       </div>
+
+      {/* ---------------- Drawer navigasi (mobile) ---------------- */}
+      <SettingsDrawer isOpen={navDrawerOpen} onClose={() => setNavDrawerOpen(false)}>
+        <SettingsNavList activeNav={activeNav} onSelect={handleSelectNav} onSoon={handleDrawerSoon} />
+      </SettingsDrawer>
 
       {/* ---------------- Modal Edit Profil ---------------- */}
       <Modal isOpen={editOpen} onClose={() => setEditOpen(false)}>
