@@ -130,6 +130,14 @@ function UserProfile() {
     ? new Date(joinedAtSource).toLocaleDateString('id-ID', { month: 'short', year: 'numeric' })
     : null;
 
+  // Akun terhubung: status nyata dari sesi auth (bukan data dummy). Supabase
+  // menaruh provider di app_metadata.providers dan/atau daftar identities.
+  const authProviders = user?.app_metadata?.providers
+    ?? (user?.app_metadata?.provider ? [user.app_metadata.provider] : []);
+  const googleConnected = authProviders.includes('google')
+    || (user?.identities ?? []).some((i) => i.provider === 'google');
+  const emailVerified = Boolean(user?.email_confirmed_at);
+
   // Resep tersimpan milik pengguna (dari tabel saved_recipes via RLS).
   const [savedRecipes, setSavedRecipes] = useState([]);
   const [loadingSaved, setLoadingSaved] = useState(true);
@@ -396,67 +404,35 @@ function UserProfile() {
             )}
           </section>
 
-          {/* Connected Accounts */}
+          {/* Connected Accounts — status nyata dari sesi auth */}
           <section className="space-y-6">
             <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
               Akun Terhubung
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Email */}
+              <div className="p-5 rounded-2xl border border-outline-variant bg-surface-container-lowest flex items-center gap-4 hover:shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)] transition-all">
+                <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary shrink-0">
+                  <span className="material-symbols-outlined">mail</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-on-surface truncate">{displayEmail}</p>
+                  <p className={`text-xs font-semibold ${emailVerified ? 'text-success-green' : 'text-on-surface-variant'}`}>
+                    {emailVerified ? 'Email terverifikasi' : 'Email belum terverifikasi'}
+                  </p>
+                </div>
+              </div>
               {/* Google */}
-              <div className="p-5 rounded-2xl border border-outline-variant bg-surface-container-lowest flex items-center justify-between hover:shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)] transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary">
-                    <span className="material-symbols-outlined">mail</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-on-surface">Google</p>
-                    <p className="text-xs font-semibold text-success-green">Terhubung</p>
-                  </div>
+              <div className="p-5 rounded-2xl border border-outline-variant bg-surface-container-lowest flex items-center gap-4 hover:shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)] transition-all">
+                <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary shrink-0">
+                  <span className="material-symbols-outlined">account_circle</span>
                 </div>
-                <button
-                  onClick={() => soon('Putuskan Akun Google')}
-                  className="text-outline hover:text-error transition-colors cursor-pointer"
-                  aria-label="Putuskan akun Google"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">link_off</span>
-                </button>
-              </div>
-              {/* Phone */}
-              <div className="p-5 rounded-2xl border border-outline-variant bg-surface-container-lowest flex items-center justify-between hover:shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)] transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary">
-                    <span className="material-symbols-outlined">smartphone</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-on-surface">+62 812-3456-7890</p>
-                    <p className="text-xs font-semibold text-success-green">Terverifikasi</p>
-                  </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-on-surface">Google</p>
+                  <p className={`text-xs font-semibold ${googleConnected ? 'text-success-green' : 'text-on-surface-variant'}`}>
+                    {googleConnected ? 'Terhubung' : 'Belum terhubung'}
+                  </p>
                 </div>
-                <button
-                  onClick={() => soon('Ubah Nomor Telepon')}
-                  className="text-primary hover:text-surface-tint transition-colors cursor-pointer"
-                  aria-label="Ubah nomor telepon"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">edit</span>
-                </button>
-              </div>
-              {/* WhatsApp */}
-              <div className="p-5 rounded-2xl border-2 border-dashed border-outline-variant bg-surface-container-lowest flex items-center justify-between hover:shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)] transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 rounded-full bg-canvas-white border border-outline-variant flex items-center justify-center text-outline">
-                    <span className="material-symbols-outlined">chat</span>
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-on-surface-variant">WhatsApp</p>
-                    <p className="text-xs text-on-surface-variant">Belum terhubung</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => soon('Hubungkan WhatsApp')}
-                  className="px-3 py-1 border border-primary text-primary rounded-full text-xs font-semibold hover:bg-surface-cream transition-colors cursor-pointer"
-                >
-                  Hubungkan
-                </button>
               </div>
             </div>
           </section>
@@ -504,29 +480,28 @@ function UserProfile() {
             </div>
           </section>
 
-          {/* Subscription Management */}
+          {/* Subscription Management — biaya & benefit paket belum final */}
           <section className="space-y-6 pt-4">
             <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
               Manajemen Langganan
             </h3>
-            <div className="p-6 rounded-2xl border border-outline-variant bg-surface-container-lowest flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="p-6 rounded-2xl border border-dashed border-outline-variant bg-surface-container-lowest flex flex-col md:flex-row items-center justify-between gap-6">
               <div className="flex items-center gap-6">
-                <div className="w-16 h-16 rounded-2xl bg-primary-container/10 flex items-center justify-center text-primary">
-                  <span className="material-symbols-outlined text-[32px] fill">card_membership</span>
+                <div className="w-16 h-16 rounded-2xl bg-surface-variant flex items-center justify-center text-primary">
+                  <span className="material-symbols-outlined text-[32px]">card_membership</span>
                 </div>
                 <div className="space-y-1 text-center md:text-left">
-                  <p className="font-headline-md text-headline-md text-primary">Paket Pro</p>
+                  <div className="flex items-center gap-2 justify-center md:justify-start">
+                    <p className="font-headline-md text-headline-md text-primary">Paket Langganan</p>
+                    <span className="px-2.5 py-0.5 bg-surface-cream text-primary rounded-full text-xs font-bold uppercase tracking-wide">
+                      Coming Soon
+                    </span>
+                  </div>
                   <p className="text-base text-on-surface-variant">
-                    Langganan Anda diperpanjang pada 15 April 2026
+                    Paket premium &amp; benefitnya sedang kami siapkan. Untuk sekarang, semua fitur tersedia gratis.
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => soon('Opsi Upgrade Langganan')}
-                className="w-full md:w-auto px-6 py-3 border-2 border-primary text-primary rounded-full text-sm font-semibold hover:bg-surface-cream transition-colors cursor-pointer"
-              >
-                Lihat Opsi Upgrade
-              </button>
             </div>
           </section>
         </div>
