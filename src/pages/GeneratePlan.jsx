@@ -359,8 +359,15 @@ export function GeneratePlan() {
             <input
               type="number"
               inputMode="numeric"
-              value={budget}
-              onChange={(e) => setBudget(Number(e.target.value))}
+              min="0"
+              // Tampilkan kosong saat 0 supaya placeholder muncul & tidak ada "0"
+              // nyangkut di depan (mis. ngetik 700000 jadi 0700000). Input disaring
+              // ke digit saja, lalu dikonversi via Number agar leading zero hilang.
+              value={budget === 0 ? '' : budget}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '');
+                setBudget(digits === '' ? 0 : Number(digits));
+              }}
               className="w-full px-4 py-3 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               placeholder="Budget dalam Rupiah"
             />
