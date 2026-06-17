@@ -1,6 +1,4 @@
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
-import { LandingPage } from './pages/LandingPage.jsx';
-import { PreRegister } from './pages/PreRegister.jsx';
 import { PrivacyPolicy } from './pages/PrivacyPolicy.jsx';
 import { HelpCenter } from './pages/HelpCenter.jsx';
 import { TermsOfService } from './pages/TermsOfService.jsx';
@@ -19,9 +17,9 @@ import { AIProviders } from './pages/admin/AIProviders.jsx';
 import { Toast } from './components/Toast.jsx';
 import { InstallPrompt } from './components/InstallPrompt.jsx';
 
-// Routing penuh CookPlan. Halaman publik (landing, pre-register, legal) + halaman
-// aplikasi terproteksi (generate, katalog, planner, belanja, profil) di balik
-// ProtectedRoute. Auth diaktifkan kembali setelah fase pre-register.
+// Routing penuh CookPlan. Membuka aplikasi (root "/") langsung mengarahkan ke
+// /generate; pengguna yang belum login akan dilempar ke /auth oleh
+// ProtectedRoute. Halaman legal tetap publik; sisanya terproteksi.
 function App() {
   const navigate = useNavigate();
   const handleNavigate = (path) => navigate(path === 'overview' ? '/' : `/${path}`);
@@ -29,19 +27,24 @@ function App() {
   return (
     <>
       <Routes>
+        {/* Membuka aplikasi langsung menuju generate */}
+        <Route path="/" element={<Navigate to="/generate" replace />} />
+
         {/* Publik */}
-        <Route path="/" element={<LandingPage onNavigate={handleNavigate} />} />
-        <Route path="/register" element={<PreRegister onNavigate={handleNavigate} />} />
         <Route path="/privacy" element={<PrivacyPolicy onNavigate={handleNavigate} />} />
         <Route path="/help" element={<HelpCenter onNavigate={handleNavigate} />} />
         <Route path="/terms" element={<TermsOfService onNavigate={handleNavigate} />} />
         <Route path="/about" element={<TeamProfile onNavigate={handleNavigate} />} />
         <Route path="/auth" element={<AuthPage />} />
 
-        {/* Terproteksi (butuh login) */}
-        <Route element={<ProtectedRoute />}>
+        {/* Bisa dicoba tamu (sesi anonim) — generate + lihat hasil, limit 2x */}
+        <Route element={<ProtectedRoute allowAnonymous />}>
           <Route path="/generate" element={<AppShell><GeneratePlan /></AppShell>} />
           <Route path="/generate/:planId" element={<AppShell><GenerateResult /></AppShell>} />
+        </Route>
+
+        {/* Terproteksi (butuh akun penuh) */}
+        <Route element={<ProtectedRoute />}>
           <Route path="/order/:planId" element={<AppShell><OrderPage /></AppShell>} />
           <Route path="/catalog" element={<AppShell><CatalogPage /></AppShell>} />
           <Route path="/planner" element={<AppShell><PlannerPage /></AppShell>} />

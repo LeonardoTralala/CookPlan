@@ -2,9 +2,8 @@ import { useEffect, useRef } from "react";
 import { scrollToSection } from "../utils/scroll.js";
 
 export function Hero({ onNavigate }) {
-  // Fase pre-register: CTA utama menuju formulir daftar tunggu; CTA sekunder
-  // hanya menggulir ke bagian "Cara Kerja" (fitur belum dibuka).
-  const goRegister = () => (onNavigate ? onNavigate("register") : scrollToSection("how-it-works"));
+  // CTA utama masuk ke aplikasi (/generate); CTA sekunder menggulir ke "Cara Kerja".
+  const goRegister = () => (onNavigate ? onNavigate("generate") : scrollToSection("how-it-works"));
   const goLearn = () => scrollToSection("how-it-works");
 
   const videoRef = useRef(null);
@@ -68,7 +67,7 @@ export function Hero({ onNavigate }) {
               onClick={goRegister}
               className="px-6 py-3 md:px-8 md:py-4 bg-primary text-on-primary rounded-full font-label-md text-label-md hover:shadow-lg active:scale-[0.98] transition cursor-pointer font-semibold"
             >
-              Daftar Gratis Sekarang
+              Mulai Sekarang
             </button>
             <button
               onClick={goLearn}

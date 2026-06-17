@@ -1,9 +1,8 @@
 import { Link } from 'react-router-dom';
 import { Logo } from "./Logo.jsx";
 
-// Navbar fase pre-register: hanya logo + CTA daftar tunggu. Tautan fitur aplikasi
-// (katalog/planner/belanja) dan tombol "Masuk" sengaja dihilangkan sampai
-// peluncuran, karena fitur belum dibuka untuk umum.
+// Navbar landing: logo + CTA masuk ke aplikasi (mengarah ke /generate; pengguna
+// yang belum login akan diminta login lebih dulu).
 export function Navbar() {
   return (
     <header className="w-full sticky top-0 z-50 border-b border-outline-variant/30 backdrop-blur-md bg-canvas-white/95">
@@ -13,10 +12,10 @@ export function Navbar() {
         </Link>
 
         <Link
-          to="/register"
+          to="/generate"
           className="inline-flex items-center min-h-11 px-5 py-2.5 rounded-full bg-primary text-on-primary text-sm font-semibold hover:bg-surface-tint active:scale-95 transition cursor-pointer"
         >
-          Daftar Gratis
+          Mulai Sekarang
         </Link>
       </nav>
     </header>
