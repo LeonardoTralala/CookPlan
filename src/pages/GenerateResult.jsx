@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { getGeneratedPlanById, regenerateDay } from '../services/aiService.js';
 import { getRecipesByIds } from '../services/recipeService.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { useAuth } from '../hooks/useAuth.js';
 import { mapGeneratedPlanToWeek } from '../utils/planMapper.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 
@@ -19,6 +20,9 @@ export function GenerateResult() {
   const navigate = useNavigate();
   const location = useLocation();
   const { applySlots, restoreSlot, showToast } = usePlan();
+  // Tamu (anonymous) hanya boleh lihat hasil — simpan/terapkan & ganti menu per
+  // hari butuh akun penuh (server pun menolak regenerate untuk tamu).
+  const { isAnonymous } = useAuth();
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -92,7 +96,8 @@ export function GenerateResult() {
           setRecipeIndex(index);
 
           // Auto-apply ke planner sekali, hanya saat baru selesai generate.
-          if (autoApplyRef.current) {
+          // Tamu dilewati: planner butuh akun penuh.
+          if (autoApplyRef.current && !isAnonymous) {
             autoApplyRef.current = false;
             applyToPlanner(data.plan, index, true);
             // Bersihkan state navigasi supaya refresh tidak menerapkan ulang.
@@ -106,7 +111,7 @@ export function GenerateResult() {
       }
     })();
     return () => { active = false; };
-  }, [planId, applyToPlanner, navigate, location.pathname]);
+  }, [planId, applyToPlanner, navigate, location.pathname, isAnonymous]);
 
   const plan = result?.plan;
   const showShopping = useMemo(() => {
@@ -257,21 +262,23 @@ export function GenerateResult() {
           <div key={di} className="bg-surface-container-low rounded-2xl p-4 md:p-5">
             <div className="flex items-center justify-between gap-2 mb-3">
               <h3 className="font-bold text-primary">{day.day}</h3>
-              <button
-                onClick={() => {
-                  if (anyRegenerating) return;
-                  setNoteDraft('');
-                  setNoteOpenIndex(isNoteOpen ? null : di);
-                }}
-                disabled={anyRegenerating}
-                aria-expanded={isNoteOpen}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/40 text-primary text-xs font-semibold hover:bg-primary/5 active:scale-95 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <span className={`material-symbols-outlined text-[18px] ${isRegenerating ? 'animate-spin' : ''}`}>
-                  {isRegenerating ? 'progress_activity' : 'autorenew'}
-                </span>
-                {isRegenerating ? 'Mengganti…' : 'Ganti Menu'}
-              </button>
+              {!isAnonymous && (
+                <button
+                  onClick={() => {
+                    if (anyRegenerating) return;
+                    setNoteDraft('');
+                    setNoteOpenIndex(isNoteOpen ? null : di);
+                  }}
+                  disabled={anyRegenerating}
+                  aria-expanded={isNoteOpen}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-primary/40 text-primary text-xs font-semibold hover:bg-primary/5 active:scale-95 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className={`material-symbols-outlined text-[18px] ${isRegenerating ? 'animate-spin' : ''}`}>
+                    {isRegenerating ? 'progress_activity' : 'autorenew'}
+                  </span>
+                  {isRegenerating ? 'Mengganti…' : 'Ganti Menu'}
+                </button>
+              )}
             </div>
 
             {/* Editor catatan opsional + tombol generate ulang hari ini */}
@@ -382,6 +389,22 @@ export function GenerateResult() {
         </section>
       )}
 
+      {/* Tamu: CTA daftar untuk menyimpan & menerapkan hasil ke planner */}
+      {isAnonymous && (
+        <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-4 text-center space-y-3">
+          <p className="text-sm text-on-surface">
+            Suka hasilnya? Daftar gratis untuk menyimpan & menerapkan menu ini ke Rencana Masak Mingguan.
+          </p>
+          <Link
+            to="/auth"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-[20px]">person_add</span>
+            Daftar untuk simpan & terapkan
+          </Link>
+        </div>
+      )}
+
       {/* Action: apply ke planner + order (full mode = Core Offer) */}
       <div className="flex flex-col sm:flex-row gap-3 pt-2">
         <button
@@ -391,13 +414,15 @@ export function GenerateResult() {
           <span className="material-symbols-outlined text-[20px]">refresh</span>
           Generate Lagi
         </button>
-        <button
-          onClick={() => (applied ? navigate('/planner') : applyToPlanner(plan, recipeIndex))}
-          className="flex-1 px-6 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
-        >
-          <span className="material-symbols-outlined text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
-          {applied ? 'Lihat Rencana Mingguan' : 'Terapkan ke Planner'}
-        </button>
+        {!isAnonymous && (
+          <button
+            onClick={() => (applied ? navigate('/planner') : applyToPlanner(plan, recipeIndex))}
+            className="flex-1 px-6 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
+            {applied ? 'Lihat Rencana Mingguan' : 'Terapkan ke Planner'}
+          </button>
+        )}
       </div>
 
       {/* Modal detail resep */}

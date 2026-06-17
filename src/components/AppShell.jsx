@@ -18,8 +18,11 @@ export function AppShell({ children }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { plannedCount } = usePlan();
-  const { signOut } = useAuth();
+  const { signOut, isAnonymous } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
+
+  // Tamu (anonymous): hanya tab Generate yang relevan; tab lain butuh akun penuh.
+  const navItems = isAnonymous ? NAV_ITEMS.filter((i) => i.to === '/generate') : NAV_ITEMS;
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -49,7 +52,7 @@ export function AppShell({ children }) {
 
           {/* Desktop links */}
           <div className="hidden md:flex items-center gap-1">
-            {NAV_ITEMS.map((item) => (
+            {navItems.map((item) => (
               <Link
                 key={item.to}
                 to={item.to}
@@ -70,38 +73,52 @@ export function AppShell({ children }) {
             ))}
           </div>
 
-          <button
-            onClick={handleSignOut}
-            disabled={signingOut}
-            className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:text-error transition-colors cursor-pointer disabled:opacity-60"
-          >
-            <span className="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
-            Keluar
-          </button>
+          {isAnonymous ? (
+            // Tamu: arahkan untuk daftar / masuk alih-alih keluar.
+            <Link
+              to="/auth"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-semibold hover:shadow-md active:scale-95 transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[20px]" aria-hidden="true">person_add</span>
+              Daftar / Masuk
+            </Link>
+          ) : (
+            <>
+              <button
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:text-error transition-colors cursor-pointer disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
+                Keluar
+              </button>
 
-          {/* Mobile: hanya logout di header (nav utama di bottom) */}
-          <button
-            onClick={handleSignOut}
-            disabled={signingOut}
-            aria-label="Keluar"
-            className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-error transition-colors cursor-pointer disabled:opacity-60"
-          >
-            <span className="material-symbols-outlined" aria-hidden="true">logout</span>
-          </button>
+              {/* Mobile: hanya logout di header (nav utama di bottom) */}
+              <button
+                onClick={handleSignOut}
+                disabled={signingOut}
+                aria-label="Keluar"
+                className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-error transition-colors cursor-pointer disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+              </button>
+            </>
+          )}
         </nav>
       </header>
 
-      <main id="main-content" tabIndex={-1} className="flex-grow outline-none pb-20 md:pb-0">
+      <main id="main-content" tabIndex={-1} className={`flex-grow outline-none ${isAnonymous ? '' : 'pb-20 md:pb-0'}`}>
         {children}
       </main>
 
-      {/* Bottom nav (mobile) */}
+      {/* Bottom nav (mobile) — tamu hanya punya Generate, jadi disembunyikan. */}
+      {!isAnonymous && (
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-canvas-white/95 backdrop-blur-md border-t border-outline-variant/30 pb-safe-2"
         aria-label="Navigasi utama"
       >
         <div className="grid grid-cols-5">
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <Link
               key={item.to}
               to={item.to}
@@ -125,6 +142,7 @@ export function AppShell({ children }) {
           ))}
         </div>
       </nav>
+      )}
     </div>
   );
 }

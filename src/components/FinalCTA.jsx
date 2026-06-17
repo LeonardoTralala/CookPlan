@@ -5,8 +5,8 @@ export function FinalCTA({ onNavigate }) {
 
   const start = () =>
     onNavigate
-      ? onNavigate("register")
-      : showToast("Terima kasih! Pendaftaran beta akan segera dibuka.");
+      ? onNavigate("generate")
+      : showToast("Ayo mulai susun menu mingguanmu!");
 
   return (
     <section className="section-padding px-margin-mobile md:px-margin-desktop text-center">
