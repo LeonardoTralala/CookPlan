@@ -194,11 +194,15 @@ function RecipeCatalog({ onAddToPlan }) {
       }
 
       // 2. Preferensi diet (chip) — cocokkan slug ke recipe.tags / badges.
+      //    Semantik OR (union): resep lolos bila cocok dengan SALAH SATU chip aktif.
+      //    Mis. pilih "Serba Ayam" + "Serba Sapi" → tampil resep ayam ATAU sapi
+      //    (kalau pakai AND, dua protein selalu 0 hasil karena tak ada resep ayam
+      //    sekaligus sapi). Selaras perilaku OR di filter wizard AI (overlaps).
       if (activeFilters.length > 0) {
-        const matchesAllActive = activeFilters.every((slug) =>
+        const matchesAnyActive = activeFilters.some((slug) =>
           recipeMatchesDiet(recipe, slug, dietLabelOf.get(slug))
         );
-        if (!matchesAllActive) return false;
+        if (!matchesAnyActive) return false;
       }
 
       // 3. Max Cooking Time — 120 = "Semua" (tanpa batas), jadi skip filter.

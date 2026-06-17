@@ -122,12 +122,12 @@ Deno.serve(async (req) => {
   const targetDay = days[dayIndex];
   const dayLabel = String(targetDay?.day ?? `Hari ${dayIndex + 1}`);
 
-  // 5. Retrieve recipe bank (diet-filtered seperti generate-plan, pakai recipes.diet)
+  // 5. Retrieve recipe bank (filter preferensi seperti generate-plan, pakai recipes.tags)
   const RECIPE_COLS =
     "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings";
   const diet = Array.isArray(input.diet) ? (input.diet as string[]) : [];
   let recipeQuery = admin.from("recipes").select(RECIPE_COLS).eq("is_active", true).limit(40);
-  if (diet.length > 0) recipeQuery = recipeQuery.overlaps("diet", diet);
+  if (diet.length > 0) recipeQuery = recipeQuery.overlaps("tags", diet);
   let { data: candidates } = await recipeQuery;
   if (!candidates || candidates.length < 3) {
     const { data: allActive } = await admin

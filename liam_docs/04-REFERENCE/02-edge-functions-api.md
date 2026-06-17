@@ -167,7 +167,7 @@ Susun ulang menu **satu hari** dari sebuah plan yang sudah di-generate, dengan *
 ```
 auth → rate limit (20/hari, berbagi kuota dgn generate-plan) → parse body
   → ambil generated_plans milik user → validasi dayIndex
-  → retrieve resep (diet-filtered via recipes.diet) → provider (chain/legacy)
+  → retrieve resep (preferensi-filtered via recipes.tags) → provider (chain/legacy)
   → AI (REGENERATE_DAY_SYSTEM_PROMPT + buildRegenerateDayMessage) → parse 1 hari (retry 1x)
   → validasi recipe_id ∈ bank → enforceVariety → ganti days[dayIndex]
   → buildShoppingList (recompute SELURUH plan) → update output_json → log → return

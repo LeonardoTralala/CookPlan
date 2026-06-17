@@ -50,7 +50,7 @@ dengan semua itu (lihat ADR-013).
 ```
 auth → rate limit (20/hari, UTC) → parse body (planId, dayIndex, note?, mealType?)
   → ambil generated_plans milik user → validasi dayIndex dalam rentang
-  → retrieve bank resep (diet-filtered via recipes.diet)
+  → retrieve bank resep (preferensi-filtered via recipes.tags)
   → provider selection (chain priority / is_active+is_fallback)
   → AI (REGENERATE_DAY_SYSTEM_PROMPT + buildRegenerateDayMessage) → parse 1 hari (retry 1x)
   → validasi recipe_id ∈ bank → enforceVariety (isi 3 slot, set servings)

@@ -102,17 +102,19 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 5. Retrieve recipe context (filter berdasarkan diet bila ada tag cocok).
+  // 5. Retrieve recipe context (filter berdasarkan preferensi via recipes.tags).
   //    Ambil SEMUA yang cocok (bukan 40 pertama), lalu ACAK & potong ke 40.
   //    Kalau cuma 40 pertama yang dikirim, AI selalu lihat resep yang sama →
   //    hasil "itu-itu aja". Shuffle bikin tiap generate beda kombinasi resep.
+  //    Catatan: filter dilakukan pada kolom `tags` (sumber kebenaran yang sama
+  //    dengan chip katalog & diet_tags.value). Kolom `diet` lama deprecated.
   const RECIPE_COLS =
     "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings";
   const RECIPE_CAP = 40;
 
   let recipeQuery = admin.from("recipes").select(RECIPE_COLS).eq("is_active", true);
   if (input.diet.length > 0) {
-    recipeQuery = recipeQuery.overlaps("diet", input.diet);
+    recipeQuery = recipeQuery.overlaps("tags", input.diet);
   }
   let { data: pool } = await recipeQuery;
   // Fallback: kalau filter diet menyisakan terlalu sedikit, ambil semua aktif.
