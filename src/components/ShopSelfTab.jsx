@@ -14,7 +14,9 @@ const DELIVERY_FEE = 15000;
 // Dua mode tampilan: per-bahan (gabung & checklist) atau per-menu (kelompok resep).
 export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
   const { showToast } = usePlan();
-  const [checkedItems, setCheckedItems] = useState(() => new Set());
+  // Default: semua bahan dianggap perlu dibeli (tercentang). Set ini menampung
+  // bahan yang user CANCEL karena sudah punya → tidak ikut dibeli & dihitung.
+  const [ownedItems, setOwnedItems] = useState(() => new Set());
   const [recipes, setRecipes] = useState([]);
   const [view, setView] = useState('bahan'); // 'bahan' | 'menu'
 
@@ -39,31 +41,54 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     () => slotsFromWeeklyPlan(weeklyPlan, recipeIndex),
     [weeklyPlan, recipeIndex]
   );
-  const { sections, totalItems, estimatedCost } = useMemo(
+  const { sections, totalItems } = useMemo(
     () => buildShoppingListFromSlots(slots),
     [slots]
   );
   const menus = useMemo(() => buildMenuListFromSlots(slots), [slots]);
 
+  // Toggle "sudah punya": kalau dibatalkan, bahan masuk ownedItems (tidak dibeli).
   const toggleItem = (id) => {
-    setCheckedItems((prev) => {
+    setOwnedItems((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
-  const total = estimatedCost + (totalItems > 0 ? DELIVERY_FEE : 0);
-  const checkedCount = checkedItems.size;
+  // Hitung ulang hanya bahan yang masih perlu dibeli (di luar ownedItems).
+  const { neededCount, neededCost } = useMemo(() => {
+    let count = 0;
+    let cost = 0;
+    for (const section of sections) {
+      for (const item of section.items) {
+        if (ownedItems.has(item.id)) continue;
+        count += 1;
+        cost += item.priceIdr || 0;
+      }
+    }
+    return { neededCount: count, neededCost: Math.round(cost) };
+  }, [sections, ownedItems]);
+
+  const total = neededCost + (neededCount > 0 ? DELIVERY_FEE : 0);
+  const ownedCount = totalItems - neededCount;
 
   const handleSave = () => {
-    if (totalItems === 0) return;
+    // Simpan hanya bahan yang benar-benar dibeli (yang sudah punya dilewati).
+    const neededSections = sections
+      .map((s) => ({ ...s, items: s.items.filter((it) => !ownedItems.has(it.id)) }))
+      .filter((s) => s.items.length > 0);
+    const items = flattenSections(neededSections);
+    if (items.length === 0) {
+      showToast('Tidak ada bahan untuk disimpan — semua sudah ditandai punya.', { variant: 'error' });
+      return;
+    }
     onSave?.({
       title: `Belanja Sendiri — ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })}`,
       sourceType: 'planner',
       sourceRef: null,
-      items: flattenSections(sections),
-      totalIdr: estimatedCost,
+      items,
+      totalIdr: neededCost,
     });
   };
 
@@ -106,6 +131,14 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
           </button>
         </div>
 
+        {/* Petunjuk: semua bahan otomatis dicentang, tinggal batalkan yang sudah punya. */}
+        {view === 'bahan' && (
+          <div className="flex items-start gap-2.5 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-sm text-on-surface-variant">
+            <span className="material-symbols-outlined text-primary text-[20px] shrink-0">info</span>
+            <p>Semua bahan otomatis dicentang untuk dibeli. Batalkan centang bahan yang <span className="font-semibold text-on-surface">sudah kamu punya</span> — biaya & jumlah ikut menyesuaikan.</p>
+          </div>
+        )}
+
         {/* ---- VIEW PER BAHAN (checklist, group kategori) ---- */}
         {view === 'bahan' && sections.map((section) => (
           <section key={section.key}>
@@ -116,28 +149,33 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
             </div>
             <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
               {section.items.map((item) => {
-                const checked = checkedItems.has(item.id);
+                const owned = ownedItems.has(item.id); // sudah punya → dicancel
                 return (
                   <button key={item.id} onClick={() => toggleItem(item.id)}
+                    aria-pressed={!owned}
                     className="w-full text-left flex items-center justify-between p-4 md:p-5 border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors group cursor-pointer">
                     <div className="flex items-center gap-4 min-w-0">
                       <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
-                        checked ? 'bg-success-green border-success-green' : 'border-outline-variant group-hover:border-primary'}`}>
+                        owned ? 'border-outline-variant group-hover:border-primary' : 'bg-success-green border-success-green'}`}>
                         <span className={`material-symbols-outlined text-sm transition-opacity ${
-                          checked ? 'text-white opacity-100' : 'text-primary opacity-0 group-hover:opacity-60'}`}>check</span>
+                          owned ? 'text-primary opacity-0 group-hover:opacity-60' : 'text-white opacity-100'}`}>check</span>
                       </div>
                       <div className="min-w-0">
-                        <p className={`font-semibold text-on-surface truncate ${checked ? 'line-through opacity-60' : ''}`}>{item.name}</p>
-                        <p className="text-xs text-on-surface-variant">Beli di: <span className="text-primary font-bold">{section.meta.store}</span></p>
+                        <p className={`font-semibold text-on-surface truncate ${owned ? 'line-through opacity-60' : ''}`}>{item.name}</p>
+                        {owned ? (
+                          <p className="text-xs text-on-surface-variant italic">Sudah punya · tidak dibeli</p>
+                        ) : (
+                          <p className="text-xs text-on-surface-variant">Beli di: <span className="text-primary font-bold">{section.meta.store}</span></p>
+                        )}
                       </div>
                     </div>
                     <div className="text-right shrink-0 pl-3 flex flex-col items-end gap-1">
                       <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-                        checked ? 'bg-success-green/15 text-success-green' : 'bg-surface-cream text-on-surface'}`}>
+                        owned ? 'bg-surface-container-low text-on-surface-variant line-through' : 'bg-surface-cream text-on-surface'}`}>
                         {formatAmount(item.amount)} {item.unit}
                       </span>
                       {item.priceIdr > 0 && (
-                        <span className="text-xs font-bold text-primary">{formatRupiah(Math.round(item.priceIdr))}</span>
+                        <span className={`text-xs font-bold ${owned ? 'text-on-surface-variant/50 line-through' : 'text-primary'}`}>{formatRupiah(Math.round(item.priceIdr))}</span>
                       )}
                     </div>
                   </button>
@@ -187,17 +225,20 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
             <h3 className="font-headline-md text-headline-md text-primary mb-5">Ringkasan</h3>
             <div className="mb-5">
               <div className="flex justify-between text-xs font-semibold text-on-surface-variant mb-2">
-                <span>Progres belanja</span>
-                <span>{checkedCount} dari {totalItems} dibeli</span>
+                <span>Bahan yang dibeli</span>
+                <span>{neededCount} dari {totalItems}</span>
               </div>
               <div className="h-2.5 bg-white/60 rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all duration-700"
-                  style={{ width: `${Math.round((checkedCount / totalItems) * 100)}%` }} />
+                  style={{ width: `${Math.round((neededCount / totalItems) * 100)}%` }} />
               </div>
+              {ownedCount > 0 && (
+                <p className="text-xs text-on-surface-variant mt-2">{ownedCount} bahan ditandai sudah punya</p>
+              )}
             </div>
             <div className="space-y-3 mb-6 text-sm">
-              <div className="flex justify-between"><span className="text-on-surface-variant">Total Bahan</span><span className="font-bold text-on-surface">{totalItems} item</span></div>
-              <div className="flex justify-between"><span className="text-on-surface-variant">Estimasi Biaya</span><span className="font-bold text-on-surface">{formatRupiah(estimatedCost)}</span></div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">Bahan Dibeli</span><span className="font-bold text-on-surface">{neededCount} item</span></div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">Estimasi Biaya</span><span className="font-bold text-on-surface">{formatRupiah(neededCost)}</span></div>
               <div className="pt-3 border-t border-outline/20 flex justify-between"><span className="text-lg font-bold text-primary">Total</span><span className="text-lg font-bold text-primary">{formatRupiah(total)}</span></div>
             </div>
             <button onClick={handleSave}
@@ -217,7 +258,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
       <div className="lg:hidden fixed bottom-above-nav left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-outline-variant shadow-xl px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-on-surface-variant leading-tight">{checkedCount} dari {totalItems} dibeli</p>
+            <p className="text-xs text-on-surface-variant leading-tight">{neededCount} dari {totalItems} bahan dibeli</p>
             <p className="font-bold text-primary text-base leading-tight">{formatRupiah(total)}</p>
           </div>
           <button onClick={handleSave}
