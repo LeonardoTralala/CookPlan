@@ -10,6 +10,7 @@ import type { AIProvider } from "../_shared/aiAdapter.ts";
 import { validateInput, validateOutput, subtractPantry, enforceVariety } from "../_shared/validate.ts";
 
 const RATE_LIMIT_PER_DAY = 20; // generate per user per hari
+const GUEST_LIMIT = 2;         // total percobaan untuk tamu (anonymous), bukan per hari
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,16 +51,32 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData?.user) return json({ error: "Tidak terautentikasi." }, 401);
   const userId = userData.user.id;
+  const isAnon = userData.user.is_anonymous === true;
 
-  // 2. Rate limit (window UTC-based, konsisten dengan getTodayUsageCount di klien)
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
-  const { count: usageCount } = await admin
+  // 2. Rate limit.
+  //    - User penuh: batas per hari (window UTC-based, konsisten dengan
+  //      getTodayUsageCount di klien).
+  //    - Tamu (anonymous): batas TOTAL seumur sesi (tanpa filter hari), supaya
+  //      "2 percobaan gratis" benar-benar 2x lalu harus daftar.
+  let usageQuery = admin
     .from("ai_usage_log")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", userId)
-    .gte("created_at", startOfDay.toISOString());
-  if ((usageCount ?? 0) >= RATE_LIMIT_PER_DAY) {
+    .eq("user_id", userId);
+  if (!isAnon) {
+    const startOfDay = new Date();
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    usageQuery = usageQuery.gte("created_at", startOfDay.toISOString());
+  }
+  const { count: usageCount } = await usageQuery;
+  const limit = isAnon ? GUEST_LIMIT : RATE_LIMIT_PER_DAY;
+  if ((usageCount ?? 0) >= limit) {
+    if (isAnon) {
+      return json({
+        error: `Batas ${GUEST_LIMIT} percobaan gratis tercapai. Daftar gratis untuk lanjut.`,
+        limitReached: true,
+        guest: true,
+      }, 429);
+    }
     return json({ error: `Batas ${RATE_LIMIT_PER_DAY} generate per hari tercapai. Coba lagi besok.` }, 429);
   }
 

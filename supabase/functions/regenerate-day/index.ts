@@ -67,6 +67,11 @@ Deno.serve(async (req) => {
   const { data: userData, error: userErr } = await userClient.auth.getUser();
   if (userErr || !userData?.user) return json({ error: "Tidak terautentikasi." }, 401);
   const userId = userData.user.id;
+  // Tamu (anonymous) hanya boleh generate + lihat hasil — susun ulang per hari
+  // butuh akun penuh.
+  if (userData.user.is_anonymous === true) {
+    return json({ error: "Daftar gratis untuk menyusun ulang menu per hari.", guest: true }, 403);
+  }
 
   // 2. Rate limit (window UTC, berbagi kuota dengan generate-plan)
   const startOfDay = new Date();

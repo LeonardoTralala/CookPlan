@@ -139,3 +139,18 @@ export async function getTodayUsageCount() {
   if (error) throw error;
   return count ?? 0;
 }
+
+// Total pemakaian SELAMA HIDUP sesi (tanpa batas hari). Dipakai untuk tamu
+// (anonymous), yang dibatasi 2 generate total — bukan per hari. Konsisten dengan
+// hitungan server-side di Edge Function generate-plan untuk user anonim.
+export async function getGuestUsageCount() {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) return 0;
+  const { count, error } = await supabase
+    .from("ai_usage_log")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if (error) throw error;
+  return count ?? 0;
+}

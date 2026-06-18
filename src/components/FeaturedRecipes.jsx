@@ -5,14 +5,14 @@ import { initialRecipes } from "../utils/recipes.js";
 export function FeaturedRecipes({ onNavigate }) {
   const { showToast } = usePlan();
 
-  // Fase pre-register: katalog penuh belum dibuka — arahkan ke daftar tunggu.
+  // Arahkan ke katalog penuh di dalam aplikasi (butuh login).
   const seeAll = () =>
-    onNavigate ? onNavigate("register") : showToast("Katalog lengkap resep segera hadir — gabung daftar tunggu dulu!");
+    onNavigate ? onNavigate("catalog") : showToast("Katalog lengkap resep ada di dalam aplikasi.");
 
-  // Kartu resep unggulan = teaser marketing. Klik mengarahkan ke daftar tunggu
+  // Kartu resep unggulan = teaser marketing. Klik mengarahkan ke katalog
   // (bukan menambah ke rencana, karena katalog penuh ada di area login).
   const handleAdd = () =>
-    onNavigate ? onNavigate("register") : showToast("Gabung daftar tunggu untuk mengakses resep lengkap!");
+    onNavigate ? onNavigate("catalog") : showToast("Masuk untuk mengakses resep lengkap!");
 
   return (
     <section id="recipes" className="section-padding bg-canvas-white px-margin-mobile md:px-margin-desktop">

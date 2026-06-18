@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { generatePlan, getGeneratedHistory, getTodayUsageCount, deleteGeneratedPlan } from '../services/aiService.js';
+import { generatePlan, getGeneratedHistory, getTodayUsageCount, getGuestUsageCount, deleteGeneratedPlan } from '../services/aiService.js';
 import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { Modal } from '../components/Modal.jsx';
+import { useAuth } from '../hooks/useAuth.js';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
 // Step 1: periode + porsi + waktu makan
@@ -42,10 +43,14 @@ const NOTES_MAX = 300;
 
 // Selaras dengan RATE_LIMIT_PER_DAY di Edge Function generate-plan.
 const DAILY_LIMIT = 20;
+// Selaras dengan GUEST_LIMIT di Edge Function generate-plan: tamu (anonymous)
+// boleh mencoba generate sebanyak ini secara total sebelum harus daftar.
+const GUEST_LIMIT = 2;
 
 export function GeneratePlan() {
   const navigate = useNavigate();
   const { showToast } = usePlan();
+  const { isAnonymous } = useAuth();
 
   const [step, setStep] = useState(1);
   const [periode, setPeriode] = useState(7);
@@ -71,12 +76,19 @@ export function GeneratePlan() {
   // Opsi diet di-fetch dari diet_tags; gagal → tetap pakai fallback konstanta.
   useEffect(() => {
     let active = true;
-    getGeneratedHistory(5, { successOnly: true })
-      .then((rows) => { if (active) setHistory(rows); })
-      .catch(() => { /* riwayat opsional, jangan ganggu wizard */ });
-    getTodayUsageCount()
-      .then((n) => { if (active) setUsageCount(n); })
-      .catch(() => { /* idem */ });
+    // Tamu: tidak menampilkan riwayat; kuota dihitung total (bukan per hari).
+    if (isAnonymous) {
+      getGuestUsageCount()
+        .then((n) => { if (active) setUsageCount(n); })
+        .catch(() => { /* idem */ });
+    } else {
+      getGeneratedHistory(5, { successOnly: true })
+        .then((rows) => { if (active) setHistory(rows); })
+        .catch(() => { /* riwayat opsional, jangan ganggu wizard */ });
+      getTodayUsageCount()
+        .then((n) => { if (active) setUsageCount(n); })
+        .catch(() => { /* idem */ });
+    }
     // Opsi diet + preferensi tersimpan pengguna (profiles.diet_prefs) diambil
     // bersamaan: preferensi profil jadi pilihan awal wizard, dan chip yang
     // ditampilkan dijaga agar selalu memuat pilihan tersebut.
@@ -92,7 +104,19 @@ export function GeneratePlan() {
       setDietSample(sampleDietTags(pool, 8, prefs ?? ['halal']));
     });
     return () => { active = false; };
-  }, []);
+  }, [isAnonymous]);
+
+  // Sisa percobaan gratis untuk tamu; habis → arahkan ke login/daftar.
+  const guestRemaining = Math.max(0, GUEST_LIMIT - (usageCount ?? 0));
+  const guestExhausted = isAnonymous && usageCount != null && guestRemaining === 0;
+
+  // Tamu yang kuotanya habis langsung diarahkan ke halaman login/daftar saat
+  // mau generate lagi (termasuk saat membuka halaman ini dalam keadaan habis).
+  useEffect(() => {
+    if (guestExhausted) {
+      navigate('/auth', { replace: true, state: { from: '/generate' } });
+    }
+  }, [guestExhausted, navigate]);
 
   // Kuota harian: server reset di tengah malam UTC (lihat getTodayUsageCount).
   // quotaLeft null = belum termuat. Tampilkan waktu reset dalam zona lokal user.
@@ -162,13 +186,23 @@ export function GeneratePlan() {
       // autoApply: hasil generate langsung diterapkan ke Rencana Masak Mingguan.
       navigate(`/generate/${result.planId}`, { state: { autoApply: true } });
     } catch (e) {
+      const msg = e.message || 'Gagal generate plan. Coba lagi.';
+      // Tamu kehabisan percobaan gratis → langsung ke halaman login/daftar.
+      if (isAnonymous && /percobaan gratis/i.test(msg)) {
+        navigate('/auth', { replace: true, state: { from: '/generate' } });
+        return;
+      }
       // Server menolak karena rate limit harian → samakan tampilannya & tandai habis.
-      const msg = (e.message || '').toLowerCase();
-      if (e.status === 429 || msg.includes('kuota') || msg.includes('limit') || msg.includes('rate')) {
+      const lower = msg.toLowerCase();
+      if (e.status === 429 || lower.includes('kuota') || lower.includes('limit') || lower.includes('rate')) {
         setUsageCount(DAILY_LIMIT);
         setError(quotaMessage);
       } else {
-        setError(e.message || 'Gagal generate plan. Coba lagi.');
+        setError(msg);
+      }
+      // Tamu: segarkan hitungan supaya redirect terpicu bila kuota ternyata habis.
+      if (isAnonymous) {
+        getGuestUsageCount().then(setUsageCount).catch(() => {});
       }
     } finally {
       setLoading(false);
@@ -190,7 +224,13 @@ export function GeneratePlan() {
         <p className="text-on-surface-variant text-body-md mb-2">
           Biar AI susun menu & belanja mingguanmu otomatis.
         </p>
-        {usageCount != null && (
+        {usageCount != null && isAnonymous && (
+          <p className="text-xs text-on-surface-variant/80 mb-5 flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">bolt</span>
+            Sisa percobaan gratis: <strong>{guestRemaining}</strong> dari {GUEST_LIMIT} generate
+          </p>
+        )}
+        {usageCount != null && !isAnonymous && (
           quotaExhausted ? (
             <div className="mb-5 flex items-start gap-2 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
               <span className="material-symbols-outlined text-[20px] shrink-0">hourglass_empty</span>
@@ -232,7 +272,7 @@ export function GeneratePlan() {
                 </p>
               </div>
               <button
-                onClick={() => setConfirmSwitchShop(true)}
+                onClick={() => isAnonymous ? navigate('/auth') : setConfirmSwitchShop(true)}
                 className="rounded-xl border border-outline-variant hover:border-primary/50 p-4 text-left transition-colors cursor-pointer group"
               >
                 <div className="flex items-center gap-2 mb-1.5">

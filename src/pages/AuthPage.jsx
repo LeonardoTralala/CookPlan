@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation, Link } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Logo } from "../components/Logo.jsx";
 import { Toast } from "../components/Toast.jsx";
 import { useAuth } from "../hooks/useAuth.js";
@@ -7,12 +7,6 @@ import { usePlan } from "../hooks/usePlan.js";
 import { SESSION_EXPIRED_FLAG } from "../lib/session.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// Flag untuk menutup self-register saat fase pre-register publik. Saat ini
-// AKTIF (true) — calon pengguna bisa langsung daftar lewat tab "Daftar" di
-// halaman ini. Set false bila ingin mengarahkan pendaftar ke daftar tunggu
-// `/register` sementara waktu (misal pause campaign atau quota terisi).
-const ALLOW_SELF_REGISTER = true;
 
 // Terjemahkan pesan error Supabase ke bahasa yang ramah pengguna.
 function friendlyError(error) {
@@ -40,7 +34,7 @@ function GoogleIcon() {
 export default function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { isAuthenticated, loading: authLoading, isRecovery, signUp, signIn, signInWithGoogle, resetPassword, updatePassword, clearRecovery } = useAuth();
+  const { isFullUser, loading: authLoading, isRecovery, signUp, signIn, signInWithGoogle, resetPassword, updatePassword, clearRecovery } = useAuth();
   const { showToast } = usePlan();
 
   // Halaman yang tadi dituju sebelum diarahkan ke login (dari ProtectedRoute).
@@ -75,10 +69,13 @@ export default function AuthPage() {
     setMode("update");
   }
 
-  // Sudah login? Langsung arahkan ke aplikasi — kecuali sedang alur recovery.
+  // Sudah punya AKUN PENUH? Langsung arahkan ke aplikasi — kecuali sedang alur
+  // recovery. Tamu (sesi anonim) sengaja TIDAK diarahkan: mereka datang ke sini
+  // justru untuk daftar/masuk, jadi membiarkan halaman ini tampil (kalau tidak,
+  // /generate ↔ /auth saling lempar dan layar berkedip).
   useEffect(() => {
-    if (!authLoading && isAuthenticated && !isRecovery) navigate(redirectTo, { replace: true });
-  }, [authLoading, isAuthenticated, isRecovery, navigate, redirectTo]);
+    if (!authLoading && isFullUser && !isRecovery) navigate(redirectTo, { replace: true });
+  }, [authLoading, isFullUser, isRecovery, navigate, redirectTo]);
 
   // Konsumsi flag sesi-berakhir sekali (pesan sudah dibaca ke notice di atas).
   useEffect(() => {
@@ -258,8 +255,8 @@ export default function AuthPage() {
           <h1 className="font-headline-md text-headline-md">{heading}</h1>
           <p className="mt-1.5 text-body-md text-on-surface-variant">{subheading}</p>
 
-          {/* Toggle Masuk / Daftar — hanya muncul bila registrasi mandiri dibuka. */}
-          {ALLOW_SELF_REGISTER && !isForgot && !isUpdate && (
+          {/* Toggle Masuk / Daftar */}
+          {!isForgot && !isUpdate && (
             <div className="mt-6 grid grid-cols-2 gap-1 rounded-full bg-surface-container-low p-1" role="tablist" aria-label="Mode autentikasi">
               {[["login", "Masuk"], ["register", "Daftar"]].map(([value, label]) => (
                 <button
@@ -419,26 +416,16 @@ export default function AuthPage() {
                 Lanjutkan dengan Google
               </button>
 
-              {ALLOW_SELF_REGISTER ? (
-                <p className="mt-6 text-center text-label-md text-on-surface-variant">
-                  {isRegister ? "Sudah punya akun? " : "Belum punya akun? "}
-                  <button
-                    type="button"
-                    onClick={() => switchMode(isRegister ? "login" : "register")}
-                    className="font-semibold text-primary hover:underline cursor-pointer"
-                  >
-                    {isRegister ? "Masuk" : "Daftar gratis"}
-                  </button>
-                </p>
-              ) : (
-                // Registrasi mandiri masih ditutup — arahkan ke daftar tunggu.
-                <p className="mt-6 text-center text-label-md text-on-surface-variant">
-                  Belum punya akun?{" "}
-                  <Link to="/register" className="font-semibold text-primary hover:underline cursor-pointer">
-                    Gabung daftar tunggu
-                  </Link>
-                </p>
-              )}
+              <p className="mt-6 text-center text-label-md text-on-surface-variant">
+                {isRegister ? "Sudah punya akun? " : "Belum punya akun? "}
+                <button
+                  type="button"
+                  onClick={() => switchMode(isRegister ? "login" : "register")}
+                  className="font-semibold text-primary hover:underline cursor-pointer"
+                >
+                  {isRegister ? "Masuk" : "Daftar gratis"}
+                </button>
+              </p>
             </>
           )}
         </div>

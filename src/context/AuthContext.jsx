@@ -76,6 +76,11 @@ export function AuthProvider({ children }) {
     supabase.auth.signInWithPassword({ email, password }),
   []);
 
+  // Sesi tamu (anonymous) untuk mencoba fitur generate tanpa daftar. Membuat
+  // user asli di auth.users (is_anonymous=true) sehingga Edge Function & RLS
+  // jalan apa adanya; limit percobaan ditegakkan server-side.
+  const signInAnonymously = useCallback(() => supabase.auth.signInAnonymously(), []);
+
   const signInWithGoogle = useCallback(() =>
     supabase.auth.signInWithOAuth({
       provider: "google",
@@ -109,17 +114,21 @@ export function AuthProvider({ children }) {
     session,
     user: session?.user ?? null,
     isAuthenticated: Boolean(session),
+    // Tamu = sesi anonim. isFullUser = sudah punya akun nyata (bukan tamu).
+    isAnonymous: Boolean(session?.user?.is_anonymous),
+    isFullUser: Boolean(session) && !session?.user?.is_anonymous,
     loading,
     isRecovery,
     signUp,
     signIn,
+    signInAnonymously,
     signInWithGoogle,
     resetPassword,
     updatePassword,
     clearRecovery,
     signOut,
     resendVerification,
-  }), [session, loading, isRecovery, signUp, signIn, signInWithGoogle, resetPassword, updatePassword, clearRecovery, signOut, resendVerification]);
+  }), [session, loading, isRecovery, signUp, signIn, signInAnonymously, signInWithGoogle, resetPassword, updatePassword, clearRecovery, signOut, resendVerification]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
