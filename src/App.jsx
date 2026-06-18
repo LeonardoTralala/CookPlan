@@ -14,6 +14,7 @@ const HelpCenter = lazy(() => import('./pages/HelpCenter.jsx').then((m) => ({ de
 const TermsOfService = lazy(() => import('./pages/TermsOfService.jsx').then((m) => ({ default: m.TermsOfService })));
 const TeamProfile = lazy(() => import('./pages/TeamProfile.jsx').then((m) => ({ default: m.TeamProfile })));
 const AuthPage = lazy(() => import('./pages/AuthPage.jsx'));
+const AuthCallback = lazy(() => import('./pages/AuthCallback.jsx'));
 const CatalogPage = lazy(() => import('./pages/CatalogPage.jsx').then((m) => ({ default: m.CatalogPage })));
 const PlannerPage = lazy(() => import('./pages/PlannerPage.jsx').then((m) => ({ default: m.PlannerPage })));
 const ShoppingPage = lazy(() => import('./pages/ShoppingPage.jsx').then((m) => ({ default: m.ShoppingPage })));
@@ -47,6 +48,7 @@ function App() {
           <Route path="/terms" element={<TermsOfService onNavigate={handleNavigate} />} />
           <Route path="/about" element={<TeamProfile onNavigate={handleNavigate} />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
 
           {/* Bisa dicoba tamu (sesi anonim) — generate + lihat hasil, limit 2x */}
           <Route element={<ProtectedRoute allowAnonymous />}>
