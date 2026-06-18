@@ -70,10 +70,13 @@ export function AuthProvider({ children }) {
   // jalan apa adanya; limit percobaan ditegakkan server-side.
   const signInAnonymously = useCallback(() => supabase.auth.signInAnonymously(), []);
 
+  // Mendarat di /auth/callback (rute publik) — bukan langsung ke rute
+  // terproteksi — agar Supabase sempat menukar "?code" jadi sesi sebelum
+  // diarahkan ke aplikasi. Lihat src/pages/AuthCallback.jsx.
   const signInWithGoogle = useCallback(() =>
     supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${SITE_URL}/catalog` },
+      options: { redirectTo: `${SITE_URL}/auth/callback` },
     }),
   []);
 

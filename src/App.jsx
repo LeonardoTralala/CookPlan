@@ -4,6 +4,7 @@ import { HelpCenter } from './pages/HelpCenter.jsx';
 import { TermsOfService } from './pages/TermsOfService.jsx';
 import { TeamProfile } from './pages/TeamProfile.jsx';
 import AuthPage from './pages/AuthPage.jsx';
+import AuthCallback from './pages/AuthCallback.jsx';
 import { ProtectedRoute } from './components/ProtectedRoute.jsx';
 import { AppShell } from './components/AppShell.jsx';
 import { CatalogPage } from './pages/CatalogPage.jsx';
@@ -36,6 +37,7 @@ function App() {
         <Route path="/terms" element={<TermsOfService onNavigate={handleNavigate} />} />
         <Route path="/about" element={<TeamProfile onNavigate={handleNavigate} />} />
         <Route path="/auth" element={<AuthPage />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Bisa dicoba tamu (sesi anonim) — generate + lihat hasil, limit 2x */}
         <Route element={<ProtectedRoute allowAnonymous />}>
