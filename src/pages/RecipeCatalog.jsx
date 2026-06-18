@@ -4,6 +4,7 @@ import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
+import { CatalogGridSkeleton } from '../components/Skeleton.jsx';
 
 // Opsi diet untuk chip "Inspirasi Masakan Hari Ini" diambil dinamis dari diet_tags
 // (sama sumbernya dengan Generate step 2). Konstanta ini hanya FALLBACK bila fetch
@@ -14,6 +15,10 @@ const DEFAULT_DIET_OPTIONS = [
   { value: 'cepat', label: 'Cepat (< 30 mnt)' },
   { value: 'bahan-lokal', label: 'Bahan Lokal' },
 ];
+
+// Jumlah resep yang ditampilkan per "halaman" (pagination sisi-klien). Tombol
+// "Muat Lebih Banyak" menambah sebanyak ini; menjaga DOM awal tetap ringan.
+const RECIPES_PER_PAGE = 12;
 
 // Cocokkan satu resep dengan satu preferensi diet (slug diet_tags.value).
 // Kunci utama: recipe.tags (berisi slug). Fallback: badge label (case-insensitive),
@@ -54,6 +59,8 @@ function RecipeCatalog({ onAddToPlan }) {
   const [maxTime, setMaxTime] = useState(120); // default max 120 minutes
   const [priceCategory, setPriceCategory] = useState('Semua'); // 'Semua', 'Hemat', 'Standar', 'Premium'
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  // Pagination sisi-klien: berapa banyak resep yang sedang ditampilkan.
+  const [visibleCount, setVisibleCount] = useState(RECIPES_PER_PAGE);
   const [selectedRecipeForDetail, setSelectedRecipeForDetail] = useState(null);
   const [selectedRecipeForPlan, setSelectedRecipeForPlan] = useState(null);
   
@@ -187,11 +194,15 @@ function RecipeCatalog({ onAddToPlan }) {
       }
 
       // 2. Preferensi diet (chip) — cocokkan slug ke recipe.tags / badges.
+      //    Semantik OR (union): resep lolos bila cocok dengan SALAH SATU chip aktif.
+      //    Mis. pilih "Serba Ayam" + "Serba Sapi" → tampil resep ayam ATAU sapi
+      //    (kalau pakai AND, dua protein selalu 0 hasil karena tak ada resep ayam
+      //    sekaligus sapi). Selaras perilaku OR di filter wizard AI (overlaps).
       if (activeFilters.length > 0) {
-        const matchesAllActive = activeFilters.every((slug) =>
+        const matchesAnyActive = activeFilters.some((slug) =>
           recipeMatchesDiet(recipe, slug, dietLabelOf.get(slug))
         );
-        if (!matchesAllActive) return false;
+        if (!matchesAnyActive) return false;
       }
 
       // 3. Max Cooking Time — 120 = "Semua" (tanpa batas), jadi skip filter.
@@ -205,6 +216,19 @@ function RecipeCatalog({ onAddToPlan }) {
       return true;
     });
   }, [recipes, searchQuery, activeFilters, maxTime, priceCategory, dietLabelOf]);
+
+  // Reset pagination ke halaman pertama tiap kali kriteria filter berubah, agar
+  // user tidak "nyangkut" di posisi muat-banyak setelah memfilter. Pola adjust-
+  // state-during-render (lint-safe), sama seperti recoverySynced di AuthPage.
+  const filterSig = `${searchQuery}|${activeFilters.join(',')}|${maxTime}|${priceCategory}`;
+  const [lastFilterSig, setLastFilterSig] = useState(filterSig);
+  if (filterSig !== lastFilterSig) {
+    setLastFilterSig(filterSig);
+    setVisibleCount(RECIPES_PER_PAGE);
+  }
+
+  const visibleRecipes = filteredRecipes.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredRecipes.length;
 
   // Handle confirming "Add to Plan"
   const handleConfirmAddToPlan = () => {
@@ -259,7 +283,7 @@ function RecipeCatalog({ onAddToPlan }) {
             inputMode="search"
             enterKeyHint="search"
             autoComplete="off"
-            className="w-full pl-11 pr-6 py-2.5 rounded-full border border-outline-variant bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-sm transition-all text-sm font-medium"
+            className="w-full pl-11 pr-6 py-2.5 rounded-full border border-outline-variant bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-sm transition-all text-base md:text-sm font-medium"
             placeholder="Cari resep sehat untuk keluarga..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -282,7 +306,7 @@ function RecipeCatalog({ onAddToPlan }) {
             <button
               key={opt.value}
               onClick={() => handleToggleFilter(opt.value)}
-              className={`px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
+              className={`inline-flex items-center justify-center min-h-[44px] px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
                 activeFilters.includes(opt.value)
                   ? 'bg-primary text-white border-primary shadow-sm'
                   : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
@@ -294,7 +318,7 @@ function RecipeCatalog({ onAddToPlan }) {
           <button
             type="button"
             onClick={reshuffleDiet}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs md:text-sm font-semibold border border-dashed border-primary/50 text-primary hover:bg-primary/5 active:scale-95 transition cursor-pointer"
+            className="inline-flex items-center justify-center min-h-[44px] gap-1.5 px-4 py-2 rounded-full text-xs md:text-sm font-semibold border border-dashed border-primary/50 text-primary hover:bg-primary/5 active:scale-95 transition cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">casino</span>
             Pilihan lain
@@ -303,7 +327,7 @@ function RecipeCatalog({ onAddToPlan }) {
           {/* Toggle Advanced Filters Button */}
           <button
             onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`px-4 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all flex items-center gap-1.5 cursor-pointer ${
+            className={`min-h-[44px] px-4 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
               showAdvancedFilters
                 ? 'bg-primary text-white border-primary'
                 : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/20'
@@ -316,7 +340,7 @@ function RecipeCatalog({ onAddToPlan }) {
           {(searchQuery || activeFilters.length > 0 || maxTime < 120 || priceCategory !== 'Semua') && (
             <button
               onClick={handleResetFilters}
-              className="text-xs md:text-sm font-bold text-error hover:text-error/80 transition-colors flex items-center gap-1 cursor-pointer pl-2"
+              className="min-h-[44px] text-xs md:text-sm font-bold text-error hover:text-error/80 transition-colors flex items-center gap-1 cursor-pointer pl-2"
             >
               <span className="material-symbols-outlined text-base">restart_alt</span>
               Atur Ulang
@@ -358,7 +382,7 @@ function RecipeCatalog({ onAddToPlan }) {
                     <button
                       key={opt.value}
                       onClick={() => setMaxTime(opt.value)}
-                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+                      className={`inline-flex items-center justify-center min-h-[44px] px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
                         maxTime === opt.value
                           ? 'bg-primary text-white border-primary shadow-sm'
                           : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/30'
@@ -380,7 +404,7 @@ function RecipeCatalog({ onAddToPlan }) {
                     <button
                       key={cat}
                       onClick={() => setPriceCategory(cat)}
-                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
+                      className={`inline-flex items-center justify-center min-h-[44px] px-4 py-1.5 rounded-full text-xs font-bold transition-all border cursor-pointer ${
                         priceCategory === cat
                           ? 'bg-primary text-white border-primary shadow-sm'
                           : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/30'
@@ -401,10 +425,7 @@ function RecipeCatalog({ onAddToPlan }) {
       {/* Catalog Grid */}
       <section className="px-4 max-w-container-max mx-auto">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-on-surface-variant">
-            <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-3" aria-hidden="true">progress_activity</span>
-            <p className="text-sm">Memuat resep…</p>
-          </div>
+          <CatalogGridSkeleton />
         ) : loadError ? (
           <div className="text-center py-20 bg-white rounded-3xl border border-error/30 p-8">
             <span className="material-symbols-outlined text-5xl text-error mb-4">error</span>
@@ -429,7 +450,7 @@ function RecipeCatalog({ onAddToPlan }) {
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-            {filteredRecipes.map((recipe) => (
+            {visibleRecipes.map((recipe) => (
               <div
                 key={recipe.id}
                 className="recipe-card-shadow bg-surface-container rounded-2xl overflow-hidden group cursor-pointer hover:-translate-y-0.5 transition-all duration-300 flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
@@ -496,15 +517,18 @@ function RecipeCatalog({ onAddToPlan }) {
           </div>
         )}
 
-        {/* Load More Button */}
-        {filteredRecipes.length > 0 && (
-          <div className="mt-16 text-center">
+        {/* Muat lebih banyak — pagination sisi-klien (hilang bila semua tampil) */}
+        {hasMore && (
+          <div className="mt-12 text-center">
             <button
-              onClick={() => showToast('Lebih banyak resep akan segera ditambahkan!')}
+              onClick={() => setVisibleCount((c) => c + RECIPES_PER_PAGE)}
               className="px-8 py-3 rounded-full border border-secondary text-secondary font-bold hover:bg-secondary-container/20 transition-all cursor-pointer"
             >
               Muat Lebih Banyak Resep
             </button>
+            <p className="mt-3 text-xs text-on-surface-variant">
+              Menampilkan {visibleRecipes.length} dari {filteredRecipes.length} resep
+            </p>
           </div>
         )}
       </section>

@@ -6,17 +6,20 @@ import { PlanProvider } from './context/PlanContext.jsx'
 import { AuthProvider } from './context/AuthContext.jsx'
 import { BrowserRouter } from 'react-router-dom'
 import { ScrollToTop } from './components/ScrollToTop.jsx'
+import { ErrorBoundary } from './components/ErrorBoundary.jsx'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <BrowserRouter>
-      <AuthProvider>
-        <PlanProvider>
-          <ScrollToTop />
-          <App />
-        </PlanProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AuthProvider>
+          <PlanProvider>
+            <ScrollToTop />
+            <App />
+          </PlanProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ErrorBoundary>
   </StrictMode>,
 )
 

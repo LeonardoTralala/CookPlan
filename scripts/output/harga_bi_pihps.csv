@@ -1,0 +1,11 @@
+cat_id,nama,harga_per_kg,satuan,sumber,tanggal
+cat_1,Beras Medium,16100,kg,BI PIHPS,2026-06-18
+cat_2,Beras Kualitas Bawah,37250,kg,BI PIHPS,2026-06-18
+cat_3,Beras Kualitas Super,144850,kg,BI PIHPS,2026-06-18
+cat_4,Bawang Merah,30100,kg,BI PIHPS,2026-06-18
+cat_5,Bawang Putih,54150,kg,BI PIHPS,2026-06-18
+cat_6,Cabai Merah,43000,kg,BI PIHPS,2026-06-18
+cat_7,Daging Ayam Ras,57550,kg,BI PIHPS,2026-06-18
+cat_8,Daging Sapi Kualitas 1,67050,kg,BI PIHPS,2026-06-18
+cat_9,Gula Pasir,22900,kg,BI PIHPS,2026-06-18
+cat_10,Telur Ayam Ras,19600,kg,BI PIHPS,2026-06-18
