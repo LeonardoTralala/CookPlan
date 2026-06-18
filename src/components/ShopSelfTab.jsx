@@ -234,6 +234,12 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
             </div>
           </section>
         ))}
+
+        {/* Disclaimer harga: estimasi, bukan harga final di pasar/toko. */}
+        <p className="flex items-start gap-2 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-xs text-on-surface-variant">
+          <span className="material-symbols-outlined text-[18px] shrink-0">info</span>
+          <span>Harga yang tertera adalah harga estimasi, bisa berbeda dari harga sebenarnya di pasar/toko tergantung lokasi, musim, dan ketersediaan bahan.</span>
+        </p>
       </div>
 
       <div className="hidden lg:block lg:col-span-4">
