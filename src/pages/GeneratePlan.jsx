@@ -181,7 +181,14 @@ export function GeneratePlan() {
       const result = await generatePlan({ periode, porsi, variasiPerHari, diet, budget, pantry, notes, outputType: 'full' });
       // Simpan hasil ke sessionStorage agar GenerateResult bisa baca tanpa refetch.
       sessionStorage.setItem(`plan_${result.planId}`, JSON.stringify(result));
-      setUsageCount((n) => (n == null ? n : n + 1)); // sinkronkan sisa kuota
+      // Tamu: JANGAN naikkan hitungan di sini. Bila usageCount mencapai GUEST_LIMIT,
+      // effect guestExhausted langsung redirect ke /auth dan menelan hasil generate
+      // ke-2 sebelum user sempat melihatnya. Tamu cukup dihitung ulang saat kembali
+      // ke halaman ini (mount → getGuestUsageCount), sehingga percobaan BERIKUTNYA
+      // barulah diarahkan ke login. User penuh tetap disinkronkan untuk display kuota.
+      if (!isAnonymous) {
+        setUsageCount((n) => (n == null ? n : n + 1)); // sinkronkan sisa kuota
+      }
       showToast('Plan berhasil dibuat! 🎉');
       // autoApply: hasil generate langsung diterapkan ke Rencana Masak Mingguan.
       navigate(`/generate/${result.planId}`, { state: { autoApply: true } });
