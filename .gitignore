@@ -38,6 +38,9 @@ backups
 # Graphify
 graphify-out/
 
+# Artefak scratch agent (script sekali pakai, output build/lint) — bukan source
+.agents/scratch/
+
 # Preview email yang di-generate lokal (lihat scripts/preview-email.mjs)
 scripts/.preview/
 

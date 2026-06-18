@@ -13,7 +13,7 @@ export function Toast() {
       aria-atomic="true"
       className={
         toast.message
-          ? `fixed bottom-6 right-6 z-50 ${isError ? "bg-error" : "bg-primary"} text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 animate-fade-in`
+          ? `fixed left-4 right-4 bottom-above-cta md:left-auto md:right-6 md:bottom-6 z-50 ${isError ? "bg-error" : "bg-primary"} text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center gap-3 animate-fade-in`
           : "sr-only"
       }
     >

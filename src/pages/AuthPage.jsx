@@ -4,6 +4,7 @@ import { Logo } from "../components/Logo.jsx";
 import { Toast } from "../components/Toast.jsx";
 import { useAuth } from "../hooks/useAuth.js";
 import { usePlan } from "../hooks/usePlan.js";
+import { SESSION_EXPIRED_FLAG } from "../lib/session.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -47,7 +48,17 @@ export default function AuthPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [notice, setNotice] = useState("");
+  // Datang ke sini karena sesi berakhir di tengah pemakaian? Nilai awal notice
+  // dibaca dari flag (read murni di initializer; flag dihapus di effect bawah).
+  const [notice, setNotice] = useState(() => {
+    try {
+      return sessionStorage.getItem(SESSION_EXPIRED_FLAG)
+        ? "Sesi kamu sudah berakhir. Silakan masuk lagi untuk melanjutkan."
+        : "";
+    } catch {
+      return "";
+    }
+  });
 
   // Bila sesi recovery baru terdeteksi setelah mount (event PASSWORD_RECOVERY),
   // pindah ke form set kata sandi baru. Pola adjust-state-during-render agar
@@ -65,6 +76,15 @@ export default function AuthPage() {
   useEffect(() => {
     if (!authLoading && isFullUser && !isRecovery) navigate(redirectTo, { replace: true });
   }, [authLoading, isFullUser, isRecovery, navigate, redirectTo]);
+
+  // Konsumsi flag sesi-berakhir sekali (pesan sudah dibaca ke notice di atas).
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(SESSION_EXPIRED_FLAG);
+    } catch {
+      // sessionStorage bisa tidak tersedia (private mode); abaikan.
+    }
+  }, []);
 
   function switchMode(next) {
     setMode(next);

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generatePlan, getGeneratedHistory, getTodayUsageCount, getGuestUsageCount, deleteGeneratedPlan } from '../services/aiService.js';
 import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { Modal } from '../components/Modal.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
@@ -62,6 +63,8 @@ export function GeneratePlan() {
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  // Konfirmasi sebelum pindah ke "Belanja di Kami" (keluar dari wizard generate).
+  const [confirmSwitchShop, setConfirmSwitchShop] = useState(false);
   const [history, setHistory] = useState([]);
   const [usageCount, setUsageCount] = useState(null);
   // dietPool = semua preferensi (dari diet_tags). dietSample = subset acak yang
@@ -115,6 +118,19 @@ export function GeneratePlan() {
     }
   }, [guestExhausted, navigate]);
 
+  // Kuota harian: server reset di tengah malam UTC (lihat getTodayUsageCount).
+  // quotaLeft null = belum termuat. Tampilkan waktu reset dalam zona lokal user.
+  const quotaLeft = usageCount == null ? null : Math.max(0, DAILY_LIMIT - usageCount);
+  const quotaExhausted = quotaLeft === 0;
+  const quotaResetText = useMemo(() => {
+    const reset = new Date();
+    reset.setUTCHours(24, 0, 0, 0); // tengah malam UTC berikutnya
+    return new Intl.DateTimeFormat('id-ID', {
+      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    }).format(reset);
+  }, []);
+  const quotaMessage = `Kuota generate harian (${DAILY_LIMIT}/hari) sudah habis. Bisa generate lagi mulai ${quotaResetText}.`;
+
   // Tampilkan kombinasi preferensi diet acak lain (yang sedang dipilih tetap muncul).
   const reshuffleDiet = () => setDietSample(sampleDietTags(dietPool, 8, diet));
 
@@ -151,6 +167,12 @@ export function GeneratePlan() {
   };
 
   const handleGenerate = async () => {
+    // Guarded click: kuota habis → jelaskan langsung, JANGAN buang request +
+    // loading panjang yang berujung error (alternatif dari men-disable tombol).
+    if (quotaExhausted) {
+      setError(quotaMessage);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -159,6 +181,7 @@ export function GeneratePlan() {
       const result = await generatePlan({ periode, porsi, variasiPerHari, diet, budget, pantry, notes, outputType: 'full' });
       // Simpan hasil ke sessionStorage agar GenerateResult bisa baca tanpa refetch.
       sessionStorage.setItem(`plan_${result.planId}`, JSON.stringify(result));
+      setUsageCount((n) => (n == null ? n : n + 1)); // sinkronkan sisa kuota
       showToast('Plan berhasil dibuat! 🎉');
       // autoApply: hasil generate langsung diterapkan ke Rencana Masak Mingguan.
       navigate(`/generate/${result.planId}`, { state: { autoApply: true } });
@@ -169,7 +192,14 @@ export function GeneratePlan() {
         navigate('/auth', { replace: true, state: { from: '/generate' } });
         return;
       }
-      setError(msg);
+      // Server menolak karena rate limit harian → samakan tampilannya & tandai habis.
+      const lower = msg.toLowerCase();
+      if (e.status === 429 || lower.includes('kuota') || lower.includes('limit') || lower.includes('rate')) {
+        setUsageCount(DAILY_LIMIT);
+        setError(quotaMessage);
+      } else {
+        setError(msg);
+      }
       // Tamu: segarkan hitungan supaya redirect terpicu bila kuota ternyata habis.
       if (isAnonymous) {
         getGuestUsageCount().then(setUsageCount).catch(() => {});
@@ -201,10 +231,17 @@ export function GeneratePlan() {
           </p>
         )}
         {usageCount != null && !isAnonymous && (
-          <p className="text-xs text-on-surface-variant/80 mb-5 flex items-center gap-1">
-            <span className="material-symbols-outlined text-[16px]">bolt</span>
-            Sisa kuota hari ini: <strong>{Math.max(0, DAILY_LIMIT - usageCount)}</strong> dari {DAILY_LIMIT} generate
-          </p>
+          quotaExhausted ? (
+            <div className="mb-5 flex items-start gap-2 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
+              <span className="material-symbols-outlined text-[20px] shrink-0">hourglass_empty</span>
+              <span>Kuota generate harian habis ({DAILY_LIMIT}/hari). Bisa generate lagi mulai <strong>{quotaResetText}</strong>.</span>
+            </div>
+          ) : (
+            <p className="text-xs text-on-surface-variant mb-5 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px]">bolt</span>
+              Sisa kuota hari ini: <strong>{quotaLeft}</strong> dari {DAILY_LIMIT} generate
+            </p>
+          )
         )}
         <div className="flex items-center gap-2">
           {[1, 2, 3].map((s) => (
@@ -235,7 +272,7 @@ export function GeneratePlan() {
                 </p>
               </div>
               <button
-                onClick={() => navigate(isAnonymous ? '/auth' : '/shopping?tab=kami')}
+                onClick={() => isAnonymous ? navigate('/auth') : setConfirmSwitchShop(true)}
                 className="rounded-xl border border-outline-variant hover:border-primary/50 p-4 text-left transition-colors cursor-pointer group"
               >
                 <div className="flex items-center gap-2 mb-1.5">
@@ -362,8 +399,15 @@ export function GeneratePlan() {
             <input
               type="number"
               inputMode="numeric"
-              value={budget}
-              onChange={(e) => setBudget(Number(e.target.value))}
+              min="0"
+              // Tampilkan kosong saat 0 supaya placeholder muncul & tidak ada "0"
+              // nyangkut di depan (mis. ngetik 700000 jadi 0700000). Input disaring
+              // ke digit saja, lalu dikonversi via Number agar leading zero hilang.
+              value={budget === 0 ? '' : budget}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '');
+                setBudget(digits === '' ? 0 : Number(digits));
+              }}
               className="w-full px-4 py-3 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               placeholder="Budget dalam Rupiah"
             />
@@ -470,11 +514,38 @@ export function GeneratePlan() {
           </div>
           {loading && (
             <p className="text-center text-xs text-on-surface-variant">
-              Sonnet 4.5 thinking butuh beberapa detik untuk berpikir mendalam…
+              AI sedang menyusun menu mingguanmu — ini bisa memakan beberapa detik…
             </p>
           )}
         </div>
       )}
+
+      {/* Konfirmasi pindah ke "Belanja di Kami" — cegah keluar wizard tak sengaja */}
+      <Modal isOpen={confirmSwitchShop} onClose={() => setConfirmSwitchShop(false)}>
+        <div className="w-full max-w-sm bg-canvas-white rounded-3xl p-6 shadow-xl">
+          <div className="flex flex-col items-center text-center gap-1">
+            <span className="material-symbols-outlined text-primary text-[32px] mb-1" aria-hidden="true">local_shipping</span>
+            <h2 className="text-lg font-bold text-on-surface">Pindah ke Belanja di Kami?</h2>
+            <p className="text-sm text-on-surface-variant">
+              Kamu akan keluar dari wizard generate. Isian yang belum di-generate tidak akan tersimpan.
+            </p>
+          </div>
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={() => setConfirmSwitchShop(false)}
+              className="flex-1 min-h-11 rounded-full text-sm font-semibold text-on-surface-variant bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              onClick={() => navigate('/shopping?tab=kami')}
+              className="flex-1 min-h-11 rounded-full text-sm font-semibold text-on-primary bg-primary hover:opacity-90 transition-opacity cursor-pointer"
+            >
+              Ya, pindah
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

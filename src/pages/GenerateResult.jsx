@@ -293,7 +293,7 @@ export function GenerateResult() {
                   onChange={(e) => setNoteDraft(e.target.value.slice(0, 200))}
                   rows={2}
                   placeholder="mis. pengen yang ada ayamnya, atau kosongkan aja kalau cuma pengen menu lain"
-                  className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+                  className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-base md:text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
                 />
                 <div className="flex items-center justify-between mt-1.5">
                   <span className="text-[11px] text-on-surface-variant/70">{noteDraft.length}/200</span>
