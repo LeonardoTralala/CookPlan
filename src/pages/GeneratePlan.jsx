@@ -206,7 +206,14 @@ export function GeneratePlan() {
       // refetch. `input` (terutama pantry) dipakai untuk recompute belanja saat
       // "Ganti Menu" — lihat GenerateResult.handleRegenerateDay.
       sessionStorage.setItem(`plan_${result.planId}`, JSON.stringify({ ...result, input }));
-      setUsageCount((n) => (n == null ? n : n + 1)); // sinkronkan sisa kuota
+      // Tamu: JANGAN naikkan hitungan di sini. Bila usageCount mencapai GUEST_LIMIT,
+      // effect guestExhausted langsung redirect ke /auth dan menelan hasil generate
+      // ke-2 sebelum user sempat melihatnya. Tamu cukup dihitung ulang saat kembali
+      // ke halaman ini (mount → getGuestUsageCount), sehingga percobaan BERIKUTNYA
+      // barulah diarahkan ke login. User penuh tetap disinkronkan untuk display kuota.
+      if (!isAnonymous) {
+        setUsageCount((n) => (n == null ? n : n + 1)); // sinkronkan sisa kuota
+      }
       showToast('Plan berhasil dibuat! 🎉');
       // autoApply: hasil generate langsung diterapkan ke Rencana Masak Mingguan.
       navigate(`/generate/${result.planId}`, { state: { autoApply: true } });

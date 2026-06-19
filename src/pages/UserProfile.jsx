@@ -181,16 +181,47 @@ function UserProfile() {
       ? 'Perempuan'
       : 'Belum diisi';
 
-  // Modal Edit Profil (nama lengkap + jenis kelamin).
+  // Modal Edit Profil (foto + nama lengkap + jenis kelamin).
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editGender, setEditGender] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
+  // Foto di-staging di dalam modal: file dipilih & di-preview dulu, baru diunggah
+  // saat user menekan "Simpan" — jadi perubahan profil diterapkan sesuka user.
+  const editAvatarInputRef = useRef(null);
+  const [editAvatarFile, setEditAvatarFile] = useState(null);
+  const [editAvatarPreview, setEditAvatarPreview] = useState('');
+
+  // Buang preview lokal (object URL) supaya tidak bocor memori, lalu reset staging.
+  const clearStagedAvatar = () => {
+    setEditAvatarPreview((url) => { if (url) URL.revokeObjectURL(url); return ''; });
+    setEditAvatarFile(null);
+  };
 
   const openEdit = () => {
     setEditName(metaName);
     setEditGender(metaGender);
+    clearStagedAvatar();
     setEditOpen(true);
+  };
+
+  const handleEditAvatarPick = () => editAvatarInputRef.current?.click();
+
+  const handleEditAvatarChange = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // reset agar pilih file sama tetap memicu onChange
+    if (!file) return;
+    // Validasi cepat di klien (cocokkan dengan limit bucket: JPG/PNG/WebP, 2 MB).
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      showToast('Format foto harus JPG, PNG, atau WebP.');
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showToast('Ukuran foto maksimal 2 MB.');
+      return;
+    }
+    setEditAvatarFile(file);
+    setEditAvatarPreview((old) => { if (old) URL.revokeObjectURL(old); return URL.createObjectURL(file); });
   };
 
   const handleSaveProfile = async (e) => {
@@ -201,8 +232,12 @@ function UserProfile() {
     }
     setSavingProfile(true);
     try {
+      // Unggah foto baru dulu (bila ada) supaya avatar_url ikut tersimpan, baru
+      // perbarui nama & jenis kelamin. getProfile final memuat ketiganya sekaligus.
+      if (editAvatarFile) await uploadAvatar(editAvatarFile);
       const updated = await updateProfile({ fullName: editName, gender: editGender });
       setProfile(updated);
+      clearStagedAvatar();
       showToast('Profil berhasil diperbarui.');
       setEditOpen(false);
     } catch (err) {
@@ -714,6 +749,9 @@ function UserProfile() {
               type="file"
               accept="image/jpeg,image/png,image/webp"
               className="hidden"
+              // Cegah klik programatik input menggelembung balik ke div pembungkus
+              // (onClick handleAvatarPick) yang akan memicu picker dua kali.
+              onClick={(e) => e.stopPropagation()}
               onChange={handleAvatarChange}
             />
           </div>
@@ -806,7 +844,37 @@ function UserProfile() {
 
           <div>
             <h3 className="font-headline-md text-headline-md text-primary">Edit Profil</h3>
-            <p className="text-sm text-on-surface-variant mt-1">Perbarui nama dan jenis kelamin Anda.</p>
+            <p className="text-sm text-on-surface-variant mt-1">Perbarui foto, nama, dan jenis kelamin Anda.</p>
+          </div>
+
+          {/* Foto profil: pilih + preview di sini, diterapkan saat tekan Simpan */}
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-surface-cream bg-surface-variant shrink-0">
+              <img
+                src={editAvatarPreview || avatarSrc}
+                alt=""
+                onError={(e) => { e.currentTarget.src = AVATAR_URL; }}
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <button
+                type="button"
+                onClick={handleEditAvatarPick}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-primary text-primary text-sm font-semibold hover:bg-primary/5 active:scale-95 transition-colors cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">photo_camera</span>
+                {editAvatarFile ? 'Ganti Foto' : 'Ubah Foto'}
+              </button>
+              <p className="text-xs text-on-surface-variant">JPG, PNG, atau WebP. Maks 2 MB.</p>
+            </div>
+            <input
+              ref={editAvatarInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={handleEditAvatarChange}
+            />
           </div>
 
           <div className="space-y-2">

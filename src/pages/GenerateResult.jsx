@@ -405,6 +405,10 @@ export function GenerateResult() {
             <span className="font-bold text-primary">Total Estimasi</span>
             <span className="font-bold text-primary text-lg">{formatRupiah(plan.total_estimated_cost)}</span>
           </div>
+          <p className="flex items-start gap-1.5 px-1 text-xs text-on-surface-variant/80">
+            <span className="material-symbols-outlined text-[16px] shrink-0">info</span>
+            <span>Harga yang tertera adalah harga estimasi, bisa berbeda dari harga sebenarnya di pasar/toko tergantung lokasi, musim, dan ketersediaan bahan.</span>
+          </p>
         </section>
       )}
 
