@@ -31,6 +31,8 @@ export function GenerateResult() {
   const [recipeIndex, setRecipeIndex] = useState(new Map());
   const [detailRecipe, setDetailRecipe] = useState(null);
   const [applied, setApplied] = useState(false);
+  // Konfirmasi sebelum menerapkan menu ke planner ("Masuk ke Planner?").
+  const [confirmApply, setConfirmApply] = useState(false);
   // true bila datang langsung dari halaman generate (bukan buka ulang dari history).
   const autoApplyRef = useRef(Boolean(location.state?.autoApply));
 
@@ -416,7 +418,7 @@ export function GenerateResult() {
         </button>
         {!isAnonymous && (
           <button
-            onClick={() => (applied ? navigate('/planner') : applyToPlanner(plan, recipeIndex))}
+            onClick={() => (applied ? navigate('/planner') : setConfirmApply(true))}
             className="flex-1 px-6 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
@@ -424,6 +426,40 @@ export function GenerateResult() {
           </button>
         )}
       </div>
+
+      {/* Konfirmasi terapkan ke planner */}
+      {confirmApply && (
+        <ModalSheet onClose={() => setConfirmApply(false)} labelledBy="confirm-apply-title" panelClassName="max-w-md">
+          <div className="p-6 pt-4 space-y-5">
+            <div className="flex flex-col items-center text-center gap-2">
+              <span className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-[26px]">calendar_month</span>
+              </span>
+              <h3 id="confirm-apply-title" className="font-headline-sm text-headline-sm text-on-surface">
+                Masuk ke Planner?
+              </h3>
+              <p className="text-sm text-on-surface-variant">
+                Menu ini akan diterapkan ke Rencana Masak Mingguan kamu. Slot yang sudah terisi akan ditimpa.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmApply(false)}
+                className="flex-1 px-5 py-3 rounded-full border border-outline-variant text-on-surface-variant font-semibold text-sm hover:bg-surface-container-low active:scale-95 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => { setConfirmApply(false); applyToPlanner(plan, recipeIndex); }}
+                className="flex-1 px-5 py-3 rounded-full bg-primary text-on-primary font-semibold text-sm hover:shadow-md active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[20px]">check</span>
+                Ya, Terapkan
+              </button>
+            </div>
+          </div>
+        </ModalSheet>
+      )}
 
       {/* Modal detail resep */}
       {detailRecipe && (
