@@ -44,13 +44,29 @@ export function AuthProvider({ children }) {
       setSession(newSession);
     });
 
-    // Penanganan terpusat sesi berakhir: paksa signOut agar session→null,
-    // sehingga ProtectedRoute mengarahkan ke /auth (sekali pintu keluar).
+    // Penanganan terpusat sesi berakhir. Sebelum memaksa logout, COBA pulihkan
+    // sesi dulu: saat app dibuka kembali, access token (JWT) sering kedaluwarsa
+    // sesaat sementara refresh token masih valid. Tanpa percobaan refresh ini,
+    // error "JWT expired" yang muncul sebelum auto-refresh selesai akan langsung
+    // melempar user ke /auth — bikin user harus login lagi tiap buka aplikasi.
+    // Hanya signOut (session→null → ProtectedRoute arahkan ke /auth) bila refresh
+    // benar-benar gagal, sehingga login efektif bertahan selama refresh token hidup.
     const unsubExpiry = onSessionExpired(() => {
-      supabase.auth.signOut().catch(() => {
-        // Bila signOut gagal, biarkan — storage lokal akan dibersihkan & UI
-        // tetap mengandalkan redirect dari status sesi.
-      });
+      supabase.auth.refreshSession()
+        .then(({ data, error }) => {
+          if (!error && data?.session) {
+            // Sesi berhasil dipulihkan — user tetap login, tidak jadi logout.
+            if (active) setSession(data.session);
+            return;
+          }
+          // Refresh gagal (refresh token mati/dicabut) → baru paksa logout.
+          return supabase.auth.signOut();
+        })
+        .catch(() => {
+          // Bila refresh/signOut gagal, biarkan — UI tetap mengandalkan
+          // redirect dari status sesi.
+          supabase.auth.signOut().catch(() => {});
+        });
     });
 
     return () => {

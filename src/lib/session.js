@@ -14,21 +14,58 @@ const EVENT = "cookplan:session-expired";
 // Flag dibaca AuthPage untuk menampilkan banner "sesi berakhir" setelah redirect.
 export const SESSION_EXPIRED_FLAG = "cookplan:sessionExpired";
 
-// Apakah error ini menandakan masalah auth/sesi (bukan error biasa)?
+// Apakah error ini menandakan masalah AUTENTIKASI/SESI (sesi habis) — sehingga
+// pantas memicu logout — dan BUKAN sekadar penolakan OTORISASI/kuota?
+//
+// Penting: status 403 SENGAJA tidak lagi dianggap auth secara membabi buta.
+// PostgREST memakai 403 untuk pelanggaran RLS, dan Edge Function bisa memakai
+// 403/pesan tertentu untuk "akses ditolak" atau kuota harian habis. Dulu semua
+// itu salah dianggap "sesi berakhir" → user ke-logout padahal sesinya sehat.
+// Sekarang hanya 401 (belum terautentikasi) atau pesan yang jelas-jelas soal
+// sesi/token yang dianggap auth error.
 export function isAuthError(err) {
   if (!err) return false;
-  const status = err.status ?? err.statusCode ?? err.code;
-  if (status === 401 || status === 403) return true;
   const msg = (err.message || String(err)).toLowerCase();
-  return (
-    msg.includes("belum login") ||
-    msg.includes("jwt") ||
-    msg.includes("unauthorized") ||
-    msg.includes("not authenticated") ||
-    msg.includes("auth session missing") ||
-    msg.includes("invalid token") ||
-    (msg.includes("session") && msg.includes("expired"))
-  );
+
+  // 1) Pengecualian eksplisit: ini OTORISASI/kuota, bukan sesi habis → jangan
+  //    pernah logout meskipun statusnya 403.
+  const NON_AUTH = [
+    "row-level security",
+    "permission denied",
+    "insufficient_privilege",
+    "forbidden",
+    "quota",
+    "rate limit",
+    "rate-limit",
+    "too many",
+    "batas harian",
+    "limit harian",
+    "limit tercapai",
+    "kuota",
+  ];
+  if (NON_AUTH.some((s) => msg.includes(s))) return false;
+
+  // 2) Sinyal sesi/token dari pesan error (paling andal lintas status).
+  const AUTH_MSG = [
+    "belum login",
+    "jwt",
+    "unauthorized",
+    "not authenticated",
+    "auth session missing",
+    "invalid token",
+    "token expired",
+    "refresh token",
+  ];
+  if (AUTH_MSG.some((s) => msg.includes(s))) return true;
+  if (msg.includes("session") && msg.includes("expired")) return true;
+
+  // 3) Status 401 = belum terautentikasi → sesi bermasalah. 403 TIDAK dipakai
+  //    di sini karena ambigu (lihat catatan di atas); kalau memang soal sesi,
+  //    biasanya sudah tertangkap oleh sinyal pesan di langkah 2.
+  const status = err.status ?? err.statusCode ?? err.code;
+  if (status === 401) return true;
+
+  return false;
 }
 
 // Umumkan bahwa sesi berakhir. Idempoten secara praktis: flag + event sekali picu.
