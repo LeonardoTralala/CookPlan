@@ -65,6 +65,7 @@ export function GeneratePlan() {
   const [porsi, setPorsi] = useState(2);
   const [meals, setMeals] = useState(['breakfast', 'lunch', 'dinner']);
   const [variasiPerHari, setVariasiPerHari] = useState(1);
+  const [persona, setPersona] = useState('');
   const [diet, setDiet] = useState(['halal']);
   const [budget, setBudget] = useState(200000);
   const [pantry, setPantry] = useState([]);
@@ -108,6 +109,9 @@ export function GeneratePlan() {
       if (!active) return;
       const prefs = prof?.dietPrefs?.length ? prof.dietPrefs : null;
       if (prefs) setDiet(prefs);
+      // Persona dari profil (diisi sekali saat onboarding) diteruskan diam-diam
+      // ke AI — tidak ditampilkan di wizard; diubah lewat Profil bila perlu.
+      if (prof?.persona) setPersona(prof.persona);
       const pool = rows.length ? rows : DEFAULT_DIET_OPTIONS;
       if (rows.length) setDietPool(rows);
       setDietSample(sampleDietTags(pool, 8, prefs ?? ['halal']));
@@ -200,7 +204,7 @@ export function GeneratePlan() {
     try {
       // outputType selalu 'full' — pilihan jenis output dihapus dari wizard;
       // hasil selalu lengkap (menu + belanja + prep), Core Offer tetap tersedia.
-      const input = { periode, porsi, meals, variasiPerHari, diet, budget, pantry, notes, outputType: 'full' };
+      const input = { periode, porsi, meals, variasiPerHari, diet, budget, pantry, notes, persona, outputType: 'full' };
       const result = await generatePlan(input);
       // Simpan hasil + input ke sessionStorage agar GenerateResult bisa baca tanpa
       // refetch. `input` (terutama pantry) dipakai untuk recompute belanja saat

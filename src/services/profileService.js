@@ -7,7 +7,10 @@ import { supabase } from "../lib/supabase.js";
 // avatar_url. Email tidak disimpan di profiles — selalu dibaca dari auth.users.
 // RLS owner-only (profiles_select_own / profiles_update_own) menjaga akses.
 
-const PROFILE_SELECT = "id, full_name, username, gender, avatar_url, created_at, diet_prefs";
+const PROFILE_SELECT = "id, full_name, username, gender, avatar_url, created_at, diet_prefs, persona";
+
+// Persona valid (selaras CHECK constraint DB & VALID_PERSONA di Edge Function).
+const VALID_PERSONA = ["mahasiswa", "pekerja", "ibu_rumah_tangga", "keluarga", "lainnya"];
 
 // Ambil profil pengguna aktif dalam bentuk camelCase yang siap dipakai UI.
 export async function getProfile() {
@@ -31,6 +34,7 @@ export async function getProfile() {
     avatarUrl: data.avatar_url || "",
     createdAt: data.created_at ?? user.created_at ?? null,
     dietPrefs: data.diet_prefs ?? [], // array slug diet_tags.value
+    persona: data.persona || "",      // NULL di DB → "" untuk UI ("belum diisi")
   };
 }
 
@@ -57,6 +61,16 @@ export async function updateProfile(patch = {}) {
     if (!Array.isArray(patch.dietPrefs)) throw new Error("Preferensi diet tidak valid.");
     // Normalisasi: hanya string, buang duplikat & kosong.
     updates.diet_prefs = [...new Set(patch.dietPrefs.filter((v) => typeof v === "string" && v))];
+  }
+  if (patch.persona !== undefined) {
+    // "" (belum diisi) → NULL agar lolos CHECK constraint & berarti "belum diisi".
+    if (patch.persona === "") {
+      updates.persona = null;
+    } else if (VALID_PERSONA.includes(patch.persona)) {
+      updates.persona = patch.persona;
+    } else {
+      throw new Error("Persona tidak valid.");
+    }
   }
 
   if (Object.keys(updates).length === 0) return getProfile();

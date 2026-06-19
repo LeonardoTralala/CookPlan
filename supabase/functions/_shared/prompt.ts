@@ -4,7 +4,7 @@
 
 // Naikkan setiap kali prompt berubah secara perilaku — ikut di-hash sebagai
 // cache key di generate-plan supaya hasil cache prompt lama tidak terpakai.
-export const PROMPT_VERSION = "6";
+export const PROMPT_VERSION = "7";
 
 // Label Indonesia untuk tiap meal_type — dipakai saat menyusun instruksi waktu makan.
 const MEAL_LABEL_ID: Record<string, string> = {
@@ -12,6 +12,23 @@ const MEAL_LABEL_ID: Record<string, string> = {
   lunch: "makan siang (lunch)",
   dinner: "makan malam (dinner)",
 };
+
+// Petunjuk untuk AI per persona user ("siapakah kamu"). Mengarahkan gaya menu
+// tanpa menjadi hard constraint (diet & bank resep tetap yang utama). Selaras
+// PERSONA_OPTIONS di src/utils/persona.js & VALID_PERSONA di validate.ts.
+const PERSONA_HINT_ID: Record<string, string> = {
+  mahasiswa: "mahasiswa/anak kos — utamakan menu hemat, cepat, dan bahan mudah didapat",
+  pekerja: "pekerja kantoran — utamakan menu praktis & cocok untuk meal prep/bekal",
+  ibu_rumah_tangga: "ibu rumah tangga — menu ramah keluarga, bergizi, dan variatif",
+  keluarga: "berkeluarga — menu ramah keluarga dan mengenyangkan",
+  lainnya: "pengguna umum",
+};
+
+// Bangun baris "Profil pengguna" untuk prompt; kosong bila persona tak diisi/dikenal.
+function personaLine(persona?: string): string {
+  const hint = persona ? PERSONA_HINT_ID[persona] : "";
+  return hint ? `- Profil pengguna: ${hint}\n` : "";
+}
 
 // Bentuk minimal input & resep yang dipakai builder prompt (selaras GenerateInput
 // di validate.ts & bank resep yang di-query Edge Function).
@@ -24,6 +41,7 @@ interface PromptInput {
   meals?: string[];
   variasiPerHari?: number;
   notes?: string;
+  persona?: string;
   outputType?: string;
 }
 interface PromptCandidate {
@@ -131,7 +149,7 @@ PRIORITAS: Parameter di atas (periode, porsi, waktu makan, diet, budget) WAJIB &
   const totalDays = input.periode;
 
   return `PERMINTAAN USER:
-- Periode: ${totalDays} hari
+${personaLine(input.persona)}- Periode: ${totalDays} hari
 - Porsi per jam makan: ${input.porsi} (servings tiap waktu makan)
 - Waktu makan per hari: ${mealCount}× (${slotsLabel}) — HANYA waktu makan ini, semuanya WAJIB terisi
 - Variasi menu per hari: ${variasi} resep berbeda (sisanya pakai ulang resep yang sama)
@@ -212,6 +230,7 @@ interface RegenInput {
   diet?: string[];
   meals?: string[];
   variasiPerHari?: number;
+  persona?: string;
   outputType?: string;
 }
 interface RegenCandidate {
@@ -272,7 +291,7 @@ ${note}
     : "\n(User tidak memberi catatan khusus — cukup berikan variasi menu yang berbeda dan menarik.)\n";
 
   return `PERMINTAAN USER (regenerate SATU hari):
-- Hari yang diganti: ${dayLabel}
+${personaLine(input.persona)}- Hari yang diganti: ${dayLabel}
 - Porsi per jam makan: ${input.porsi} (servings tiap waktu makan)
 - Waktu makan per hari: ${mealCount}× (${slotsLabel}) — HANYA waktu makan ini, semuanya WAJIB terisi
 - Variasi menu per hari: ${variasi} resep berbeda (sisanya pakai ulang resep yang sama)
