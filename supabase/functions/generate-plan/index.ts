@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
 
   // 10. Post-process di server (bukan delegasi ke AI):
   //     a. tegakkan variasi/hari + isi 3 slot (foodprep), b. kurangi pantry.
-  const variedOutput = enforceVariety(parsed as Record<string, unknown>, input.variasiPerHari, input.porsi);
+  const variedOutput = enforceVariety(parsed as Record<string, unknown>, input.variasiPerHari, input.porsi, input.meals);
   const finalOutput = subtractPantry(variedOutput, input.pantry);
 
   // 11. Persist

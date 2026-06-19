@@ -16,12 +16,20 @@ import { useAuth } from '../hooks/useAuth.js';
 // mingguan (Senin–Minggu) dan validasi server (validateInput).
 const PERIODE_MAX = 7;
 
-// Variasi menu per hari: berapa RESEP BERBEDA yang dimasak dalam sehari. Setiap
-// hari tetap 3 waktu makan (breakfast/lunch/dinner); bila variasi < 3, resep yang
-// sama dipakai ulang untuk mengisi waktu makan sisanya (konsep foodprep — masak
-// sekali, makan beberapa kali). Maks 3 karena tidak mungkin > jumlah waktu makan.
+// Variasi menu per hari: berapa RESEP BERBEDA yang dimasak dalam sehari. Bila
+// variasi < jumlah waktu makan terpilih, resep yang sama dipakai ulang untuk
+// mengisi waktu makan sisanya (konsep foodprep — masak sekali, makan beberapa
+// kali). Maks 3 (tidak mungkin > jumlah waktu makan dalam sehari).
 const VARIASI_MAX = 3;
-const MEAL_SLOTS_PER_DAY = 3;
+
+// Pilihan waktu makan per hari. User boleh memilih subset (mis. cuma makan siang,
+// atau siang + malam); minimal satu. Urutan ini = urutan kanonik yang dipakai
+// server (breakfast → lunch → dinner).
+const MEAL_OPTIONS = [
+  { value: 'breakfast', label: 'Sarapan' },
+  { value: 'lunch', label: 'Makan Siang' },
+  { value: 'dinner', label: 'Makan Malam' },
+];
 
 // Opsi diet sekarang diambil dinamis dari tabel diet_tags (lihat dietService).
 // Konstanta ini cuma FALLBACK bila fetch gagal / tabel belum di-push, supaya
@@ -55,6 +63,7 @@ export function GeneratePlan() {
   const [step, setStep] = useState(1);
   const [periode, setPeriode] = useState(7);
   const [porsi, setPorsi] = useState(2);
+  const [meals, setMeals] = useState(['breakfast', 'lunch', 'dinner']);
   const [variasiPerHari, setVariasiPerHari] = useState(1);
   const [diet, setDiet] = useState(['halal']);
   const [budget, setBudget] = useState(200000);
@@ -138,6 +147,19 @@ export function GeneratePlan() {
     setDiet((prev) => prev.includes(value) ? prev.filter((d) => d !== value) : [...prev, value]);
   };
 
+  // Jumlah waktu makan terpilih — dipakai untuk teks variasi & ringkasan.
+  const mealCount = meals.length;
+
+  // Toggle waktu makan; jaga minimal satu tetap aktif & urutan kanonik.
+  const toggleMeal = (value) => {
+    setMeals((prev) => {
+      if (prev.includes(value)) {
+        return prev.length === 1 ? prev : prev.filter((m) => m !== value);
+      }
+      return MEAL_OPTIONS.map((o) => o.value).filter((m) => prev.includes(m) || m === value);
+    });
+  };
+
   const addPantry = () => {
     const text = pantryInput.trim();
     if (!text) return;
@@ -178,9 +200,12 @@ export function GeneratePlan() {
     try {
       // outputType selalu 'full' — pilihan jenis output dihapus dari wizard;
       // hasil selalu lengkap (menu + belanja + prep), Core Offer tetap tersedia.
-      const result = await generatePlan({ periode, porsi, variasiPerHari, diet, budget, pantry, notes, outputType: 'full' });
-      // Simpan hasil ke sessionStorage agar GenerateResult bisa baca tanpa refetch.
-      sessionStorage.setItem(`plan_${result.planId}`, JSON.stringify(result));
+      const input = { periode, porsi, meals, variasiPerHari, diet, budget, pantry, notes, outputType: 'full' };
+      const result = await generatePlan(input);
+      // Simpan hasil + input ke sessionStorage agar GenerateResult bisa baca tanpa
+      // refetch. `input` (terutama pantry) dipakai untuk recompute belanja saat
+      // "Ganti Menu" — lihat GenerateResult.handleRegenerateDay.
+      sessionStorage.setItem(`plan_${result.planId}`, JSON.stringify({ ...result, input }));
       // Tamu: JANGAN naikkan hitungan di sini. Bila usageCount mencapai GUEST_LIMIT,
       // effect guestExhausted langsung redirect ke /auth dan menelan hasil generate
       // ke-2 sebelum user sempat melihatnya. Tamu cukup dihitung ulang saat kembali
@@ -312,6 +337,19 @@ export function GeneratePlan() {
             </p>
           </Field>
 
+          <Field label="Waktu makan per hari">
+            <div className="flex flex-wrap gap-2">
+              {MEAL_OPTIONS.map((opt) => (
+                <Chip key={opt.value} active={meals.includes(opt.value)} onClick={() => toggleMeal(opt.value)}>
+                  {opt.label}
+                </Chip>
+              ))}
+            </div>
+            <p className="text-xs text-on-surface-variant mt-2">
+              Pilih jam makan yang mau direncanakan (mis. cuma makan siang, atau siang + malam). Minimal satu — {mealCount}× makan/hari.
+            </p>
+          </Field>
+
           <Field label="Berapa variasi menu dalam sehari?">
             <Stepper
               value={variasiPerHari}
@@ -320,11 +358,11 @@ export function GeneratePlan() {
               suffix="Variasi"
             />
             <p className="text-xs text-on-surface-variant mt-2">
-              Tetap {MEAL_SLOTS_PER_DAY}× makan/hari. {variasiPerHari === 1
-                ? 'Masak 1 menu sekali, dimakan pagi–siang–malam (foodprep).'
-                : variasiPerHari >= MEAL_SLOTS_PER_DAY
+              {mealCount}× makan/hari. {variasiPerHari === 1
+                ? 'Masak 1 menu sekali, dipakai untuk semua waktu makan (foodprep).'
+                : variasiPerHari >= mealCount
                   ? 'Tiap waktu makan menu berbeda.'
-                  : `${variasiPerHari} menu berbeda, dipakai ulang menutup ${MEAL_SLOTS_PER_DAY} waktu makan.`}
+                  : `${variasiPerHari} menu berbeda, dipakai ulang menutup ${mealCount} waktu makan.`}
             </p>
           </Field>
 
@@ -480,6 +518,10 @@ export function GeneratePlan() {
             <h3 className="font-headline-md text-headline-md text-primary mb-2">Ringkasan</h3>
             <SummaryRow label="Periode" value={`${periode} hari`} />
             <SummaryRow label="Porsi per jam makan" value={`${porsi} porsi`} />
+            <SummaryRow
+              label="Waktu makan"
+              value={meals.map((m) => MEAL_OPTIONS.find((o) => o.value === m)?.label ?? m).join(', ')}
+            />
             <SummaryRow
               label="Variasi menu"
               value={`${variasiPerHari} variasi/hari${variasiPerHari === 1 ? ' (masak sekali, seharian)' : ''}`}

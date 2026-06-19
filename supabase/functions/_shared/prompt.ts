@@ -4,7 +4,7 @@
 
 // Naikkan setiap kali prompt berubah secara perilaku — ikut di-hash sebagai
 // cache key di generate-plan supaya hasil cache prompt lama tidak terpakai.
-export const PROMPT_VERSION = "5";
+export const PROMPT_VERSION = "6";
 
 // Label Indonesia untuk tiap meal_type — dipakai saat menyusun instruksi waktu makan.
 const MEAL_LABEL_ID: Record<string, string> = {
@@ -21,6 +21,7 @@ interface PromptInput {
   diet?: string[];
   budget?: number;
   pantry?: { name: string; amount?: number; unit?: string }[];
+  meals?: string[];
   variasiPerHari?: number;
   notes?: string;
   outputType?: string;
@@ -44,9 +45,9 @@ ATURAN WAJIB:
 1. HANYA gunakan resep dari BANK RESEP yang diberikan (gunakan recipe_id yang valid). JANGAN mengarang resep di luar bank.
 2. Hormati preferensi diet & alergi user sebagai HARD CONSTRAINT. Jangan pilih resep yang melanggar.
 3. Variasikan menu antar hari (jangan menu yang sama berturut-turut bila memungkinkan).
-4. Setiap waktu makan WAJIB punya "servings" = "Porsi per jam makan" dari user. Pastikan shopping_list & total_estimated_cost mencakup TOTAL semua porsi (3 waktu makan/hari × porsi × jumlah hari).
+4. Setiap waktu makan WAJIB punya "servings" = "Porsi per jam makan" dari user. Pastikan shopping_list & total_estimated_cost mencakup TOTAL semua porsi (jumlah waktu makan terpilih/hari × porsi × jumlah hari).
 5. Usahakan total estimasi biaya TIDAK melebihi budget user lebih dari 10%. Beri peringatan di "warnings" bila budget terlalu kecil.
-6. Setiap hari WAJIB punya 3 waktu makan terisi: breakfast, lunch, dinner (jangan ada yang bolong). TAPI gunakan hanya sebanyak "Variasi menu per hari" resep BERBEDA per hari — bila variasi < 3, PAKAI ULANG recipe_id yang sama untuk mengisi waktu makan sisanya (konsep foodprep: masak sekali, makan beberapa kali). Contoh: variasi=1 → satu recipe_id sama di breakfast, lunch, dinner.
+6. Setiap hari WAJIB mengisi PERSIS waktu makan yang diminta user (lihat daftar "Waktu makan per hari" di permintaan) — jangan ada yang bolong, dan JANGAN menambah waktu makan yang tidak diminta. Gunakan hanya sebanyak "Variasi menu per hari" resep BERBEDA per hari — bila variasi < jumlah waktu makan, PAKAI ULANG recipe_id yang sama untuk mengisi sisanya (konsep foodprep: masak sekali, makan beberapa kali). Contoh: variasi=1 → satu recipe_id sama di semua waktu makan terpilih.
 7. Bahasa Indonesia santai & ramah untuk field teks (plan_summary, notes, prep_instructions).
 
 OUTPUT: WAJIB berupa JSON valid SAJA, TANPA penjelasan tambahan, TANPA markdown code fence. Ikuti SCHEMA persis.`;
@@ -102,11 +103,15 @@ export function buildUserMessage(input: PromptInput, candidates: PromptCandidate
   const dietList = input.diet ?? [];
   const dietText = dietList.length > 0 ? dietList.join(", ") : "tidak ada preferensi khusus";
 
-  // Setiap hari TETAP 3 waktu makan; variasiPerHari = jumlah resep berbeda per hari.
-  const slotList = ["breakfast", "lunch", "dinner"];
+  // Waktu makan per hari = subset terpilih user (default ketiganya), urut kanonik.
+  // variasiPerHari = jumlah resep berbeda per hari (dibatasi jumlah slot).
+  const ALL_SLOTS = ["breakfast", "lunch", "dinner"];
+  const picked = Array.isArray(input.meals) ? ALL_SLOTS.filter((m) => input.meals!.includes(m)) : [];
+  const slotList = picked.length > 0 ? picked : ALL_SLOTS;
   const slotsLabel = slotList.map((m) => MEAL_LABEL_ID[m] ?? m).join(", ");
   const slotTypesCsv = slotList.join(", ");
-  const variasi = Math.min(3, Math.max(1, Math.floor(Number(input.variasiPerHari)) || 1));
+  const mealCount = slotList.length;
+  const variasi = Math.min(mealCount, Math.max(1, Math.floor(Number(input.variasiPerHari)) || 1));
 
   // Catatan khusus user — preferensi tambahan/penghalus. PRIORITAS DI BAWAH parameter
   // terstruktur: dibungkus delimiter + framing agar tidak bisa menimpa aturan sistem
@@ -128,7 +133,7 @@ PRIORITAS: Parameter di atas (periode, porsi, waktu makan, diet, budget) WAJIB &
   return `PERMINTAAN USER:
 - Periode: ${totalDays} hari
 - Porsi per jam makan: ${input.porsi} (servings tiap waktu makan)
-- Waktu makan per hari: 3× (${slotsLabel}) — selalu terisi penuh
+- Waktu makan per hari: ${mealCount}× (${slotsLabel}) — HANYA waktu makan ini, semuanya WAJIB terisi
 - Variasi menu per hari: ${variasi} resep berbeda (sisanya pakai ulang resep yang sama)
 - Preferensi diet: ${dietText}
 - Budget total: Rp ${input.budget?.toLocaleString("id-ID") ?? "tidak ditentukan"}
@@ -142,7 +147,7 @@ ${JSON.stringify(recipeBank, null, 1)}
 
 ${OUTPUT_SCHEMA_TEXT}
 ${notesBlock}
-Buatkan plan untuk ${totalDays} hari. Untuk SETIAP hari isi KETIGA waktu makan: ${slotTypesCsv} (gunakan nilai meal_type itu persis, jangan ada yang bolong). Namun cukup gunakan ${variasi} resep BERBEDA per hari — bila ${variasi} < 3, PAKAI ULANG recipe_id yang sama di waktu makan sisanya (foodprep: masak sekali, makan beberapa kali). Set "servings" setiap slot = ${input.porsi}. shopping_list & total_estimated_cost harus mencakup TOTAL semua porsi (3 waktu makan/hari). Untuk sarapan pilih resep yang cocok, kalau tidak ada gunakan resep paling ringan/cepat. Output JSON saja.`;
+Buatkan plan untuk ${totalDays} hari. Untuk SETIAP hari isi PERSIS waktu makan ini: ${slotTypesCsv} (gunakan nilai meal_type itu persis, jangan ada yang bolong, JANGAN tambahkan waktu makan lain di luar daftar). Namun cukup gunakan ${variasi} resep BERBEDA per hari — bila ${variasi} < ${mealCount}, PAKAI ULANG recipe_id yang sama di waktu makan sisanya (foodprep: masak sekali, makan beberapa kali). Set "servings" setiap slot = ${input.porsi}. shopping_list & total_estimated_cost harus mencakup TOTAL semua porsi (${mealCount} waktu makan/hari).${slotList.includes("breakfast") ? " Untuk sarapan pilih resep yang cocok, kalau tidak ada gunakan resep paling ringan/cepat." : ""} Output JSON saja.`;
 }
 
 // ===========================================================================
@@ -162,7 +167,7 @@ TUGAS: Susun ULANG menu untuk SATU hari saja dari BANK RESEP yang disediakan. Us
 ATURAN WAJIB:
 1. HANYA gunakan resep dari BANK RESEP (pakai recipe_id yang valid). JANGAN mengarang resep.
 2. Hormati preferensi diet & alergi user sebagai HARD CONSTRAINT.
-3. Isi KETIGA waktu makan: breakfast, lunch, dinner (jangan ada yang bolong). Gunakan hanya sebanyak "Variasi menu per hari" resep BERBEDA — bila variasi < 3, PAKAI ULANG recipe_id yang sama untuk mengisi waktu makan sisanya (foodprep: masak sekali, makan beberapa kali).
+3. Isi PERSIS waktu makan yang diminta user (lihat "Waktu makan per hari" di permintaan; jangan ada yang bolong, jangan tambah di luar daftar). Gunakan hanya sebanyak "Variasi menu per hari" resep BERBEDA — bila variasi < jumlah waktu makan, PAKAI ULANG recipe_id yang sama untuk mengisi sisanya (foodprep: masak sekali, makan beberapa kali).
 4. Sebisa mungkin BERBEDA dari menu hari itu sebelumnya, dan hindari recipe_id yang sudah dipakai di hari lain (variasi).
 5. Kalau user memberi CATATAN preferensi, jadikan prioritas pemilihan resep selama TIDAK melanggar diet & masih ada di bank resep.
 6. Set "servings" tiap waktu makan = porsi yang diminta user.
@@ -205,6 +210,7 @@ interface RegenDayOpts {
 interface RegenInput {
   porsi?: number;
   diet?: string[];
+  meals?: string[];
   variasiPerHari?: number;
   outputType?: string;
 }
@@ -242,7 +248,13 @@ export function buildRegenerateDayMessage(
     bahan: r.ingredients_text,
   }));
 
-  const variasi = Math.min(3, Math.max(1, Math.floor(Number(input.variasiPerHari)) || 1));
+  const ALL_SLOTS = ["breakfast", "lunch", "dinner"];
+  const picked = Array.isArray(input.meals) ? ALL_SLOTS.filter((m) => input.meals!.includes(m)) : [];
+  const slotList = picked.length > 0 ? picked : ALL_SLOTS;
+  const slotsLabel = slotList.map((m) => MEAL_LABEL_ID[m] ?? m).join(", ");
+  const slotTypesCsv = slotList.join(", ");
+  const mealCount = slotList.length;
+  const variasi = Math.min(mealCount, Math.max(1, Math.floor(Number(input.variasiPerHari)) || 1));
   const dietArr = input.diet ?? [];
   const dietText = dietArr.length > 0 ? dietArr.join(", ") : "tidak ada preferensi khusus";
   const currentText = currentMeals.length > 0
@@ -262,6 +274,7 @@ ${note}
   return `PERMINTAAN USER (regenerate SATU hari):
 - Hari yang diganti: ${dayLabel}
 - Porsi per jam makan: ${input.porsi} (servings tiap waktu makan)
+- Waktu makan per hari: ${mealCount}× (${slotsLabel}) — HANYA waktu makan ini, semuanya WAJIB terisi
 - Variasi menu per hari: ${variasi} resep berbeda (sisanya pakai ulang resep yang sama)
 - Preferensi diet: ${dietText}
 - Jenis output: ${input.outputType}
@@ -276,5 +289,5 @@ ${JSON.stringify(recipeBank, null, 1)}
 
 ${REGEN_DAY_SCHEMA_TEXT}
 
-Susun ulang menu untuk hari "${dayLabel}": isi tiga waktu makan (breakfast, lunch, dinner), pakai ${variasi} resep berbeda (sisanya pakai ulang), set "servings" tiap slot = ${input.porsi}. Output JSON objek tunggal sesuai schema. JSON saja.`;
+Susun ulang menu untuk hari "${dayLabel}": isi PERSIS waktu makan ini (${slotTypesCsv}; jangan ada yang bolong, jangan tambah di luar daftar), pakai ${variasi} resep berbeda (sisanya pakai ulang), set "servings" tiap slot = ${input.porsi}. Output JSON objek tunggal sesuai schema. JSON saja.`;
 }

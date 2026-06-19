@@ -5,6 +5,7 @@ import { getRecipesByIds } from '../services/recipeService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { mapGeneratedPlanToWeek } from '../utils/planMapper.js';
+import { buildShoppingList } from '../utils/shoppingList.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 
 const MEAL_LABEL = { breakfast: 'Sarapan', lunch: 'Makan Siang', dinner: 'Makan Malam' };
@@ -29,8 +30,13 @@ export function GenerateResult() {
   const [error, setError] = useState('');
   const [showReasoning, setShowReasoning] = useState(false);
   const [recipeIndex, setRecipeIndex] = useState(new Map());
+  // Bahan tersedia di rumah (pantry) dari input generate — dipakai untuk
+  // recompute belanja client-side saat "Ganti Menu" (lihat handleRegenerateDay).
+  const [pantry, setPantry] = useState([]);
   const [detailRecipe, setDetailRecipe] = useState(null);
   const [applied, setApplied] = useState(false);
+  // Konfirmasi sebelum menerapkan menu ke planner ("Masuk ke Planner?").
+  const [confirmApply, setConfirmApply] = useState(false);
   // true bila datang langsung dari halaman generate (bukan buka ulang dari history).
   const autoApplyRef = useRef(Boolean(location.state?.autoApply));
 
@@ -79,10 +85,15 @@ export function GenerateResult() {
           data = JSON.parse(cached);
         } else {
           const row = await getGeneratedPlanById(planId);
-          data = { plan: row.output_json, reasoning: row.reasoning_content, meta: { model: row.model }, planId: row.id };
+          data = {
+            plan: row.output_json, reasoning: row.reasoning_content,
+            meta: { model: row.model }, planId: row.id, input: row.input_json,
+          };
         }
         if (!active) return;
         setResult(data);
+        // pantry untuk recompute belanja saat ganti menu (boleh kosong).
+        setPantry(Array.isArray(data.input?.pantry) ? data.input.pantry : []);
 
         // Ambil resep detail untuk semua recipe_id di plan.
         const ids = new Set();
@@ -126,11 +137,18 @@ export function GenerateResult() {
     setRegenDayIndex(dayIndex);
     try {
       const res = await regenerateDay(planId, dayIndex, { note });
-      const newPlan = res.plan;
+
+      // Hari baru dari server (otoritatif untuk hari yang diganti). Kita TIDAK
+      // mengandalkan res.plan sepenuhnya: versi regenerate-day yang ter-deploy
+      // bisa mengembalikan plan yang belum menerapkan perubahan ke days[dayIndex].
+      // Jadi kita tempel hari baru ke plan yang sedang tampil secara client-side.
+      const newDay = res.day && Array.isArray(res.day.meals) ? res.day : null;
+      const fallbackDay = Array.isArray(res.plan?.days) ? res.plan.days[dayIndex] : null;
+      const appliedDay = newDay ?? fallbackDay;
 
       // Pastikan resep baru ada di index (untuk render gambar/judul & sync planner).
       const newIds = new Set();
-      for (const m of res.day?.meals ?? []) if (m.recipe_id != null) newIds.add(m.recipe_id);
+      for (const m of appliedDay?.meals ?? []) if (m.recipe_id != null) newIds.add(m.recipe_id);
       const missing = [...newIds].filter((id) => !recipeIndex.has(id));
       let nextIndex = recipeIndex;
       if (missing.length > 0) {
@@ -140,7 +158,23 @@ export function GenerateResult() {
         setRecipeIndex(nextIndex);
       }
 
-      const newResult = { ...result, plan: newPlan };
+      // Bangun days baru di klien: ganti hari ke-dayIndex dengan hasil terbaru.
+      const baseDays = result.plan?.days ?? [];
+      const newDays = appliedDay
+        ? baseDays.map((d, i) => (i === dayIndex ? appliedDay : d))
+        : baseDays;
+
+      // Hitung ulang daftar belanja & total dari menu TERBARU secara client-side
+      // supaya bahan + estimasi harga ikut berubah walau Edge Function
+      // regenerate-day belum menghitung ulang (mis. belum di-redeploy). Hanya
+      // untuk plan yang memang menampilkan belanja (full/foodprep).
+      let finalPlan = { ...result.plan, days: newDays };
+      if (Array.isArray(result.plan?.shopping_list)) {
+        const { shopping_list, total_estimated_cost } = buildShoppingList(newDays, nextIndex, pantry);
+        finalPlan = { ...finalPlan, shopping_list, total_estimated_cost };
+      }
+
+      const newResult = { ...result, plan: finalPlan };
       setResult(newResult);
       try {
         sessionStorage.setItem(`plan_${planId}`, JSON.stringify(newResult));
@@ -148,19 +182,19 @@ export function GenerateResult() {
 
       // Sinkronkan planner kalau plan sudah diterapkan.
       if (appliedRef.current) {
-        const { slots } = mapGeneratedPlanToWeek(newPlan, nextIndex);
+        const { slots } = mapGeneratedPlanToWeek(finalPlan, nextIndex);
         if (slots.length > 0) applySlots(slots);
       }
 
       setNoteOpenIndex(null);
       setNoteDraft('');
-      showToast(`Menu ${res.day?.day || `hari ${dayIndex + 1}`} berhasil diganti! 🍳`);
+      showToast(`Menu ${appliedDay?.day || `hari ${dayIndex + 1}`} berhasil diganti! 🍳`);
     } catch (e) {
       showToast(e.message || 'Gagal mengganti menu hari ini.', { variant: 'error' });
     } finally {
       setRegenDayIndex(null);
     }
-  }, [planId, regenDayIndex, recipeIndex, result, applySlots, showToast]);
+  }, [planId, regenDayIndex, recipeIndex, result, pantry, applySlots, showToast]);
 
   if (loading) {
     return (
@@ -420,7 +454,7 @@ export function GenerateResult() {
         </button>
         {!isAnonymous && (
           <button
-            onClick={() => (applied ? navigate('/planner') : applyToPlanner(plan, recipeIndex))}
+            onClick={() => (applied ? navigate('/planner') : setConfirmApply(true))}
             className="flex-1 px-6 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
           >
             <span className="material-symbols-outlined text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
@@ -428,6 +462,40 @@ export function GenerateResult() {
           </button>
         )}
       </div>
+
+      {/* Konfirmasi terapkan ke planner */}
+      {confirmApply && (
+        <ModalSheet onClose={() => setConfirmApply(false)} labelledBy="confirm-apply-title" panelClassName="max-w-md">
+          <div className="p-6 pt-4 space-y-5">
+            <div className="flex flex-col items-center text-center gap-2">
+              <span className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-[26px]">calendar_month</span>
+              </span>
+              <h3 id="confirm-apply-title" className="font-headline-sm text-headline-sm text-on-surface">
+                Masuk ke Planner?
+              </h3>
+              <p className="text-sm text-on-surface-variant">
+                Menu ini akan diterapkan ke Rencana Masak Mingguan kamu. Slot yang sudah terisi akan ditimpa.
+              </p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setConfirmApply(false)}
+                className="flex-1 px-5 py-3 rounded-full border border-outline-variant text-on-surface-variant font-semibold text-sm hover:bg-surface-container-low active:scale-95 transition cursor-pointer"
+              >
+                Batal
+              </button>
+              <button
+                onClick={() => { setConfirmApply(false); applyToPlanner(plan, recipeIndex); }}
+                className="flex-1 px-5 py-3 rounded-full bg-primary text-on-primary font-semibold text-sm hover:shadow-md active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[20px]">check</span>
+                Ya, Terapkan
+              </button>
+            </div>
+          </div>
+        </ModalSheet>
+      )}
 
       {/* Modal detail resep */}
       {detailRecipe && (
