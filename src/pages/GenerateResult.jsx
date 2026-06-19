@@ -5,6 +5,7 @@ import { getRecipesByIds } from '../services/recipeService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { mapGeneratedPlanToWeek } from '../utils/planMapper.js';
+import { buildShoppingList } from '../utils/shoppingList.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 
 const MEAL_LABEL = { breakfast: 'Sarapan', lunch: 'Makan Siang', dinner: 'Makan Malam' };
@@ -29,6 +30,9 @@ export function GenerateResult() {
   const [error, setError] = useState('');
   const [showReasoning, setShowReasoning] = useState(false);
   const [recipeIndex, setRecipeIndex] = useState(new Map());
+  // Bahan tersedia di rumah (pantry) dari input generate — dipakai untuk
+  // recompute belanja client-side saat "Ganti Menu" (lihat handleRegenerateDay).
+  const [pantry, setPantry] = useState([]);
   const [detailRecipe, setDetailRecipe] = useState(null);
   const [applied, setApplied] = useState(false);
   // Konfirmasi sebelum menerapkan menu ke planner ("Masuk ke Planner?").
@@ -81,10 +85,15 @@ export function GenerateResult() {
           data = JSON.parse(cached);
         } else {
           const row = await getGeneratedPlanById(planId);
-          data = { plan: row.output_json, reasoning: row.reasoning_content, meta: { model: row.model }, planId: row.id };
+          data = {
+            plan: row.output_json, reasoning: row.reasoning_content,
+            meta: { model: row.model }, planId: row.id, input: row.input_json,
+          };
         }
         if (!active) return;
         setResult(data);
+        // pantry untuk recompute belanja saat ganti menu (boleh kosong).
+        setPantry(Array.isArray(data.input?.pantry) ? data.input.pantry : []);
 
         // Ambil resep detail untuk semua recipe_id di plan.
         const ids = new Set();
@@ -128,11 +137,18 @@ export function GenerateResult() {
     setRegenDayIndex(dayIndex);
     try {
       const res = await regenerateDay(planId, dayIndex, { note });
-      const newPlan = res.plan;
+
+      // Hari baru dari server (otoritatif untuk hari yang diganti). Kita TIDAK
+      // mengandalkan res.plan sepenuhnya: versi regenerate-day yang ter-deploy
+      // bisa mengembalikan plan yang belum menerapkan perubahan ke days[dayIndex].
+      // Jadi kita tempel hari baru ke plan yang sedang tampil secara client-side.
+      const newDay = res.day && Array.isArray(res.day.meals) ? res.day : null;
+      const fallbackDay = Array.isArray(res.plan?.days) ? res.plan.days[dayIndex] : null;
+      const appliedDay = newDay ?? fallbackDay;
 
       // Pastikan resep baru ada di index (untuk render gambar/judul & sync planner).
       const newIds = new Set();
-      for (const m of res.day?.meals ?? []) if (m.recipe_id != null) newIds.add(m.recipe_id);
+      for (const m of appliedDay?.meals ?? []) if (m.recipe_id != null) newIds.add(m.recipe_id);
       const missing = [...newIds].filter((id) => !recipeIndex.has(id));
       let nextIndex = recipeIndex;
       if (missing.length > 0) {
@@ -142,7 +158,23 @@ export function GenerateResult() {
         setRecipeIndex(nextIndex);
       }
 
-      const newResult = { ...result, plan: newPlan };
+      // Bangun days baru di klien: ganti hari ke-dayIndex dengan hasil terbaru.
+      const baseDays = result.plan?.days ?? [];
+      const newDays = appliedDay
+        ? baseDays.map((d, i) => (i === dayIndex ? appliedDay : d))
+        : baseDays;
+
+      // Hitung ulang daftar belanja & total dari menu TERBARU secara client-side
+      // supaya bahan + estimasi harga ikut berubah walau Edge Function
+      // regenerate-day belum menghitung ulang (mis. belum di-redeploy). Hanya
+      // untuk plan yang memang menampilkan belanja (full/foodprep).
+      let finalPlan = { ...result.plan, days: newDays };
+      if (Array.isArray(result.plan?.shopping_list)) {
+        const { shopping_list, total_estimated_cost } = buildShoppingList(newDays, nextIndex, pantry);
+        finalPlan = { ...finalPlan, shopping_list, total_estimated_cost };
+      }
+
+      const newResult = { ...result, plan: finalPlan };
       setResult(newResult);
       try {
         sessionStorage.setItem(`plan_${planId}`, JSON.stringify(newResult));
@@ -150,19 +182,19 @@ export function GenerateResult() {
 
       // Sinkronkan planner kalau plan sudah diterapkan.
       if (appliedRef.current) {
-        const { slots } = mapGeneratedPlanToWeek(newPlan, nextIndex);
+        const { slots } = mapGeneratedPlanToWeek(finalPlan, nextIndex);
         if (slots.length > 0) applySlots(slots);
       }
 
       setNoteOpenIndex(null);
       setNoteDraft('');
-      showToast(`Menu ${res.day?.day || `hari ${dayIndex + 1}`} berhasil diganti! 🍳`);
+      showToast(`Menu ${appliedDay?.day || `hari ${dayIndex + 1}`} berhasil diganti! 🍳`);
     } catch (e) {
       showToast(e.message || 'Gagal mengganti menu hari ini.', { variant: 'error' });
     } finally {
       setRegenDayIndex(null);
     }
-  }, [planId, regenDayIndex, recipeIndex, result, applySlots, showToast]);
+  }, [planId, regenDayIndex, recipeIndex, result, pantry, applySlots, showToast]);
 
   if (loading) {
     return (

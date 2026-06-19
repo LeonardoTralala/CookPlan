@@ -200,9 +200,12 @@ export function GeneratePlan() {
     try {
       // outputType selalu 'full' — pilihan jenis output dihapus dari wizard;
       // hasil selalu lengkap (menu + belanja + prep), Core Offer tetap tersedia.
-      const result = await generatePlan({ periode, porsi, meals, variasiPerHari, diet, budget, pantry, notes, outputType: 'full' });
-      // Simpan hasil ke sessionStorage agar GenerateResult bisa baca tanpa refetch.
-      sessionStorage.setItem(`plan_${result.planId}`, JSON.stringify(result));
+      const input = { periode, porsi, meals, variasiPerHari, diet, budget, pantry, notes, outputType: 'full' };
+      const result = await generatePlan(input);
+      // Simpan hasil + input ke sessionStorage agar GenerateResult bisa baca tanpa
+      // refetch. `input` (terutama pantry) dipakai untuk recompute belanja saat
+      // "Ganti Menu" — lihat GenerateResult.handleRegenerateDay.
+      sessionStorage.setItem(`plan_${result.planId}`, JSON.stringify({ ...result, input }));
       setUsageCount((n) => (n == null ? n : n + 1)); // sinkronkan sisa kuota
       showToast('Plan berhasil dibuat! 🎉');
       // autoApply: hasil generate langsung diterapkan ke Rencana Masak Mingguan.
