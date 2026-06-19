@@ -127,6 +127,13 @@ Deno.serve(async (req) => {
   const targetDay = days[dayIndex];
   const dayLabel = String(targetDay?.day ?? `Hari ${dayIndex + 1}`);
 
+  // Waktu makan terpilih plan (urut kanonik). Plan lama tanpa field meals →
+  // default ketiganya, supaya regenerate tetap konsisten dengan plan tsb.
+  const selectedMeals = Array.isArray(input.meals)
+    ? VALID_MEALS.filter((m) => (input.meals as unknown[]).map(String).includes(m))
+    : [];
+  const planMeals = selectedMeals.length > 0 ? selectedMeals : [...VALID_MEALS];
+
   // 5. Retrieve recipe bank (filter preferensi seperti generate-plan, pakai recipes.tags)
   const RECIPE_COLS =
     "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings";
@@ -256,16 +263,16 @@ Deno.serve(async (req) => {
     return json({ error: `Output AI tidak lolos validasi: recipe_id ${badId.recipe_id} tidak ada di bank resep.` }, 502);
   }
 
-  // 11. Enforce variety + isi 3 slot (reuse logika tested; bungkus 1 hari).
+  // 11. Enforce variety + isi slot waktu makan terpilih (reuse logika tested; bungkus 1 hari).
   const porsi = Number(input.porsi) || 2;
-  const variasiPerHari = Number(input.variasiPerHari) || 3;
-  const enforced = enforceVariety({ days: [{ ...newDay, day: dayLabel }] }, variasiPerHari, porsi);
+  const variasiPerHari = Number(input.variasiPerHari) || planMeals.length;
+  const enforced = enforceVariety({ days: [{ ...newDay, day: dayLabel }] }, variasiPerHari, porsi, planMeals);
   let rebuiltDay = (enforced.days as PlanDay[])[0];
 
   // mealType opsional: hanya ganti slot itu, slot lain pertahankan menu lama.
   if (mealType != null) {
     const replacement = rebuiltDay.meals?.find((m) => m.meal_type === mealType);
-    const mergedMeals = VALID_MEALS.map((mt) => {
+    const mergedMeals = planMeals.map((mt) => {
       if (mt === mealType && replacement) return { ...replacement, meal_type: mt, servings: porsi };
       const old = (targetDay?.meals ?? []).find((m) => m.meal_type === mt);
       return old ?? rebuiltDay.meals?.find((m) => m.meal_type === mt);

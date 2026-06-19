@@ -7,6 +7,7 @@ export interface GenerateInput {
   budget: number;         // IDR
   pantry: { name: string; amount?: number; unit?: string }[];
   outputType: "foodplan" | "foodprep" | "full";
+  meals: string[];        // subset waktu makan terpilih (urutan kanonik), default ketiganya
   variasiPerHari: number; // 1..3 — jumlah resep BERBEDA per hari (foodprep)
   notes: string;          // catatan khusus user (opsional, preferensi tambahan), max 300
 }
@@ -62,23 +63,28 @@ export function validateInput(raw: unknown): GenerateInput {
     };
   }).filter((p) => p.name);
 
-  // Jumlah variasi menu per hari (resep berbeda). Clamp 1..3. Klien lama yang
-  // masih kirim `meals` (subset waktu makan) → turunkan jadi jumlah waktu makan
-  // yang dipilih supaya tetap masuk akal (mis. pilih 1 slot lama ≈ 1 variasi).
+  // Waktu makan terpilih: subset breakfast/lunch/dinner. Dedupe + pertahankan
+  // urutan kanonik (breakfast→lunch→dinner). Kosong / klien lama tanpa `meals`
+  // → default ketiganya (backward compatible dengan plan & input lama).
+  const mealsSet = new Set(
+    (Array.isArray(r.meals) ? r.meals : [])
+      .map((m) => String(m).toLowerCase().trim())
+      .filter((m) => VALID_MEALS.includes(m)),
+  );
+  const selectedMeals = VALID_MEALS.filter((m) => mealsSet.has(m));
+  const meals = selectedMeals.length > 0 ? selectedMeals : [...VALID_MEALS];
+
+  // Jumlah variasi menu per hari (resep berbeda). Clamp 1..3 — independen dari
+  // jumlah waktu makan; bila variasi > slot tersedia, enforceVariety yang
+  // membatasi secara natural (tidak mungkin ada lebih banyak resep dari slot).
   let variasiRaw = Number(r.variasiPerHari);
-  if (!Number.isFinite(variasiRaw) && Array.isArray(r.meals)) {
-    const legacy = new Set(
-      r.meals.map((m) => String(m).toLowerCase().trim()).filter((m) => VALID_MEALS.includes(m)),
-    );
-    variasiRaw = legacy.size || VARIASI_MAX;
-  }
   if (!Number.isFinite(variasiRaw)) variasiRaw = VARIASI_MAX;
   const variasiPerHari = Math.min(VARIASI_MAX, Math.max(VARIASI_MIN, Math.floor(variasiRaw)));
 
   // Catatan khusus opsional. Trim + cap panjang (hemat token + batasi abuse).
   const notes = String(r.notes ?? "").trim().slice(0, NOTES_MAX);
 
-  return { periode, porsi, diet, budget, pantry, variasiPerHari, notes, outputType: outputType as GenerateInput["outputType"] };
+  return { periode, porsi, diet, budget, pantry, meals, variasiPerHari, notes, outputType: outputType as GenerateInput["outputType"] };
 }
 
 // Validasi output AI secara semantik. Return { ok, errors }.
@@ -123,38 +129,45 @@ export function validateOutput(
 
 // Tegakkan model "variasi per hari" sebagai safety net (prompt sudah menginstruksikan,
 // tapi jangan percaya penuh ke AI — sama filosofinya dgn subtractPantry). Untuk SETIAP hari:
-//   1. Pastikan ketiga waktu makan (breakfast/lunch/dinner) terisi — slot yang bolong
+//   1. Pastikan SEMUA waktu makan terpilih (`meals`) terisi — slot yang bolong
 //      diisi ulang dari resep hari itu (foodprep: masak sekali, makan beberapa kali).
-//   2. Batasi jumlah resep BERBEDA per hari = variasiPerHari; kelebihan dipetakan ulang
-//      ke salah satu resep yang dipertahankan (palette).
-//   3. Set servings tiap slot = porsi (porsi per jam makan) → total = 3 × porsi/hari.
+//      Waktu makan yang TIDAK dipilih dibuang (mis. user cuma minta lunch+dinner).
+//   2. Batasi jumlah resep BERBEDA per hari = variasiPerHari (dibatasi jumlah slot);
+//      kelebihan dipetakan ulang ke salah satu resep yang dipertahankan (palette).
+//   3. Set servings tiap slot = porsi (porsi per jam makan) → total = slot × porsi/hari.
 // Hari tanpa satu pun meal valid dibiarkan apa adanya (tak bisa mengarang resep).
 // Tidak menyentuh shopping_list/total: harga dihitung per resep & resep dipakai ulang;
 // pengurangan biaya diserahkan ke subtractPantry (sama seperti sebelumnya).
+// `meals` default ketiganya supaya pemanggil lama (plan tanpa field meals) tetap jalan.
 export function enforceVariety(
   output: Record<string, unknown>,
   variasiPerHari: number,
   porsi: number,
+  meals: string[] = VALID_MEALS,
 ) {
   if (!Array.isArray(output.days)) return output;
-  const variasi = Math.min(VARIASI_MAX, Math.max(VARIASI_MIN, Math.floor(variasiPerHari) || 1));
+  // Slot kanonik = waktu makan terpilih, urut breakfast→lunch→dinner.
+  const slots = VALID_MEALS.filter((m) => meals.includes(m));
+  const slotList = slots.length > 0 ? slots : VALID_MEALS;
+  // Variasi tidak mungkin melebihi jumlah slot yang tersedia.
+  const variasi = Math.min(slotList.length, Math.max(VARIASI_MIN, Math.floor(variasiPerHari) || 1));
   const days = (output.days as Record<string, unknown>[]).map((day) => {
-    const meals = Array.isArray(day.meals) ? (day.meals as Record<string, unknown>[]) : [];
-    if (meals.length === 0) return day;
+    const dayMeals = Array.isArray(day.meals) ? (day.meals as Record<string, unknown>[]) : [];
+    if (dayMeals.length === 0) return day;
 
     // Resep berbeda sesuai urutan kemunculan → palette dipotong ke `variasi`.
     const distinct: Record<string, unknown>[] = [];
-    for (const m of meals) {
+    for (const m of dayMeals) {
       const rid = Number(m.recipe_id);
       if (!distinct.some((d) => Number(d.recipe_id) === rid)) distinct.push(m);
     }
     const palette = distinct.slice(0, variasi);
     const allowedIds = new Set(palette.map((p) => Number(p.recipe_id)));
 
-    // Bangun 3 slot kanonik. Slot yang sudah ada & resepnya ada di palette dipertahankan;
+    // Bangun slot terpilih. Slot yang sudah ada & resepnya ada di palette dipertahankan;
     // sisanya diisi resep palette secara bergiliran.
-    const newMeals = VALID_MEALS.map((mealType, i) => {
-      const existing = meals.find(
+    const newMeals = slotList.map((mealType, i) => {
+      const existing = dayMeals.find(
         (m) => m.meal_type === mealType && allowedIds.has(Number(m.recipe_id)),
       );
       const base = existing ?? palette[i % palette.length];
