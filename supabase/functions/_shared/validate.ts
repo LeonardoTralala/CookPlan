@@ -26,7 +26,7 @@ const VARIASI_MIN = 1;
 const VARIASI_MAX = 3; // tidak mungkin > jumlah waktu makan
 // Persona valid (selaras CHECK constraint profiles.persona & PERSONA_OPTIONS di
 // src/utils/persona.js). Nilai di luar daftar / kosong → "" (tidak dipakai).
-const VALID_PERSONA = ["mahasiswa", "pekerja", "ibu_rumah_tangga", "keluarga", "lainnya"];
+const VALID_PERSONA = ["mahasiswa", "pekerja", "ibu_rumah_tangga", "lainnya"];
 
 // Validasi & normalisasi input dari klien. Throw Error dengan pesan ramah.
 export function validateInput(raw: unknown): GenerateInput {

@@ -20,7 +20,6 @@ const PERSONA_HINT_ID: Record<string, string> = {
   mahasiswa: "mahasiswa/anak kos — utamakan menu hemat, cepat, dan bahan mudah didapat",
   pekerja: "pekerja kantoran — utamakan menu praktis & cocok untuk meal prep/bekal",
   ibu_rumah_tangga: "ibu rumah tangga — menu ramah keluarga, bergizi, dan variatif",
-  keluarga: "berkeluarga — menu ramah keluarga dan mengenyangkan",
   lainnya: "pengguna umum",
 };
 

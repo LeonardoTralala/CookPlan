@@ -5,14 +5,14 @@
 //
 // `value` = slug stabil yang disimpan di DB & divalidasi server. WAJIB selaras
 // dengan:
-//   - CHECK constraint di migrasi 20260619000000_add_persona_to_profiles.sql
+//   - CHECK constraint profiles_persona_check (terakhir di-set migrasi
+//     20260620000000_remove_keluarga_persona.sql)
 //   - VALID_PERSONA di supabase/functions/_shared/validate.ts
 //   - PERSONA_HINT_ID di supabase/functions/_shared/prompt.ts
 export const PERSONA_OPTIONS = [
   { value: 'mahasiswa', label: 'Mahasiswa / Anak Kos', icon: 'school' },
   { value: 'pekerja', label: 'Pekerja Kantoran', icon: 'work' },
   { value: 'ibu_rumah_tangga', label: 'Ibu Rumah Tangga', icon: 'home' },
-  { value: 'keluarga', label: 'Berkeluarga', icon: 'family_restroom' },
   { value: 'lainnya', label: 'Lainnya', icon: 'person' },
 ];
 
