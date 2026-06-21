@@ -10,6 +10,7 @@ export interface GenerateInput {
   meals: string[];        // subset waktu makan terpilih (urutan kanonik), default ketiganya
   variasiPerHari: number; // 1..3 — jumlah resep BERBEDA per hari (foodprep)
   notes: string;          // catatan khusus user (opsional, preferensi tambahan), max 300
+  persona: string;        // identitas user ("siapakah kamu"), slug dari VALID_PERSONA atau "" (kosong)
 }
 
 const NOTES_MAX = 300;
@@ -23,6 +24,9 @@ const VALID_OUTPUT = ["foodplan", "foodprep", "full"];
 const VALID_MEALS = ["breakfast", "lunch", "dinner"];
 const VARIASI_MIN = 1;
 const VARIASI_MAX = 3; // tidak mungkin > jumlah waktu makan
+// Persona valid (selaras CHECK constraint profiles.persona & PERSONA_OPTIONS di
+// src/utils/persona.js). Nilai di luar daftar / kosong → "" (tidak dipakai).
+const VALID_PERSONA = ["mahasiswa", "pekerja", "ibu_rumah_tangga", "lainnya"];
 
 // Validasi & normalisasi input dari klien. Throw Error dengan pesan ramah.
 export function validateInput(raw: unknown): GenerateInput {
@@ -84,7 +88,11 @@ export function validateInput(raw: unknown): GenerateInput {
   // Catatan khusus opsional. Trim + cap panjang (hemat token + batasi abuse).
   const notes = String(r.notes ?? "").trim().slice(0, NOTES_MAX);
 
-  return { periode, porsi, diet, budget, pantry, meals, variasiPerHari, notes, outputType: outputType as GenerateInput["outputType"] };
+  // Persona opsional: hanya terima slug yang dikenal; selain itu → "" (abaikan).
+  const personaRaw = String(r.persona ?? "").trim().toLowerCase();
+  const persona = VALID_PERSONA.includes(personaRaw) ? personaRaw : "";
+
+  return { periode, porsi, diet, budget, pantry, meals, variasiPerHari, notes, persona, outputType: outputType as GenerateInput["outputType"] };
 }
 
 // Validasi output AI secara semantik. Return { ok, errors }.

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { ProtectedRoute } from './components/ProtectedRoute.jsx';
+import { OnboardingGate } from './components/OnboardingGate.jsx';
 import { AppShell } from './components/AppShell.jsx';
 import { RouteFallback } from './components/RouteFallback.jsx';
 import { Toast } from './components/Toast.jsx';
@@ -21,6 +22,7 @@ const ShoppingPage = lazy(() => import('./pages/ShoppingPage.jsx').then((m) => (
 const UserProfile = lazy(() => import('./pages/UserProfile.jsx'));
 const GeneratePlan = lazy(() => import('./pages/GeneratePlan.jsx').then((m) => ({ default: m.GeneratePlan })));
 const GenerateResult = lazy(() => import('./pages/GenerateResult.jsx').then((m) => ({ default: m.GenerateResult })));
+const Onboarding = lazy(() => import('./pages/Onboarding.jsx').then((m) => ({ default: m.Onboarding })));
 const OrderPage = lazy(() => import('./pages/OrderPage.jsx').then((m) => ({ default: m.OrderPage })));
 const AIProviders = lazy(() => import('./pages/admin/AIProviders.jsx').then((m) => ({ default: m.AIProviders })));
 
@@ -50,20 +52,32 @@ function App() {
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
 
-          {/* Bisa dicoba tamu (sesi anonim) — generate + lihat hasil, limit 2x */}
-          <Route element={<ProtectedRoute allowAnonymous />}>
-            <Route path="/generate" element={<AppShell><GeneratePlan /></AppShell>} />
-            <Route path="/generate/:planId" element={<AppShell><GenerateResult /></AppShell>} />
+          {/* Onboarding sekali: hanya akun penuh, TIDAK dibungkus OnboardingGate
+              (mencegah redirect loop ke dirinya sendiri). */}
+          <Route element={<ProtectedRoute />}>
+            <Route path="/onboarding" element={<Onboarding />} />
           </Route>
 
-          {/* Terproteksi (butuh akun penuh) */}
+          {/* Bisa dicoba tamu (sesi anonim) — generate + lihat hasil, limit 2x.
+              OnboardingGate: user PENUH tanpa persona diarahkan ke /onboarding;
+              tamu dilewati. */}
+          <Route element={<ProtectedRoute allowAnonymous />}>
+            <Route element={<OnboardingGate />}>
+              <Route path="/generate" element={<AppShell><GeneratePlan /></AppShell>} />
+              <Route path="/generate/:planId" element={<AppShell><GenerateResult /></AppShell>} />
+            </Route>
+          </Route>
+
+          {/* Terproteksi (butuh akun penuh) + gate onboarding */}
           <Route element={<ProtectedRoute />}>
-            <Route path="/order/:planId" element={<AppShell><OrderPage /></AppShell>} />
-            <Route path="/catalog" element={<AppShell><CatalogPage /></AppShell>} />
-            <Route path="/planner" element={<AppShell><PlannerPage /></AppShell>} />
-            <Route path="/shopping" element={<AppShell><ShoppingPage /></AppShell>} />
-            <Route path="/profile" element={<AppShell><UserProfile /></AppShell>} />
-            <Route path="/admin/ai" element={<AppShell><AIProviders /></AppShell>} />
+            <Route element={<OnboardingGate />}>
+              <Route path="/order/:planId" element={<AppShell><OrderPage /></AppShell>} />
+              <Route path="/catalog" element={<AppShell><CatalogPage /></AppShell>} />
+              <Route path="/planner" element={<AppShell><PlannerPage /></AppShell>} />
+              <Route path="/shopping" element={<AppShell><ShoppingPage /></AppShell>} />
+              <Route path="/profile" element={<AppShell><UserProfile /></AppShell>} />
+              <Route path="/admin/ai" element={<AppShell><AIProviders /></AppShell>} />
+            </Route>
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />

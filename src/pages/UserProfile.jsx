@@ -6,6 +6,8 @@ import { getActiveDietTags } from '../services/dietService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
+import { PERSONA_OPTIONS, personaLabel } from '../utils/persona.js';
+import { setCachedPersona } from '../utils/personaCache.js';
 import { Modal } from '../components/Modal.jsx';
 import { SettingsDrawer } from '../components/SettingsDrawer.jsx';
 
@@ -172,6 +174,11 @@ function UserProfile() {
   // Nilai dari profil (tanpa fallback email/'Pengguna') untuk prefill form edit.
   const metaName = profile?.fullName || '';
   const metaGender = profile?.gender || '';
+  const metaPersona = profile?.persona || '';
+
+  // Persona ("siapakah kamu") ditampilkan read-only di header; diedit lewat modal
+  // Edit Profil (pola sama dengan jenis kelamin).
+  const personaText = personaLabel(metaPersona) || 'Belum diisi';
 
   // Jenis kelamin hanya ditampilkan di header (read-only); satu-satunya tempat
   // mengeditnya adalah modal Edit Profil — hindari dua kontrol untuk field sama.
@@ -185,6 +192,7 @@ function UserProfile() {
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editGender, setEditGender] = useState('');
+  const [editPersona, setEditPersona] = useState('');
   const [savingProfile, setSavingProfile] = useState(false);
   // Foto di-staging di dalam modal: file dipilih & di-preview dulu, baru diunggah
   // saat user menekan "Simpan" — jadi perubahan profil diterapkan sesuka user.
@@ -201,6 +209,7 @@ function UserProfile() {
   const openEdit = () => {
     setEditName(metaName);
     setEditGender(metaGender);
+    setEditPersona(metaPersona);
     clearStagedAvatar();
     setEditOpen(true);
   };
@@ -235,8 +244,9 @@ function UserProfile() {
       // Unggah foto baru dulu (bila ada) supaya avatar_url ikut tersimpan, baru
       // perbarui nama & jenis kelamin. getProfile final memuat ketiganya sekaligus.
       if (editAvatarFile) await uploadAvatar(editAvatarFile);
-      const updated = await updateProfile({ fullName: editName, gender: editGender });
+      const updated = await updateProfile({ fullName: editName, gender: editGender, persona: editPersona });
       setProfile(updated);
+      setCachedPersona(user?.id ?? null, updated?.persona ?? ''); // jaga gate konsisten
       clearStagedAvatar();
       showToast('Profil berhasil diperbarui.');
       setEditOpen(false);
@@ -774,6 +784,10 @@ function UserProfile() {
                 <span className="material-symbols-outlined text-[14px]">wc</span>
                 Jenis Kelamin: {genderLabel}
               </span>
+              <span className="inline-flex items-center gap-1 px-3 py-1 bg-surface-container-low border border-outline-variant text-on-surface-variant rounded-full text-xs font-semibold">
+                <span className="material-symbols-outlined text-[14px]">badge</span>
+                {personaText}
+              </span>
             </div>
           </div>
 
@@ -844,7 +858,7 @@ function UserProfile() {
 
           <div>
             <h3 className="font-headline-md text-headline-md text-primary">Edit Profil</h3>
-            <p className="text-sm text-on-surface-variant mt-1">Perbarui foto, nama, dan jenis kelamin Anda.</p>
+            <p className="text-sm text-on-surface-variant mt-1">Perbarui foto, nama, jenis kelamin, dan persona Anda.</p>
           </div>
 
           {/* Foto profil: pilih + preview di sini, diterapkan saat tekan Simpan */}
@@ -906,6 +920,26 @@ function UserProfile() {
               <option value="male">Laki-laki</option>
               <option value="female">Perempuan</option>
             </select>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="edit-persona" className="block text-sm font-medium text-on-surface">
+              Siapakah kamu?
+            </label>
+            <select
+              id="edit-persona"
+              value={editPersona}
+              onChange={(e) => setEditPersona(e.target.value)}
+              className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20 cursor-pointer"
+            >
+              <option value="">Belum diisi</option>
+              {PERSONA_OPTIONS.map((p) => (
+                <option key={p.value} value={p.value}>{p.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-on-surface-variant">
+              Dipakai sebagai bawaan saat membuat rencana makan dengan AI.
+            </p>
           </div>
 
           <div className="flex items-center justify-end gap-3 pt-2">

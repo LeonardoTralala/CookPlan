@@ -15,6 +15,7 @@ import { notifySessionExpired, reportIfAuthError } from "../lib/session.js";
 //     pantry: [{name, amount?, unit?}],  // bahan tersedia di rumah
 //     variasiPerHari: number,    // 1..3 jumlah resep BERBEDA per hari (foodprep: dipakai ulang menutup waktu makan terpilih)
 //     notes: string,             // catatan khusus user (opsional), max 300 char
+//     persona: string,           // identitas user ('mahasiswa'|'pekerja'|'ibu_rumah_tangga'|'keluarga'|'lainnya'|''), mengarahkan gaya menu
 //     outputType: 'foodplan'|'foodprep'|'full'
 //   }
 //
