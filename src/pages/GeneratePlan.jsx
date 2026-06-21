@@ -219,8 +219,7 @@ export function GeneratePlan() {
         setUsageCount((n) => (n == null ? n : n + 1)); // sinkronkan sisa kuota
       }
       showToast('Plan berhasil dibuat! 🎉');
-      // autoApply: hasil generate langsung diterapkan ke Rencana Masak Mingguan.
-      navigate(`/generate/${result.planId}`, { state: { autoApply: true } });
+      navigate(`/generate/${result.planId}`);
     } catch (e) {
       const msg = e.message || 'Gagal generate plan. Coba lagi.';
       // Tamu kehabisan percobaan gratis → langsung ke halaman login/daftar.

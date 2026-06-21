@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getGeneratedPlanById, regenerateDay } from '../services/aiService.js';
 import { getRecipesByIds } from '../services/recipeService.js';
 import { usePlan } from '../hooks/usePlan.js';
@@ -19,7 +19,6 @@ function formatRupiah(n) {
 export function GenerateResult() {
   const { planId } = useParams();
   const navigate = useNavigate();
-  const location = useLocation();
   const { applySlots, restoreSlot, showToast } = usePlan();
   // Tamu (anonymous) hanya boleh lihat hasil — simpan/terapkan & ganti menu per
   // hari butuh akun penuh (server pun menolak regenerate untuk tamu).
@@ -37,8 +36,6 @@ export function GenerateResult() {
   const [applied, setApplied] = useState(false);
   // Konfirmasi sebelum menerapkan menu ke planner ("Masuk ke Planner?").
   const [confirmApply, setConfirmApply] = useState(false);
-  // true bila datang langsung dari halaman generate (bukan buka ulang dari history).
-  const autoApplyRef = useRef(Boolean(location.state?.autoApply));
 
   // State regenerate per hari: index hari mana yang lagi diproses, dan catatan
   // (note) per hari yang sedang dibuka editornya.
@@ -51,7 +48,7 @@ export function GenerateResult() {
 
   // Terapkan plan ke Rencana Masak Mingguan (planner), dengan opsi Urungkan
   // yang mengembalikan slot ke isi sebelumnya (termasuk yang tadinya kosong).
-  const applyToPlanner = useCallback((planData, index, auto = false) => {
+  const applyToPlanner = useCallback((planData, index) => {
     const { slots, skippedDays } = mapGeneratedPlanToWeek(planData, index);
     if (slots.length === 0) {
       showToast('Tidak ada menu valid untuk dimasukkan ke planner.');
@@ -60,18 +57,13 @@ export function GenerateResult() {
     const undoList = applySlots(slots);
     setApplied(true);
     const extra = skippedDays > 0 ? ' (7 hari pertama)' : '';
-    showToast(
-      auto
-        ? `${slots.length} menu otomatis masuk ke Rencana Mingguan${extra}! 🎉`
-        : `${slots.length} menu diterapkan ke Rencana Mingguan${extra}!`,
-      {
-        onUndo: () => {
-          for (const u of undoList) restoreSlot(u.day, u.mealType, u.prev);
-          setApplied(false);
-          showToast('Perubahan di planner diurungkan.');
-        },
-      }
-    );
+    showToast(`${slots.length} menu diterapkan ke Rencana Mingguan${extra}!`, {
+      onUndo: () => {
+        for (const u of undoList) restoreSlot(u.day, u.mealType, u.prev);
+        setApplied(false);
+        showToast('Perubahan di planner diurungkan.');
+      },
+    });
   }, [applySlots, restoreSlot, showToast]);
 
   // Muat hasil: utamakan sessionStorage (baru di-generate), fallback DB.
@@ -105,15 +97,6 @@ export function GenerateResult() {
           if (!active) return;
           const index = new Map(recipes.map((r) => [r.id, r]));
           setRecipeIndex(index);
-
-          // Auto-apply ke planner sekali, hanya saat baru selesai generate.
-          // Tamu dilewati: planner butuh akun penuh.
-          if (autoApplyRef.current && !isAnonymous) {
-            autoApplyRef.current = false;
-            applyToPlanner(data.plan, index, true);
-            // Bersihkan state navigasi supaya refresh tidak menerapkan ulang.
-            navigate(location.pathname, { replace: true, state: null });
-          }
         }
       } catch (e) {
         if (active) setError(e.message || 'Gagal memuat hasil.');
@@ -122,7 +105,7 @@ export function GenerateResult() {
       }
     })();
     return () => { active = false; };
-  }, [planId, applyToPlanner, navigate, location.pathname, isAnonymous]);
+  }, [planId]);
 
   const plan = result?.plan;
   const showShopping = useMemo(() => {
