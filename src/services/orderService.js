@@ -67,6 +67,46 @@ export async function createOrder(payload) {
   return order;
 }
 
+// Metadata status (label Indonesia + tone untuk badge UI). Dipakai di riwayat
+// pesanan user (UserProfile). Nilai-nilainya selaras dengan constraint DB dan
+// dengan ORDER_STATUSES/PAYMENT_STATUSES di adminOrderService.js.
+export const ORDER_STATUS_META = {
+  received: { label: "Diterima", tone: "info" },
+  processed: { label: "Diproses", tone: "warn" },
+  shipped: { label: "Dikirim", tone: "warn" },
+  delivered: { label: "Selesai", tone: "ok" },
+};
+export const PAYMENT_STATUS_META = {
+  pending: { label: "Belum bayar", tone: "warn" },
+  completed: { label: "Lunas", tone: "ok" },
+  failed: { label: "Gagal", tone: "error" },
+};
+
+const MY_ORDERS_SELECT = `
+  id, output_type, total_price, delivery_fee,
+  delivery_address, customer_name, customer_phone, payment_method,
+  orderStatus:order_status, paymentStatus:payment_status,
+  notes, createdAt:created_at,
+  items:order_items ( id, name, amount, unit, category, priceIdr:price_idr )
+`;
+
+// Riwayat pesanan milik user yang login (terbaru dulu) + rincian item.
+// RLS owner-policy (orders_owner) sudah membatasi ke user_id sendiri; filter
+// eksplisit di sini = defense-in-depth + query lebih ringan.
+export async function getMyOrders() {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) throw new Error("Belum login.");
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select(MY_ORDERS_SELECT)
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
 // Susun teks WhatsApp terformat untuk sebuah order + daftar item.
 export function buildWhatsappText(order, items = []) {
   const lines = [];

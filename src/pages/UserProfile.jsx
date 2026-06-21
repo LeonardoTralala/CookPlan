@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
+import { getMyOrders, formatRupiah, ORDER_STATUS_META, PAYMENT_STATUS_META } from '../services/orderService.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
 import { getActiveDietTags } from '../services/dietService.js';
 import { checkIsAdmin } from '../services/adminService.js';
@@ -26,9 +27,134 @@ const SETTINGS_NAV = [
 // Panel yang kontennya belum dibangun — render placeholder Coming Soon konsisten
 // dengan kartu Manajemen Langganan.
 const COMING_SOON = {
-  orders: { icon: 'receipt_long', title: 'Riwayat Pesanan', desc: 'Lacak pesanan bahan & paket masakanmu di sini.' },
   addresses: { icon: 'location_on', title: 'Alamat', desc: 'Simpan alamat pengiriman untuk checkout lebih cepat.' }
 };
+
+// Kelas badge per tone status (selaras dengan AdminOrders).
+const STATUS_TONE_CLS = {
+  info: 'bg-primary/10 text-primary',
+  warn: 'bg-amber-100 text-amber-700',
+  ok: 'bg-emerald-100 text-emerald-700',
+  error: 'bg-error/10 text-error',
+};
+
+const fmtOrderDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  } catch { return iso; }
+};
+
+// Panel "Riwayat Pesanan": daftar pesanan milik user (RLS owner-only) dengan
+// rincian item yang bisa di-expand. Fetch sendiri saat panel dirender (tab aktif).
+function OrderHistoryPanel() {
+  const { showToast } = usePlan();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getMyOrders()
+      .then((data) => { if (active) setOrders(data); })
+      .catch((err) => {
+        console.error('Gagal memuat riwayat pesanan:', err);
+        if (active) showToast('Gagal memuat riwayat pesanan.', { variant: 'error' });
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [showToast]);
+
+  return (
+    <section className="space-y-6">
+      <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
+        Riwayat Pesanan
+      </h3>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
+          <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-2" aria-hidden="true">progress_activity</span>
+          <p className="text-sm">Memuat riwayat pesanan…</p>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="text-center py-12 text-on-surface-variant">
+          <span className="material-symbols-outlined text-5xl text-outline-variant mb-2 block">receipt_long</span>
+          <p className="text-sm">Belum ada pesanan.</p>
+          <p className="text-xs mt-1">Pesanan dari "Belanja di Kami" akan muncul di sini.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {orders.map((o) => {
+            const om = ORDER_STATUS_META[o.orderStatus] ?? { label: o.orderStatus ?? '—', tone: 'info' };
+            const pm = PAYMENT_STATUS_META[o.paymentStatus] ?? { label: o.paymentStatus ?? '—', tone: 'info' };
+            const grand = (o.total_price ?? 0) + (o.delivery_fee ?? 0);
+            const isOpen = expanded === o.id;
+            return (
+              <div key={o.id} className="rounded-2xl border border-outline-variant bg-white overflow-hidden">
+                <button
+                  onClick={() => setExpanded(isOpen ? null : o.id)}
+                  className="w-full flex items-center gap-3 p-4 text-left cursor-pointer hover:bg-surface-container-lowest transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-on-surface text-sm">{o.id}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${STATUS_TONE_CLS[om.tone]}`}>{om.label}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${STATUS_TONE_CLS[pm.tone]}`}>{pm.label}</span>
+                    </div>
+                    <p className="text-xs text-on-surface-variant mt-1 truncate">
+                      {o.items?.length ?? 0} item · {fmtOrderDate(o.createdAt)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="block font-bold text-primary">{formatRupiah(grand)}</span>
+                    <span className="material-symbols-outlined text-on-surface-variant text-[20px]">{isOpen ? 'expand_less' : 'expand_more'}</span>
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-outline-variant/60 p-4 space-y-4 bg-surface-container-lowest">
+                    {o.delivery_address && (
+                      <div>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Alamat</span>
+                        <span className="block text-sm text-on-surface break-words">{o.delivery_address}</span>
+                      </div>
+                    )}
+                    {o.items?.length > 0 && (
+                      <div className="rounded-xl border border-outline-variant bg-white divide-y divide-outline-variant/40 overflow-hidden">
+                        {o.items.map((it) => (
+                          <div key={it.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                            <span className="text-on-surface">{it.name}</span>
+                            <span className="text-on-surface-variant">{it.amount} {it.unit}
+                              {it.priceIdr > 0 && <span className="ml-2 text-primary font-semibold">{formatRupiah(it.priceIdr)}</span>}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream">
+                          <span className="text-on-surface-variant">Ongkir</span>
+                          <span className="font-semibold text-on-surface">{formatRupiah(o.delivery_fee ?? 0)}</span>
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-2.5">
+                          <span className="font-bold text-primary">Total</span>
+                          <span className="font-bold text-primary">{formatRupiah(grand)}</span>
+                        </div>
+                      </div>
+                    )}
+                    {o.notes && (
+                      <div>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Catatan</span>
+                        <span className="block text-sm text-on-surface break-words">{o.notes}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
 
 // Daftar navigasi Pengaturan + blok Bantuan & Legal. Dipakai di sidebar desktop
 // (asTablist: tab ARIA penuh + navigasi panah) dan di dalam SettingsDrawer mobile
@@ -485,6 +611,9 @@ function UserProfile() {
     if (COMING_SOON[activeNav]) return <ComingSoonPanel {...COMING_SOON[activeNav]} />;
 
     switch (activeNav) {
+      case 'orders':
+        return <OrderHistoryPanel />;
+
       case 'saved':
         return (
           <section className="space-y-6">
