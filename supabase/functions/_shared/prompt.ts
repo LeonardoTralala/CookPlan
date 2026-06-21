@@ -72,7 +72,7 @@ OUTPUT: WAJIB berupa JSON valid SAJA, TANPA penjelasan tambahan, TANPA markdown 
 // Schema output dalam bentuk teks, ditempel ke prompt.
 export const OUTPUT_SCHEMA_TEXT = `SCHEMA OUTPUT (JSON):
 {
-  "plan_summary": "string - ringkasan singkat plan",
+  "plan_summary": "string - ringkasan singkat plan. Saat menyebut variasi menu, tulis '<jumlah> resep per hari' TANPA kata 'berbeda' (mis. '1 resep per hari', bukan '1 resep berbeda per hari')",
   "days": [
     {
       "day": "string - nama hari (Hari 1, Hari 2, ... atau Senin, Selasa, ...)",
