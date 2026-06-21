@@ -4,7 +4,7 @@
 
 // Naikkan setiap kali prompt berubah secara perilaku — ikut di-hash sebagai
 // cache key di generate-plan supaya hasil cache prompt lama tidak terpakai.
-export const PROMPT_VERSION = "6";
+export const PROMPT_VERSION = "7";
 
 // Label Indonesia untuk tiap meal_type — dipakai saat menyusun instruksi waktu makan.
 const MEAL_LABEL_ID: Record<string, string> = {
@@ -55,7 +55,7 @@ OUTPUT: WAJIB berupa JSON valid SAJA, TANPA penjelasan tambahan, TANPA markdown 
 // Schema output dalam bentuk teks, ditempel ke prompt.
 export const OUTPUT_SCHEMA_TEXT = `SCHEMA OUTPUT (JSON):
 {
-  "plan_summary": "string - ringkasan singkat plan",
+  "plan_summary": "string - ringkasan singkat plan. Saat menyebut variasi menu, tulis '<jumlah> resep per hari' TANPA kata 'berbeda' (mis. '1 resep per hari', bukan '1 resep berbeda per hari')",
   "days": [
     {
       "day": "string - nama hari (Hari 1, Hari 2, ... atau Senin, Selasa, ...)",
