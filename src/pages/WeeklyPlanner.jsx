@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { getRecipes } from '../services/recipeService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
@@ -103,6 +103,40 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
     const idx = todayIndexIn(weekStartDate);
     setActiveMobileDay(DAYS[idx >= 0 ? idx : 0].key);
   }
+
+  // Desktop: saat grid muncul (atau minggu berganti), geser kolom hari ini ke
+  // tengah area scroll. Pakai perhitungan scrollLeft manual via getBoundingClientRect
+  // (bukan scrollIntoView yang bisa ikut menggeser scroll vertikal halaman).
+  // No-op bila kolom hari ini tak ada (di luar minggu ini) atau grid muat penuh.
+  const gridScrollRef = useRef(null);
+  const todayColRef = useRef(null);
+  useEffect(() => {
+    if (planLoading) return; // tunggu grid asli render, bukan skeleton
+    const container = gridScrollRef.current;
+    const col = todayColRef.current;
+    if (!container || !col) return;
+    if (container.scrollWidth <= container.clientWidth) return; // tak perlu scroll
+    const cRect = container.getBoundingClientRect();
+    const colRect = col.getBoundingClientRect();
+    const delta = (colRect.left - cRect.left) - (container.clientWidth - col.clientWidth) / 2;
+    container.scrollTo({ left: container.scrollLeft + delta, behavior: 'auto' });
+  }, [weekStartDate, planLoading]);
+
+  // Mobile: baris tab hari bisa di-scroll horizontal; tab hari aktif (default =
+  // hari ini) sering di luar layar (mis. Minggu paling kanan) sehingga seolah
+  // planner terbuka di Senin. Geser tab aktif ke tengah saat dibuka/ganti hari.
+  const mobileTabsRef = useRef(null);
+  const activeTabRef = useRef(null);
+  useEffect(() => {
+    if (planLoading) return; // tab baru ada setelah grid asli render
+    const container = mobileTabsRef.current;
+    const tab = activeTabRef.current;
+    if (!container || !tab) return;
+    const cRect = container.getBoundingClientRect();
+    const tRect = tab.getBoundingClientRect();
+    const delta = (tRect.left - cRect.left) - (container.clientWidth - tab.clientWidth) / 2;
+    container.scrollTo({ left: container.scrollLeft + delta, behavior: 'smooth' });
+  }, [activeMobileDay, weekStartDate, planLoading]);
 
   // Statistik untuk kartu Weekly Progress
   const stats = useMemo(() => {
@@ -241,16 +275,17 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
             ) : (
             <>
             {/* Mobile Days Tabs */}
-            <div className="md:hidden flex overflow-x-auto hide-scrollbar gap-2 mb-6 -mx-5 px-5 pb-2">
+            <div ref={mobileTabsRef} className="md:hidden flex overflow-x-auto hide-scrollbar gap-2 mb-6 -mx-5 px-5 pb-2">
               {DAYS.map((day, dayIdx) => {
                 const today = isToday(weekDates[dayIdx]);
                 return (
                   <button
                     key={day.key}
+                    ref={activeMobileDay === day.key ? activeTabRef : null}
                     onClick={() => setActiveMobileDay(day.key)}
                     className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-bold transition-all shadow-sm cursor-pointer ${activeMobileDay === day.key
                         ? 'bg-primary text-white scale-105'
-                        : `bg-white text-on-surface-variant border hover:bg-surface-variant ${today ? 'border-primary' : 'border-outline-variant'}`
+                        : `bg-white hover:bg-surface-variant ${today ? 'border-2 border-primary text-primary' : 'border border-outline-variant text-on-surface-variant'}`
                       }`}
                   >
                     {day.short} <span className="font-medium text-xs opacity-80 ml-1">{weekDates[dayIdx].getDate()}</span>
@@ -260,7 +295,7 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
               })}
             </div>
 
-            <div className="overflow-x-hidden md:overflow-x-auto hide-scrollbar -mx-5 px-5 md:mx-0 md:px-0">
+            <div ref={gridScrollRef} className="overflow-x-hidden md:overflow-x-auto hide-scrollbar -mx-5 px-5 md:mx-0 md:px-0">
               <div className="flex flex-col gap-8 md:min-w-[1000px] md:grid md:grid-cols-8 md:gap-4">
                 {/* Kolom label jenis makan (Hanya Desktop) */}
                 <div className="hidden md:flex flex-col gap-4 mt-16">
@@ -277,17 +312,29 @@ function WeeklyPlanner({ weeklyPlan, onSetSlot, onRemoveSlot, onGoToCatalog, onG
                 {DAYS.map((day, dayIdx) => {
                   const today = isToday(weekDates[dayIdx]);
                   return (
-                  <div key={day.key} className={`flex-col gap-4 ${activeMobileDay === day.key ? 'flex' : 'hidden md:flex'}`}>
+                  <div key={day.key} ref={today ? todayColRef : null} className={`relative flex-col gap-4 ${activeMobileDay === day.key ? 'flex' : 'hidden md:flex'}`}>
+                    {/* Penanda kolom "hari ini" (desktop): latar + ring di belakang
+                        seluruh kolom. Absolute → tidak menggeser layout/alignment. */}
+                    {today && (
+                      <div aria-hidden className="hidden md:block absolute inset-0 -z-10 rounded-3xl bg-primary/[0.06] ring-1 ring-primary/30 pointer-events-none" />
+                    )}
                     {/* Header tanggal */}
-                    <div className="text-left md:text-center pb-2 md:pb-4 border-b md:border-none border-outline-variant">
-                      <div className={`text-xs font-semibold mb-1 uppercase tracking-wide md:block inline-block mr-2 md:mr-0 ${today ? 'text-primary' : 'text-on-surface'}`}>
+                    <div className={`relative text-left md:text-center pb-2 md:pb-4 border-b md:border-none ${today ? 'border-primary/40' : 'border-outline-variant'}`}>
+                      <div className={`text-xs font-bold mb-1 uppercase tracking-wide md:block inline-block mr-2 md:mr-0 ${today ? 'text-primary' : 'text-on-surface'}`}>
                         {day.short} <span className="md:hidden">- {weekDates[dayIdx].getDate()}</span>
                       </div>
                       <div className="hidden md:flex justify-center">
-                        <span className={`text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-full ${today ? 'bg-primary text-white' : 'text-on-surface'}`}>
+                        <span className={`text-2xl font-bold w-11 h-11 flex items-center justify-center rounded-full ${today ? 'bg-primary text-white ring-4 ring-primary/20 shadow-lg shadow-primary/30' : 'text-on-surface'}`}>
                           {weekDates[dayIdx].getDate()}
                         </span>
                       </div>
+                      {/* Badge "Hari ini" (desktop) — absolute di bawah header supaya
+                          tidak menambah tinggi & merusak kesejajaran kolom lain. */}
+                      {today && (
+                        <span className="hidden md:block absolute left-1/2 -translate-x-1/2 -bottom-1 px-2 py-0.5 rounded-full bg-primary text-white text-[10px] font-bold uppercase tracking-wider leading-none shadow-sm whitespace-nowrap">
+                          Hari ini
+                        </span>
+                      )}
                     </div>
 
                     {/* Slot makan */}
