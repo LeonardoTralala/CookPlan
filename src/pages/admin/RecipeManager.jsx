@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { checkIsAdmin } from '../../services/adminService.js';
 import * as recipeAdmin from '../../services/adminRecipeService.js';
+import * as ingredientService from '../../services/ingredientService.js';
 import { usePlan } from '../../hooks/usePlan.js';
 import { formatRupiah } from '../../utils/buildShoppingList.js';
 
@@ -11,25 +12,17 @@ const DIFFICULTIES = [
   { value: 'hard', label: 'Sulit' },
 ];
 
-const CATEGORIES = [
-  { value: '', label: '—' },
-  { value: 'vegetables', label: 'Sayur' },
-  { value: 'meat', label: 'Daging' },
-  { value: 'dairy', label: 'Olahan susu' },
-  { value: 'spices', label: 'Bumbu' },
-  { value: 'dry_goods', label: 'Bahan kering' },
-];
-
 const EMPTY_RECIPE = {
   title: '', description: '', cuisine: '', difficulty: 'easy',
-  readyInMinutes: '', calories: '', priceIdr: '', baseServings: 2,
+  readyInMinutes: '', calories: '', baseServings: 2,
   badges: [], tags: [], instructions: [], ingredientsText: '',
   imageUrl: '', isActive: true,
 };
 
 const numOrNull = (v) => (v === '' || v == null ? null : Number(v));
 let rowKey = 0;
-const newRow = () => ({ _key: `r${++rowKey}`, _id: null, name: '', amount: '', unit: '', category: '', priceIdr: '' });
+// priceIdr di baris = biaya terhitung (read-only, dari trigger); _id = id baris existing.
+const newRow = () => ({ _key: `r${++rowKey}`, _id: null, ingredientId: null, name: '', amount: '', unit: '', category: '', priceIdr: null });
 
 // Admin UI: kelola bank resep (harga, foto, deskripsi, bahan, langkah).
 // Tulis langsung lewat RLS admin (adminRecipeService) — tanpa Edge Function.
@@ -49,6 +42,14 @@ export function RecipeManager() {
   const [imagePreview, setImagePreview] = useState('');
   const [saving, setSaving] = useState(false);
 
+  // Master bahan (untuk picker + resolusi ingredient_id by nama). Dimuat sekali.
+  const [master, setMaster] = useState([]);
+  const masterByName = useMemo(() => {
+    const m = new Map();
+    for (const ing of master) m.set(ing.name.trim().toLowerCase(), ing);
+    return m;
+  }, [master]);
+
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
@@ -65,7 +66,10 @@ export function RecipeManager() {
     checkIsAdmin().then((ok) => {
       if (!active) return;
       setAllowed(ok);
-      if (ok) refresh();
+      if (ok) {
+        refresh();
+        ingredientService.listIngredients().then((d) => { if (active) setMaster(d); }).catch(() => {});
+      }
     });
     return () => { active = false; };
   }, [refresh]);
@@ -112,8 +116,34 @@ export function RecipeManager() {
 
   const setIngredient = (key, field, val) =>
     setIngredients((rows) => rows.map((r) => (r._key === key ? { ...r, [field]: val } : r)));
+  // Saat nama bahan dipilih/ketik, cocokkan ke master → isi ingredientId, kategori,
+  // dan sarankan satuan dasar bila satuan baris masih kosong.
+  const setIngredientName = (key, name) =>
+    setIngredients((rows) => rows.map((r) => {
+      if (r._key !== key) return r;
+      const m = masterByName.get(name.trim().toLowerCase());
+      return {
+        ...r, name,
+        ingredientId: m?.id ?? null,
+        category: m ? (m.category ?? r.category) : r.category,
+        unit: r.unit || (m?.baseUnit ?? ''),
+      };
+    }));
   const addRow = () => setIngredients((rows) => [...rows, newRow()]);
   const removeRow = (key) => setIngredients((rows) => rows.filter((r) => r._key !== key));
+
+  // Pastikan baris punya ingredient_id: cocokkan ke master by nama, atau buat master baru.
+  const resolveIngredientId = async (row) => {
+    if (row.ingredientId) return row.ingredientId;
+    const key = row.name.trim().toLowerCase();
+    const found = masterByName.get(key);
+    if (found) return found.id;
+    const created = await ingredientService.createIngredient({
+      name: row.name.trim(), category: row.category || null,
+    });
+    setMaster((m) => [...m, created]); // cache lokal agar baris lain ikut kebaca
+    return created.id;
+  };
 
   const syncIngredients = async (recipeId) => {
     const kept = ingredients.filter((r) => r.name?.trim());
@@ -121,8 +151,10 @@ export function RecipeManager() {
     const deleted = origIds.filter((id) => !keptIds.includes(id));
     for (const id of deleted) await recipeAdmin.deleteIngredient(id);
     for (const row of kept) {
-      if (row._id) await recipeAdmin.updateIngredient(row._id, row);
-      else await recipeAdmin.addIngredient(recipeId, row);
+      const ingredientId = await resolveIngredientId(row);
+      const payload = { ...row, ingredientId };
+      if (row._id) await recipeAdmin.updateIngredient(row._id, payload);
+      else await recipeAdmin.addIngredient(recipeId, payload);
     }
   };
 
@@ -140,7 +172,6 @@ export function RecipeManager() {
         difficulty: editing.difficulty || null,
         readyInMinutes: numOrNull(editing.readyInMinutes),
         calories: numOrNull(editing.calories),
-        priceIdr: numOrNull(editing.priceIdr),
         baseServings: Number(editing.baseServings) || 2,
         badges: editing.badges,
         tags: editing.tags,
@@ -284,11 +315,15 @@ export function RecipeManager() {
                 </Field>
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="grid grid-cols-3 gap-3">
                 <Field label="Waktu (menit)"><TextInput type="number" value={editing.readyInMinutes ?? ''} onChange={(v) => setField('readyInMinutes', v)} /></Field>
                 <Field label="Kalori"><TextInput type="number" value={editing.calories ?? ''} onChange={(v) => setField('calories', v)} /></Field>
-                <Field label="Harga total (Rp)"><TextInput type="number" value={editing.priceIdr ?? ''} onChange={(v) => setField('priceIdr', v)} /></Field>
                 <Field label="Porsi dasar"><TextInput type="number" value={editing.baseServings ?? 2} onChange={(v) => setField('baseServings', v)} /></Field>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl bg-surface-container-low border border-outline-variant px-4 py-2.5">
+                <span className="text-xs font-semibold text-on-surface">Harga total (otomatis dari Master Bahan)</span>
+                <span className="font-bold text-primary">{editing.id ? formatRupiah(editing.priceIdr) : '— simpan dulu'}</span>
               </div>
 
               <Field label="Tag (pisahkan dengan koma)">
@@ -306,24 +341,27 @@ export function RecipeManager() {
                 />
               </Field>
 
-              {/* Bahan */}
+              {/* Bahan — pilih dari Master Bahan; biaya per baris dihitung otomatis */}
               <div>
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-1">
                   <span className="block text-xs font-semibold text-on-surface">Bahan</span>
                   <button onClick={addRow} className="text-xs font-semibold text-primary inline-flex items-center gap-1 cursor-pointer">
                     <span className="material-symbols-outlined text-[18px]">add</span> Baris
                   </button>
                 </div>
+                <p className="text-[11px] text-on-surface-variant mb-2">Pilih bahan dari daftar; harga & total dihitung otomatis dari Master Bahan setelah disimpan.</p>
+                <datalist id="master-ingredients">
+                  {master.map((m) => <option key={m.id} value={m.name} />)}
+                </datalist>
                 <div className="space-y-2">
                   {ingredients.map((row) => (
                     <div key={row._key} className="grid grid-cols-12 gap-1.5 items-center">
-                      <input value={row.name} onChange={(e) => setIngredient(row._key, 'name', e.target.value)} placeholder="Nama" className="col-span-4 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                      <input list="master-ingredients" value={row.name} onChange={(e) => setIngredientName(row._key, e.target.value)} placeholder="Nama bahan" className="col-span-4 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
                       <input value={row.amount} onChange={(e) => setIngredient(row._key, 'amount', e.target.value)} placeholder="Jml" type="number" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
                       <input value={row.unit} onChange={(e) => setIngredient(row._key, 'unit', e.target.value)} placeholder="gr" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
-                      <select value={row.category ?? ''} onChange={(e) => setIngredient(row._key, 'category', e.target.value)} className="col-span-2 px-1 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary">
-                        {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-                      </select>
-                      <input value={row.priceIdr} onChange={(e) => setIngredient(row._key, 'priceIdr', e.target.value)} placeholder="Rp" type="number" className="col-span-1 px-1.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                      <span className="col-span-3 text-right text-xs font-semibold text-on-surface-variant pr-1" title={row.ingredientId ? '' : 'Bahan baru — akan ditambahkan ke Master Bahan'}>
+                        {row.priceIdr != null ? formatRupiah(row.priceIdr) : (row.ingredientId ? 'perlu harga' : 'baru')}
+                      </span>
                       <button onClick={() => removeRow(row._key)} className="col-span-1 flex justify-center text-error cursor-pointer" title="Hapus bahan">
                         <span className="material-symbols-outlined text-[20px]">close</span>
                       </button>

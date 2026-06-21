@@ -16,7 +16,7 @@ const FIELD_MAP = {
   description: "description",
   readyInMinutes: "ready_in_minutes",
   calories: "calories",
-  priceIdr: "price_idr",
+  // priceIdr (total) TIDAK ditulis manual — dihitung otomatis dari harga bahan (trigger DB).
   imageUrl: "image_url",
   difficulty: "difficulty",
   cuisine: "cuisine",
@@ -94,23 +94,26 @@ export async function deleteRecipe(id) {
 // editor agar bisa update/hapus baris yang sudah ada.
 export async function listIngredients(recipeId) {
   await requireUser();
+  // price_idr kini DERIVED (trigger) — disertakan read-only untuk preview biaya baris.
   const { data, error } = await supabase
     .from("recipe_ingredients")
-    .select("id, name, amount, unit, category, priceIdr:price_idr")
+    .select("id, ingredientId:ingredient_id, name, amount, unit, category, priceIdr:price_idr")
     .eq("recipe_id", recipeId)
     .order("id");
   if (error) throw error;
   return data ?? [];
 }
 
+// Baris bahan resep. Harga (price_idr) TIDAK ditulis di sini — dihitung trigger DB
+// dari ingredient_id + amount + unit lewat Master Bahan. name/category disimpan untuk
+// display (mengikuti master saat dipilih).
 function ingredientRow(ing) {
   return {
+    ingredient_id: ing.ingredientId ?? ing.ingredient_id ?? null,
     name: ing.name,
     amount: ing.amount === "" || ing.amount == null ? null : Number(ing.amount),
     unit: ing.unit || null,
     category: ing.category || null,
-    price_idr:
-      ing.priceIdr === "" || ing.priceIdr == null ? null : Number(ing.priceIdr),
   };
 }
 

@@ -26,6 +26,7 @@ const Onboarding = lazy(() => import('./pages/Onboarding.jsx').then((m) => ({ de
 const OrderPage = lazy(() => import('./pages/OrderPage.jsx').then((m) => ({ default: m.OrderPage })));
 const AIProviders = lazy(() => import('./pages/admin/AIProviders.jsx').then((m) => ({ default: m.AIProviders })));
 const RecipeManager = lazy(() => import('./pages/admin/RecipeManager.jsx').then((m) => ({ default: m.RecipeManager })));
+const IngredientManager = lazy(() => import('./pages/admin/IngredientManager.jsx').then((m) => ({ default: m.IngredientManager })));
 
 // Routing penuh CookPlan. Membuka aplikasi (root "/") langsung mengarahkan ke
 // /generate; pengguna yang belum login akan dilempar ke /auth oleh
@@ -79,6 +80,7 @@ function App() {
               <Route path="/profile" element={<AppShell><UserProfile /></AppShell>} />
               <Route path="/admin/ai" element={<AppShell><AIProviders /></AppShell>} />
               <Route path="/admin/recipes" element={<AppShell><RecipeManager /></AppShell>} />
+              <Route path="/admin/ingredients" element={<AppShell><IngredientManager /></AppShell>} />
             </Route>
           </Route>
 
