@@ -66,6 +66,17 @@ export async function createOrder(payload) {
       await supabase.from("orders").delete().eq("id", order.id);
       throw itErr;
     }
+
+    // total_price & delivery_fee otoritas server (trigger DB menurunkan
+    // total_price = SUM(price_idr) saat item masuk + mengunci delivery_fee).
+    // Baris `order` di atas diambil SEBELUM item ada → total-nya masih nilai
+    // klien. Ambil ulang agar yang dikembalikan = nilai server final.
+    const { data: fresh, error: refErr } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("id", order.id)
+      .single();
+    if (!refErr && fresh) return fresh;
   }
 
   return order;
