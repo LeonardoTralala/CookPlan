@@ -61,10 +61,19 @@ export async function getAdminStats() {
       .select("id", { count: "exact", head: true });
     return error ? 0 : count ?? 0;
   };
-  const [recipes, ingredients, packages] = await Promise.all([
+  // Pesanan yang masih perlu ditindak (belum selesai/batal) → highlight di hub.
+  const tallyActiveOrders = async () => {
+    const { count, error } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .in("order_status", ["received", "processed", "shipped"]);
+    return error ? 0 : count ?? 0;
+  };
+  const [recipes, ingredients, packages, ordersActive] = await Promise.all([
     tally("recipes"),
     tally("ingredients"),
     tally("packages"),
+    tallyActiveOrders(),
   ]);
-  return { recipes, ingredients, packages };
+  return { recipes, ingredients, packages, ordersActive };
 }

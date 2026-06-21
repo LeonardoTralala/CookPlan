@@ -8,6 +8,7 @@ const TOOLS = [
   { to: '/admin/recipes', icon: 'restaurant_menu', title: 'Kelola Resep', desc: 'Bank resep: harga, foto, bahan, dan langkah memasak.', statKey: 'recipes', unit: 'resep' },
   { to: '/admin/ingredients', icon: 'inventory_2', title: 'Master Bahan', desc: 'Harga & satuan dasar bahan — sumber harga resep.', statKey: 'ingredients', unit: 'bahan' },
   { to: '/admin/packages', icon: 'shopping_bag', title: 'Kelola Paket', desc: 'Paket "Belanja di Kami" beserta menu fiksnya.', statKey: 'packages', unit: 'paket' },
+  { to: '/admin/orders', icon: 'receipt_long', title: 'Pesanan Masuk', desc: 'Lacak pesanan WhatsApp & ubah status pengiriman.', statKey: 'ordersActive', unit: 'perlu diproses' },
   { to: '/admin/ai', icon: 'settings_suggest', title: 'Provider AI', desc: 'Konfigurasi penyedia model AI untuk generate plan.', statKey: null },
 ];
 
