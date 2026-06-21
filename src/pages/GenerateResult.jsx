@@ -212,7 +212,7 @@ export function GenerateResult() {
         {plan.plan_summary && <p className="text-on-surface-variant text-body-md">{plan.plan_summary}</p>}
         {result.meta?.model && (
           <p className="text-xs text-on-surface-variant/70 mt-2">
-            Dibuat oleh {result.meta.model}
+            Dibuat oleh CookPlan AI
             {result.meta.latency_ms ? ` · ${(result.meta.latency_ms / 1000).toFixed(1)}s` : ''}
             {result.meta.cached ? ' · dari cache' : ''}
           </p>
