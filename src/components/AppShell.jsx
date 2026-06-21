@@ -1,10 +1,11 @@
-import { useState, Suspense } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from './Logo.jsx';
 import { Modal } from './Modal.jsx';
 import { RouteFallback } from './RouteFallback.jsx';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { checkIsAdmin } from '../services/adminService.js';
 
 // Navigasi aplikasi (setelah login). Desktop: top-nav. Mobile: bottom-nav.
 // Item dibatasi maks 5 (rule bottom-nav-limit di UI/UX review).
@@ -28,6 +29,16 @@ export function AppShell({ children }) {
 
   // Tamu (anonymous): hanya tab Generate yang relevan; tab lain butuh akun penuh.
   const navItems = isAnonymous ? NAV_ITEMS.filter((i) => i.to === '/generate') : NAV_ITEMS;
+
+  // Entry point Admin di header — hanya tampil untuk admin (gerbang asli RLS).
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    if (isAnonymous) return;
+    let active = true;
+    checkIsAdmin().then((ok) => { if (active) setIsAdmin(ok); });
+    return () => { active = false; };
+  }, [isAnonymous]);
+  const onAdmin = pathname.startsWith('/admin');
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -89,7 +100,31 @@ export function AppShell({ children }) {
               Daftar / Masuk
             </Link>
           ) : (
-            <>
+            <div className="flex items-center gap-1">
+              {/* Admin: pintu masuk panel (desktop pill, mobile ikon) */}
+              {isAdmin && (
+                <>
+                  <Link
+                    to="/admin"
+                    className={`hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                      onAdmin ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true">admin_panel_settings</span>
+                    Admin
+                  </Link>
+                  <Link
+                    to="/admin"
+                    aria-label="Panel Admin"
+                    className={`md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full transition-colors ${
+                      onAdmin ? 'text-primary' : 'text-on-surface-variant hover:text-primary'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>
+                  </Link>
+                </>
+              )}
+
               <button
                 onClick={() => setConfirmOpen(true)}
                 className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:text-error transition-colors cursor-pointer"
@@ -106,7 +141,7 @@ export function AppShell({ children }) {
               >
                 <span className="material-symbols-outlined" aria-hidden="true">logout</span>
               </button>
-            </>
+            </div>
           )}
         </nav>
       </header>

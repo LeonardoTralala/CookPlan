@@ -4,9 +4,9 @@ import { supabase } from "../lib/supabase.js";
 // URL WhatsApp dengan teks terformat berisi ID pesanan unik (CP-YYYYMMDD-XXXX).
 
 // Nomor WA admin CookPlan. Set via env (Vercel/Vite) sebagai VITE_WA_ADMIN_NUMBER
-// agar tidak hardcoded di repo. Fallback placeholder dipakai cuma di dev kalau
-// env belum di-set — produksi WAJIB override lewat Vercel env vars.
-const WA_ADMIN_NUMBER = import.meta.env.VITE_WA_ADMIN_NUMBER || "6281234567890";
+// agar mudah diganti tanpa rebuild. Fallback = nomor resmi CookPlan
+// (085167542103 -> 6285167542103) supaya tetap jalan kalau env belum di-set.
+const WA_ADMIN_NUMBER = import.meta.env.VITE_WA_ADMIN_NUMBER || "6285167542103";
 
 function formatRupiah(num) {
   return new Intl.NumberFormat("id-ID", {

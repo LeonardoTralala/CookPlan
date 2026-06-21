@@ -109,25 +109,11 @@ function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = f
             Admin
           </h3>
           <button
-            onClick={() => onNavigate?.('/admin/recipes')}
+            onClick={() => onNavigate?.('/admin')}
             className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
           >
-            <span className="material-symbols-outlined text-[20px]">restaurant_menu</span>
-            Kelola Resep
-          </button>
-          <button
-            onClick={() => onNavigate?.('/admin/ingredients')}
-            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
-          >
-            <span className="material-symbols-outlined text-[20px]">inventory_2</span>
-            Master Bahan
-          </button>
-          <button
-            onClick={() => onNavigate?.('/admin/ai')}
-            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
-          >
-            <span className="material-symbols-outlined text-[20px]">settings_suggest</span>
-            Provider AI
+            <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+            Panel Admin
           </button>
         </div>
       )}
