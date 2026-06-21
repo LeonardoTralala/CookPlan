@@ -44,29 +44,49 @@ export function AuthProvider({ children }) {
       setSession(newSession);
     });
 
-    // Penanganan terpusat sesi berakhir. Sebelum memaksa logout, COBA pulihkan
-    // sesi dulu: saat app dibuka kembali, access token (JWT) sering kedaluwarsa
-    // sesaat sementara refresh token masih valid. Tanpa percobaan refresh ini,
-    // error "JWT expired" yang muncul sebelum auto-refresh selesai akan langsung
-    // melempar user ke /auth — bikin user harus login lagi tiap buka aplikasi.
-    // Hanya signOut (session→null → ProtectedRoute arahkan ke /auth) bila refresh
-    // benar-benar gagal, sehingga login efektif bertahan selama refresh token hidup.
-    const unsubExpiry = onSessionExpired(() => {
-      supabase.auth.refreshSession()
-        .then(({ data, error }) => {
-          if (!error && data?.session) {
-            // Sesi berhasil dipulihkan — user tetap login, tidak jadi logout.
-            if (active) setSession(data.session);
-            return;
-          }
-          // Refresh gagal (refresh token mati/dicabut) → baru paksa logout.
-          return supabase.auth.signOut();
-        })
-        .catch(() => {
-          // Bila refresh/signOut gagal, biarkan — UI tetap mengandalkan
-          // redirect dari status sesi.
-          supabase.auth.signOut().catch(() => {});
-        });
+    // Penanganan terpusat sesi berakhir. Saat app dibuka kembali, access token
+    // (JWT) sering kedaluwarsa sesaat sementara refresh token masih valid;
+    // Supabase otomatis me-refresh di latar belakang (autoRefreshToken: true).
+    //
+    // PENTING: JANGAN langsung panggil refreshSession() di sini — itu BALAPAN
+    // dengan auto-refresh internal Supabase. Dua refresh memakai refresh token
+    // yang sama → salah satunya dapat "refresh token already used" → user
+    // ke-logout padahal sesinya sehat (bug login yang intermittent). Selain itu
+    // banyak panggilan service yang gagal bersamaan bisa memicu handler ini
+    // berkali-kali sekaligus. Maka alurnya dibuat aman:
+    //   1) serialisasi (flag `recovering`) agar hanya satu pemulihan berjalan,
+    //   2) cek getSession() dulu — kalau auto-refresh sudah memperbarui sesi
+    //      (token belum kedaluwarsa), user tetap login, tidak jadi logout,
+    //   3) baru bila token benar-benar mati, coba refresh SEKALI; gagal → signOut
+    //      (session→null → ProtectedRoute arahkan ke /auth).
+    let recovering = false;
+    const unsubExpiry = onSessionExpired(async () => {
+      if (recovering) return;
+      recovering = true;
+      try {
+        const { data: { session: current } } = await supabase.auth.getSession();
+        // Anggap sesi sehat bila access token masih > 5 detik dari kedaluwarsa
+        // (buffer kecil agar tidak menyimpan token yang sebentar lagi basi).
+        const stillValid =
+          current?.expires_at && current.expires_at * 1000 > Date.now() + 5000;
+        if (stillValid) {
+          if (active) setSession(current);
+          return;
+        }
+        // Tidak ada sesi / token sudah kedaluwarsa → coba refresh sekali.
+        const { data, error } = await supabase.auth.refreshSession();
+        if (!error && data?.session) {
+          if (active) setSession(data.session);
+          return;
+        }
+        // Refresh gagal (refresh token mati/dicabut) → baru paksa logout.
+        await supabase.auth.signOut();
+      } catch {
+        // Bila pemulihan gagal tak terduga, paksa logout agar UI konsisten.
+        await supabase.auth.signOut().catch(() => {});
+      } finally {
+        recovering = false;
+      }
     });
 
     return () => {
