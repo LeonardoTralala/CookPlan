@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getPackages } from '../services/packageService.js';
-import { createOrder, buildWhatsappUrl } from '../services/orderService.js';
+import { createOrder } from '../services/orderService.js';
 import {
   buildShoppingListFromSlots, slotsFromPackageMeals, flattenSections,
   formatRupiah, formatAmount,
@@ -13,6 +14,7 @@ const DELIVERY_FEE = 15000;
 // lihat daftar belanja + harga (agregasi recipe_ingredients), order via WhatsApp.
 export function ShopWithUsTab({ onSave }) {
   const { showToast } = usePlan();
+  const navigate = useNavigate();
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
@@ -74,9 +76,9 @@ export function ShopWithUsTab({ onSave }) {
         deliveryFee: DELIVERY_FEE,
         notes: `Paket: ${selected.name} (${servings} porsi/menu, ${selected.periodeDays} hari)`,
       });
-      const url = buildWhatsappUrl(order, items);
-      showToast(`Pesanan ${order.id} dibuat! Membuka WhatsApp…`);
-      window.location.href = url;
+      // Order tersimpan sebagai 'draft' → ke layar konfirmasi in-app. User
+      // menekan "Buka WhatsApp" di sana (promosi draft → received + buka WA).
+      navigate(`/order/sukses/${order.id}`, { state: { order, items } });
     } catch (e) {
       showToast(e.message || 'Gagal membuat pesanan.', { variant: 'error' });
     } finally {

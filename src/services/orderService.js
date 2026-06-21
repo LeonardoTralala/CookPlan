@@ -39,6 +39,10 @@ export async function createOrder(payload) {
       customer_phone: payload.phone ?? null,
       payment_method: payload.paymentMethod ?? null,
       notes: payload.notes ?? null,
+      // Order lahir sebagai 'draft' — belum jadi "pesanan masuk". Dipromosikan ke
+      // 'received' oleh confirmOrderSent() saat user menekan "Buka WhatsApp" di
+      // layar konfirmasi. Mencegah phantom order kalau user batal kirim WA.
+      order_status: "draft",
     })
     .select("*")
     .single();
@@ -92,7 +96,8 @@ const MY_ORDERS_SELECT = `
 
 // Riwayat pesanan milik user yang login (terbaru dulu) + rincian item.
 // RLS owner-policy (orders_owner) sudah membatasi ke user_id sendiri; filter
-// eksplisit di sini = defense-in-depth + query lebih ringan.
+// eksplisit di sini = defense-in-depth + query lebih ringan. 'draft' (order
+// yang belum dikonfirmasi kirim WA) disembunyikan dari riwayat.
 export async function getMyOrders() {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;
@@ -102,9 +107,39 @@ export async function getMyOrders() {
     .from("orders")
     .select(MY_ORDERS_SELECT)
     .eq("user_id", user.id)
+    .neq("order_status", "draft")
     .order("created_at", { ascending: false });
   if (error) throw error;
   return data ?? [];
+}
+
+// Ambil satu order milik user (untuk layar konfirmasi pasca-checkout). RLS
+// owner-policy membatasi akses; getUser() = defense-in-depth.
+export async function getOrderById(orderId) {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) throw new Error("Belum login.");
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select(MY_ORDERS_SELECT)
+    .eq("id", orderId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Tandai order sudah dikirim ke WhatsApp: draft → received. Dipanggil saat user
+// menekan "Buka WhatsApp" di layar konfirmasi. Hanya mempromosikan draft (tidak
+// menimpa status lanjutan yang mungkin sudah diubah admin). Best-effort: kegagalan
+// tidak boleh memblok pembukaan WhatsApp.
+export async function confirmOrderSent(orderId) {
+  const { error } = await supabase
+    .from("orders")
+    .update({ order_status: "received" })
+    .eq("id", orderId)
+    .eq("order_status", "draft");
+  if (error) throw error;
 }
 
 // Susun teks WhatsApp terformat untuk sebuah order + daftar item.

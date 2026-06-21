@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getGeneratedPlanById } from '../services/aiService.js';
-import { createOrder, buildWhatsappUrl, formatRupiah } from '../services/orderService.js';
+import { createOrder, formatRupiah } from '../services/orderService.js';
 import { usePlan } from '../hooks/usePlan.js';
 
 // Fitur 3: Menu Order via WhatsApp. Ambil hasil generate (foodprep/full) → form
@@ -92,14 +92,10 @@ export function OrderPage() {
         paymentMethod: form.paymentMethod,
         notes: form.notes.trim() || null,
       });
-      const url = buildWhatsappUrl(order, items);
-      showToast(`Pesanan ${order.id} dibuat! Membuka WhatsApp…`);
-      // Pakai location.href (bukan window.open) karena dipanggil setelah await:
-      // popup blocker Safari/iOS — target PWA kita — memblok window.open yang
-      // kehilangan user-activation context. Deep link wa.me dibuka same-tab,
-      // app WhatsApp tetap ke-trigger di mobile. Order sudah tersimpan di DB,
-      // user bisa lihat riwayatnya nanti di profil.
-      window.location.href = url;
+      // Order tersimpan sebagai 'draft'. Arahkan ke layar konfirmasi in-app
+      // (bukan langsung wa.me): di sana user menekan "Buka WhatsApp" yang
+      // mempromosikan draft → received + membuka WA dgn user-activation bersih.
+      navigate(`/order/sukses/${order.id}`, { state: { order, items } });
     } catch (e) {
       showToast(e.message || 'Gagal membuat pesanan.', { variant: 'error' });
     } finally {

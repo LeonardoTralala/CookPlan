@@ -38,11 +38,14 @@ async function requireUser() {
 }
 
 // Daftar pesanan (terbaru dulu) + rincian item. Filter opsional by order_status.
+// 'draft' (order yang belum dikonfirmasi kirim WA oleh user) selalu dikecualikan
+// — itu cart yang ditinggalkan, bukan pesanan masuk.
 export async function listOrders({ status } = {}) {
   await requireUser();
   let q = supabase
     .from("orders")
     .select(ORDER_SELECT)
+    .neq("order_status", "draft")
     .order("created_at", { ascending: false });
   if (status) q = q.eq("order_status", status);
   const { data, error } = await q;
