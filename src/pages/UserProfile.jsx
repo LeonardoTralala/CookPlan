@@ -3,6 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
 import { getActiveDietTags } from '../services/dietService.js';
+import { checkIsAdmin } from '../services/adminService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
@@ -32,7 +33,7 @@ const COMING_SOON = {
 // Daftar navigasi Pengaturan + blok Bantuan & Legal. Dipakai di sidebar desktop
 // (asTablist: tab ARIA penuh + navigasi panah) dan di dalam SettingsDrawer mobile
 // (asTablist=false: menu navigasi biasa, hindari duplikasi id tab di DOM).
-function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = false, asTablist = false }) {
+function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = false, asTablist = false, isAdmin = false, onNavigate }) {
   const tabRefs = useRef({});
 
   // Navigasi panah antar-tab (roving tabindex) — hanya pada mode tablist desktop.
@@ -102,6 +103,27 @@ function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = f
           Kebijakan Privasi
         </button>
       </div>
+      {isAdmin && (
+        <div className="pt-6 mt-6 border-t border-outline-variant">
+          <h3 className="text-xs font-semibold text-on-surface mb-3 px-4 uppercase tracking-widest">
+            Admin
+          </h3>
+          <button
+            onClick={() => onNavigate?.('/admin/recipes')}
+            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
+          >
+            <span className="material-symbols-outlined text-[20px]">restaurant_menu</span>
+            Kelola Resep
+          </button>
+          <button
+            onClick={() => onNavigate?.('/admin/ai')}
+            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
+          >
+            <span className="material-symbols-outlined text-[20px]">settings_suggest</span>
+            Provider AI
+          </button>
+        </div>
+      )}
       <div className="pt-4 mt-4 border-t border-outline-variant">
         <button
           onClick={onLogout}
@@ -168,6 +190,14 @@ function UserProfile() {
     getProfile()
       .then((p) => { if (active) setProfile(p); })
       .catch((err) => { console.error('Gagal memuat profil:', err); });
+    return () => { active = false; };
+  }, []);
+
+  // Tautan menu Admin hanya muncul untuk admin (gerbang sebenarnya tetap RLS).
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let active = true;
+    checkIsAdmin().then((ok) => { if (active) setIsAdmin(ok); });
     return () => { active = false; };
   }, []);
 
@@ -820,7 +850,7 @@ function UserProfile() {
           {/* ---------------- Sidebar Settings (desktop) ---------------- */}
           <aside className="hidden md:block col-span-3 space-y-2 sticky top-[100px] self-start">
             <h2 className="font-headline-md text-headline-md text-primary mb-6">Pengaturan</h2>
-            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} onLogout={handleSignOut} signingOut={signingOut} asTablist />
+            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} onLogout={handleSignOut} signingOut={signingOut} isAdmin={isAdmin} onNavigate={navigate} asTablist />
           </aside>
 
           {/* ---------------- Panel aktif ---------------- */}
@@ -838,7 +868,7 @@ function UserProfile() {
 
       {/* ---------------- Drawer navigasi (mobile) ---------------- */}
       <SettingsDrawer isOpen={navDrawerOpen} onClose={() => setNavDrawerOpen(false)}>
-        <SettingsNavList activeNav={activeNav} onSelect={handleSelectNav} onSoon={handleDrawerSoon} onLogout={handleSignOut} signingOut={signingOut} />
+        <SettingsNavList activeNav={activeNav} onSelect={handleSelectNav} onSoon={handleDrawerSoon} onLogout={handleSignOut} signingOut={signingOut} isAdmin={isAdmin} onNavigate={navigate} />
       </SettingsDrawer>
 
       {/* ---------------- Modal Edit Profil ---------------- */}
