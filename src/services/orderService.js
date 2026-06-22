@@ -82,20 +82,8 @@ export async function createOrder(payload) {
   return order;
 }
 
-// Metadata status (label Indonesia + tone untuk badge UI). Dipakai di riwayat
-// pesanan user (UserProfile). Nilai-nilainya selaras dengan constraint DB dan
-// dengan ORDER_STATUSES/PAYMENT_STATUSES di adminOrderService.js.
-export const ORDER_STATUS_META = {
-  received: { label: "Diterima", tone: "info" },
-  processed: { label: "Diproses", tone: "warn" },
-  shipped: { label: "Dikirim", tone: "warn" },
-  delivered: { label: "Selesai", tone: "ok" },
-};
-export const PAYMENT_STATUS_META = {
-  pending: { label: "Belum bayar", tone: "warn" },
-  completed: { label: "Lunas", tone: "ok" },
-  failed: { label: "Gagal", tone: "error" },
-};
+// Metadata status badge = sumber tunggal di utils/orderStatus.js
+// (ORDER_STATUS_META / PAYMENT_STATUS_META). Konsumen impor langsung dari sana.
 
 const MY_ORDERS_SELECT = `
   id, output_type, total_price, delivery_fee,

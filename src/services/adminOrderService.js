@@ -3,25 +3,13 @@ import { supabase } from "../lib/supabase.js";
 // Service layer untuk Admin UI tracking pesanan (/admin/orders).
 // Pesanan via WhatsApp tersimpan di orders/order_items (orderService.createOrder
 // menulis SEBELUM buka WA). Admin baca/ubah lewat policy admin (public.is_admin())
-// — lihat migrasi 20260621000001_admin_orders_access.sql. getUser() = defense-in-depth.
+// — lihat migrasi 20260621160557_admin_orders_access.sql. getUser() = defense-in-depth.
 //
 // Workflow status pakai kolom ber-constraint di prod:
 //   order_status  : received | processed | shipped | delivered
 //   payment_status: pending | completed | failed
-
-// Pilihan status pengiriman (urut alur). Dipakai filter + dropdown editor.
-export const ORDER_STATUSES = [
-  { value: "received", label: "Diterima", icon: "inbox", tone: "info" },
-  { value: "processed", label: "Diproses", icon: "skillet", tone: "warn" },
-  { value: "shipped", label: "Dikirim", icon: "local_shipping", tone: "warn" },
-  { value: "delivered", label: "Selesai", icon: "task_alt", tone: "ok" },
-];
-
-export const PAYMENT_STATUSES = [
-  { value: "pending", label: "Belum bayar", tone: "warn" },
-  { value: "completed", label: "Lunas", tone: "ok" },
-  { value: "failed", label: "Gagal", tone: "error" },
-];
+// Daftar status (label/tone/icon) = sumber tunggal di utils/orderStatus.js;
+// UI impor langsung dari sana.
 
 const ORDER_SELECT = `
   id, output_type, total_price, delivery_fee,
@@ -37,18 +25,16 @@ async function requireUser() {
   return data.user;
 }
 
-// Daftar pesanan (terbaru dulu) + rincian item. Filter opsional by order_status.
-// 'draft' (order yang belum dikonfirmasi kirim WA oleh user) selalu dikecualikan
-// — itu cart yang ditinggalkan, bukan pesanan masuk.
-export async function listOrders({ status } = {}) {
+// Daftar pesanan (terbaru dulu) + rincian item. 'draft' (order yang belum
+// dikonfirmasi kirim WA oleh user) selalu dikecualikan — itu cart yang
+// ditinggalkan, bukan pesanan masuk. Filter status dilakukan di sisi UI.
+export async function listOrders() {
   await requireUser();
-  let q = supabase
+  const { data, error } = await supabase
     .from("orders")
     .select(ORDER_SELECT)
     .neq("order_status", "draft")
     .order("created_at", { ascending: false });
-  if (status) q = q.eq("order_status", status);
-  const { data, error } = await q;
   if (error) throw error;
   return data ?? [];
 }

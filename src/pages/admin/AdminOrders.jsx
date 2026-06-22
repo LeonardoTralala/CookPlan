@@ -1,22 +1,12 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { checkIsAdmin } from '../../services/adminService.js';
+import { listOrders, updateOrder, waLink } from '../../services/adminOrderService.js';
 import {
-  listOrders, updateOrder, waLink,
-  ORDER_STATUSES, PAYMENT_STATUSES,
-} from '../../services/adminOrderService.js';
+  ORDER_STATUSES, PAYMENT_STATUSES, STATUS_TONE_CLS as TONE_CLS, orderMeta, payMeta,
+} from '../../utils/orderStatus.js';
 import { usePlan } from '../../hooks/usePlan.js';
 import { formatRupiah, formatAmount } from '../../utils/buildShoppingList.js';
-
-const TONE_CLS = {
-  info: 'bg-primary/10 text-primary',
-  warn: 'bg-amber-100 text-amber-700',
-  ok: 'bg-emerald-100 text-emerald-700',
-  error: 'bg-error/10 text-error',
-};
-
-const orderMeta = (v) => ORDER_STATUSES.find((s) => s.value === v) ?? { label: v ?? '—', tone: 'info', icon: 'help' };
-const payMeta = (v) => PAYMENT_STATUSES.find((s) => s.value === v) ?? { label: v ?? '—', tone: 'info' };
 
 const fmtDate = (iso) => {
   if (!iso) return '';

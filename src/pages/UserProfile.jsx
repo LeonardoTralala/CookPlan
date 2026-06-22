@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
-import { getMyOrders, formatRupiah, ORDER_STATUS_META, PAYMENT_STATUS_META } from '../services/orderService.js';
+import { getMyOrders, formatRupiah } from '../services/orderService.js';
+import { ORDER_STATUS_META, PAYMENT_STATUS_META, STATUS_TONE_CLS } from '../utils/orderStatus.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
 import { getActiveDietTags } from '../services/dietService.js';
 import { checkIsAdmin } from '../services/adminService.js';
@@ -28,14 +29,6 @@ const SETTINGS_NAV = [
 // dengan kartu Manajemen Langganan.
 const COMING_SOON = {
   addresses: { icon: 'location_on', title: 'Alamat', desc: 'Simpan alamat pengiriman untuk checkout lebih cepat.' }
-};
-
-// Kelas badge per tone status (selaras dengan AdminOrders).
-const STATUS_TONE_CLS = {
-  info: 'bg-primary/10 text-primary',
-  warn: 'bg-amber-100 text-amber-700',
-  ok: 'bg-emerald-100 text-emerald-700',
-  error: 'bg-error/10 text-error',
 };
 
 const fmtOrderDate = (iso) => {
