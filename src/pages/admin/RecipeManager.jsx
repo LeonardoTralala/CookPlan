@@ -185,7 +185,9 @@ export function RecipeManager() {
   };
 
   const syncIngredients = async (recipeId) => {
-    const kept = ingredients.filter((r) => r.name?.trim());
+    // Baris yang ter-parse jadi nama kosong (judul seksi "Bumbu halus", note, emoji)
+    // bukan bahan → dikeluarkan (dan baris lama begitu ikut terhapus saat simpan).
+    const kept = ingredients.filter((r) => r.name?.trim() && parseIngredient(r.name).name);
     const keptIds = kept.map((r) => r._id).filter(Boolean);
     const deleted = origIds.filter((id) => !keptIds.includes(id));
     for (const id of deleted) await recipeAdmin.deleteIngredient(id);
