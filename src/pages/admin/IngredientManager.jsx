@@ -33,6 +33,7 @@ export function IngredientManager() {
 
   const [editing, setEditing] = useState(null); // ingredient camelCase | null
   const [overrides, setOverrides] = useState([]);
+  const [aliasRows, setAliasRows] = useState([]); // { alias, _new }
   const [saving, setSaving] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -69,16 +70,33 @@ export function IngredientManager() {
   const openEdit = async (ing) => {
     setEditing({ ...ing });
     setOverrides([]);
+    setAliasRows([]);
     try {
-      setOverrides(await ingredientService.listOverrides(ing.id));
+      const [ov, al] = await Promise.all([
+        ingredientService.listOverrides(ing.id),
+        ingredientService.listAliases(ing.id),
+      ]);
+      setOverrides(ov);
+      setAliasRows(al);
     } catch (e) {
       showToast(e.message, { variant: 'error' });
     }
   };
-  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '' }); setOverrides([]); };
-  const close = () => { setEditing(null); setOverrides([]); };
+  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '' }); setOverrides([]); setAliasRows([]); };
+  const close = () => { setEditing(null); setOverrides([]); setAliasRows([]); };
 
   const setField = (k, v) => setEditing((p) => ({ ...p, [k]: v }));
+
+  const addAliasRow = () => setAliasRows((a) => [...a, { alias: '', _new: true }]);
+  const setAliasRow = (idx, v) => setAliasRows((a) => a.map((r, i) => (i === idx ? { ...r, alias: v } : r)));
+  const removeAliasRow = async (idx) => {
+    const row = aliasRows[idx];
+    setAliasRows((a) => a.filter((_, i) => i !== idx));
+    if (row.alias && !row._new) {
+      try { await ingredientService.deleteAlias(row.alias); }
+      catch (e) { showToast(e.message, { variant: 'error' }); }
+    }
+  };
 
   const addOverrideRow = () => setOverrides((o) => [...o, { unit: '', factorToBase: '', _new: true }]);
   const setOverrideRow = (idx, k, v) => setOverrides((o) => o.map((r, i) => (i === idx ? { ...r, [k]: v } : r)));
@@ -104,6 +122,10 @@ export function IngredientManager() {
       for (const row of overrides) {
         if (!row.unit?.trim() || row.factorToBase === '' || row.factorToBase == null) continue;
         await ingredientService.upsertOverride(id, row.unit, row.factorToBase);
+      }
+      for (const row of aliasRows) {
+        if (!row.alias?.trim()) continue;
+        await ingredientService.addAlias(id, row.alias);
       }
       showToast(editing.id ? 'Bahan diperbarui.' : 'Bahan ditambahkan.');
       close();
@@ -238,6 +260,28 @@ export function IngredientManager() {
                       <input type="number" step="any" value={row.factorToBase} onChange={(e) => setOverrideRow(idx, 'factorToBase', e.target.value)} placeholder={`per ${editing.baseUnit}`}
                         className="col-span-5 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
                       <button onClick={() => removeOverrideRow(idx)} className="col-span-1 flex justify-center text-error cursor-pointer">
+                        <span className="material-symbols-outlined text-[20px]">close</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Alias / sinonim — nama lain yang menunjuk ke bahan ini */}
+              <div className="pt-1">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="block text-xs font-semibold text-on-surface">Alias / sinonim (opsional)</span>
+                  <button onClick={addAliasRow} className="text-xs font-semibold text-primary inline-flex items-center gap-1 cursor-pointer">
+                    <span className="material-symbols-outlined text-[18px]">add</span> Baris
+                  </button>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mb-2">Nama lain yang menunjuk ke bahan ini, mis. “santan instant” → <b>{editing.name || 'santan instan'}</b>. Saat resep memakai nama itu, otomatis nempel ke bahan ini (bukan bikin master kembar).</p>
+                <div className="space-y-2">
+                  {aliasRows.map((row, idx) => (
+                    <div key={idx} className="grid grid-cols-12 gap-1.5 items-center">
+                      <input value={row.alias} onChange={(e) => setAliasRow(idx, e.target.value)} placeholder="nama lain (mis. santan instant)"
+                        className="col-span-11 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                      <button onClick={() => removeAliasRow(idx)} className="col-span-1 flex justify-center text-error cursor-pointer">
                         <span className="material-symbols-outlined text-[20px]">close</span>
                       </button>
                     </div>
