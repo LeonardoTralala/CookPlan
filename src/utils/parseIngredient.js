@@ -49,7 +49,15 @@ const UNMEASURED_RE = /\b(secukupnya|sesuai selera|seperlunya|secukup ?nya)\b/i;
 const JUNK_RE = /\b(baca|caption|sesuai selera|secukupnya|sesuaikan|sepert)/i;
 
 // Awalan emoji / simbol non-huruf yang sering nempel di data scraping.
-const LEADING_SYMBOLS_RE = /^[\s\p{Extended_Pictographic}\p{Emoji_Presentation}•·*\-–—:]+/u;
+const LEADING_SYMBOLS_RE = /^[\s\p{Extended_Pictographic}\p{Emoji_Presentation}•·*\-–—:>~|»›#]+/u;
+// Akhiran emoji/simbol (mirror LEADING) — "Bumbu halus👇" → "Bumbu halus".
+const TRAILING_SYMBOLS_RE = /[\s\p{Extended_Pictographic}\p{Emoji_Presentation}•·*\-–—:>~|»›]+$/u;
+
+// Penanda JUDUL SEKSI resep (bukan bahan), mis. "Bumbu halus", "Bahan lapisan",
+// "Saus", "Marinasi". Nama yang HANYA kata heading (± modifier non-bahan) bukan
+// bahan. "saus tiram"/"bumbu kari" TIDAK kena karena ada kata bahan nyata.
+const SECTION_HEADER_RE =
+  /^(bumbu|bahan|saus|sauce|pelengkap|topping|isian|olesan|olahan|taburan|kuah|marinasi|adonan|larutan|note|bumbu rempah)(\s+(halus|iris|utuh|kasar|rempah|lembut|lapisan|cocolan|rendaman|sajian|mentega|bombay|pelengkap))?$/i;
 
 // Kata kerja persiapan — penanda bahwa teks setelah koma adalah CATATAN olah,
 // bukan bahan lain. Hanya bila cocok ini ekor-koma dipotong, supaya baris multi-
@@ -118,13 +126,18 @@ export function parseIngredient(raw) {
     }
   }
 
-  // 5) bersihkan nama: buang catatan secukupnya/sesuai selera, paren, asterisk, ekor koma
+  // 5) bersihkan nama: buang catatan secukupnya/sesuai selera, paren, asterisk,
+  //    catatan/sublist setelah ":", ekor koma, lalu simbol/emoji di ujung.
   let name = body
     .replace(UNMEASURED_RE, "")
     .replace(ASTERISK_NOTE_RE, "")
-    .replace(PAREN_NOTE_RE, "");
+    .replace(PAREN_NOTE_RE, "")
+    .replace(/\s*:.*$/, ""); // "bumbu pecak: tumbuk kasar" → "bumbu pecak"
   name = stripPrepTail(name);
+  name = name.replace(TRAILING_SYMBOLS_RE, "");
   name = normalizeSpaces(name.replace(/^[\s/|+,-]+|[\s/|+,-]+$/g, ""));
+  // judul seksi (mis. "Bumbu halus") = bukan bahan → nama kosong supaya dilewati.
+  if (SECTION_HEADER_RE.test(name)) name = "";
 
   return {
     amount: unmeasured ? null : amount,
@@ -154,5 +167,9 @@ export function validateIngredientName(name) {
   const first = n.toLowerCase().match(/^([\p{L}]+)\b/u)?.[1];
   if (first && MEASUREMENT_UNITS.has(first)) return "Nama bahan diawali satuan — tulis nama bahannya saja.";
   if (/[(){}*•]|,/.test(n)) return "Nama bahan tidak boleh memuat tanda kurung/koma/catatan.";
+  if (/[:#<>~|»›]/.test(n) || /[\p{Extended_Pictographic}]/u.test(n))
+    return "Nama bahan tidak boleh memuat simbol/emoji/tanda titik dua.";
+  if (SECTION_HEADER_RE.test(n))
+    return "Itu judul seksi resep (mis. “Bumbu halus”), bukan nama bahan.";
   return null;
 }
