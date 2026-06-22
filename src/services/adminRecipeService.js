@@ -108,13 +108,17 @@ export async function listIngredients(recipeId) {
 // dari ingredient_id + amount + unit lewat Master Bahan. name/category disimpan untuk
 // display (mengikuti master saat dipilih).
 function ingredientRow(ing) {
-  return {
+  const row = {
     ingredient_id: ing.ingredientId ?? ing.ingredient_id ?? null,
     name: ing.name,
     amount: ing.amount === "" || ing.amount == null ? null : Number(ing.amount),
     unit: ing.unit || null,
     category: ing.category || null,
   };
+  // raw_text hanya ditulis bila ada (provenance teks asli sebelum parser) — jangan
+  // timpa nilai backfill jadi NULL saat baris lama diperbarui tanpa rawText.
+  if (ing.rawText) row.raw_text = ing.rawText;
+  return row;
 }
 
 export async function addIngredient(recipeId, ing) {

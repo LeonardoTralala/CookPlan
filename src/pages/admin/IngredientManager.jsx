@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { checkIsAdmin } from '../../services/adminService.js';
 import * as ingredientService from '../../services/ingredientService.js';
+import { validateIngredientName } from '../../utils/parseIngredient.js';
 import { usePlan } from '../../hooks/usePlan.js';
 
 const BASE_UNITS = [
@@ -91,7 +92,8 @@ export function IngredientManager() {
   };
 
   const handleSave = async () => {
-    if (!editing.name?.trim()) { showToast('Nama bahan wajib diisi.', { variant: 'error' }); return; }
+    const nameErr = validateIngredientName(editing.name);
+    if (nameErr) { showToast(nameErr, { variant: 'error' }); return; }
     setSaving(true);
     try {
       let id = editing.id;
@@ -104,6 +106,22 @@ export function IngredientManager() {
         await ingredientService.upsertOverride(id, row.unit, row.factorToBase);
       }
       showToast(editing.id ? 'Bahan diperbarui.' : 'Bahan ditambahkan.');
+      close();
+      refresh();
+    } catch (e) {
+      showToast(e.message, { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!editing?.id) return;
+    if (!window.confirm(`Hapus bahan "${editing.name}"? Tautan harga di resep yang memakainya akan lepas (resep tetap ada).`)) return;
+    setSaving(true);
+    try {
+      await ingredientService.deleteIngredient(editing.id);
+      showToast('Bahan dihapus.');
       close();
       refresh();
     } catch (e) {
@@ -180,6 +198,7 @@ export function IngredientManager() {
               <Field label="Nama bahan">
                 <input value={editing.name} onChange={(e) => setField('name', e.target.value)} placeholder="Bawang Merah"
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                {(() => { const err = validateIngredientName(editing.name); return err ? <span className="block text-[11px] text-error mt-1">{err}</span> : null; })()}
               </Field>
               <div className="grid grid-cols-3 gap-3">
                 <Field label="Kategori">
@@ -228,6 +247,12 @@ export function IngredientManager() {
             </div>
 
             <div className="flex gap-3 mt-5">
+              {editing.id && (
+                <button onClick={handleDelete} disabled={saving} title="Hapus bahan"
+                  className="py-3 px-4 border border-error/40 text-error rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50 inline-flex items-center justify-center">
+                  <span className="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+              )}
               <button onClick={close} disabled={saving} className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50">Batal</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2">
                 {saving && <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>}
