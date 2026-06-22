@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { getWeekStart, toWeekKey } from "../utils/week.js";
 
 // Service layer untuk rencana mingguan. Mengganti persistensi localStorage.
 // Bentuk state di frontend: { Senin: { breakfast, lunch, dinner }, ... }
@@ -7,20 +8,11 @@ import { supabase } from "../lib/supabase.js";
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 const MEAL_TYPES = ["breakfast", "lunch", "dinner"];
 
-// Hitung tanggal Senin minggu berjalan (YYYY-MM-DD) sebagai kunci week.
-// Pakai komponen tanggal LOKAL (bukan toISOString) supaya user di non-UTC
-// timezone (mis. WIB UTC+7) tidak ketarik ke hari sebelumnya saat tengah malam
-// lokal — bug yang bikin week_start_date tersimpan/terbaca di minggu salah.
+// Kunci minggu (YYYY-MM-DD = tanggal Senin) untuk week_start_date di DB.
+// Delegasi ke utils/week.js supaya hanya ada SATU implementasi "cari hari Senin"
+// di seluruh app (lihat catatan timezone lokal di sana).
 export function getCurrentWeekStart(date = new Date()) {
-  const d = new Date(date);
-  const dow = d.getDay(); // 0=Minggu..6=Sabtu
-  const diffToMonday = dow === 0 ? -6 : 1 - dow;
-  d.setDate(d.getDate() + diffToMonday);
-  d.setHours(0, 0, 0, 0);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  return toWeekKey(getWeekStart(date));
 }
 
 function createEmptyPlan() {
@@ -48,10 +40,12 @@ function entriesToPlanShape(entries) {
   return plan;
 }
 
-// Ambil (atau buat) plan minggu berjalan milik user yang sedang login.
+// Ambil (atau buat) plan untuk satu minggu milik user yang sedang login.
+// `weekStart` = kunci minggu (YYYY-MM-DD), default minggu berjalan. Backend
+// (weekly_plans unik per user+week_start_date, RLS per-owner) sudah mendukung
+// banyak minggu — parameter ini yang membuka navigasi antar-minggu di UI.
 // Return { planId, plan } di mana plan = shape state frontend.
-export async function getCurrentPlan() {
-  const weekStart = getCurrentWeekStart();
+export async function getCurrentPlan(weekStart = getCurrentWeekStart()) {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;
   if (!user) throw new Error("Belum login.");

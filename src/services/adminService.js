@@ -51,3 +51,29 @@ export async function checkIsAdmin() {
   if (error) return false;
   return data?.role === "admin";
 }
+
+// Ringkasan jumlah konten untuk dashboard admin (head:true → cuma count, tanpa
+// transfer baris). Admin baca penuh via RLS. Gagal hitung salah satu → 0.
+export async function getAdminStats() {
+  const tally = async (table) => {
+    const { count, error } = await supabase
+      .from(table)
+      .select("id", { count: "exact", head: true });
+    return error ? 0 : count ?? 0;
+  };
+  // Pesanan yang masih perlu ditindak (belum selesai/batal) → highlight di hub.
+  const tallyActiveOrders = async () => {
+    const { count, error } = await supabase
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .in("order_status", ["received", "processed", "shipped"]);
+    return error ? 0 : count ?? 0;
+  };
+  const [recipes, ingredients, packages, ordersActive] = await Promise.all([
+    tally("recipes"),
+    tally("ingredients"),
+    tally("packages"),
+    tallyActiveOrders(),
+  ]);
+  return { recipes, ingredients, packages, ordersActive };
+}

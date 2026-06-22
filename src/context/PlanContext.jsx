@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { PlanContext } from "./plan-context.js";
 import { useAuth } from "../hooks/useAuth.js";
 import * as planService from "../services/planService.js";
+import { getWeekStart, toWeekKey, weekKeyToDate, addWeeks } from "../utils/week.js";
 
 const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner'];
@@ -22,14 +23,36 @@ function isValidPlanShape(plan) {
   });
 }
 
-function loadLocalPlan() {
-  const saved = localStorage.getItem('weeklyPlan');
+// localStorage (mode guest) di-key PER MINGGU supaya konsisten dengan DB yang
+// juga per-minggu. Key: `weeklyPlan:<YYYY-MM-DD>`.
+const localKey = (weekKey) => `weeklyPlan:${weekKey}`;
+
+function loadLocalPlan(weekKey) {
+  const saved = localStorage.getItem(localKey(weekKey));
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
       if (isValidPlanShape(parsed)) return parsed;
     } catch {
       // abaikan data rusak
+    }
+  }
+  // Migrasi sekali: key lama single-week ('weeklyPlan') hanya mewakili minggu
+  // berjalan → adopsi ke key minggu ini lalu hapus yang lama.
+  if (weekKey === toWeekKey(getWeekStart())) {
+    const legacy = localStorage.getItem('weeklyPlan');
+    if (legacy) {
+      try {
+        const parsed = JSON.parse(legacy);
+        if (isValidPlanShape(parsed)) {
+          localStorage.setItem(localKey(weekKey), legacy);
+          localStorage.removeItem('weeklyPlan');
+          return parsed;
+        }
+      } catch {
+        // abaikan data rusak
+      }
+      localStorage.removeItem('weeklyPlan');
     }
   }
   return createEmptyPlan();
@@ -40,7 +63,10 @@ export function PlanProvider({ children }) {
 
   // toast pakai counter id agar dua pesan identik tetap me-reset timer (audit #16).
   const [toast, setToast] = useState({ id: 0, message: "", onUndo: null, variant: "success" });
-  const [weeklyPlan, setWeeklyPlan] = useState(loadLocalPlan);
+  // Minggu yang sedang dilihat (kunci YYYY-MM-DD = tanggal Senin). Default minggu
+  // berjalan. Mengubahnya memicu reload plan dari DB/localStorage (lihat effect).
+  const [weekStart, setWeekStart] = useState(() => toWeekKey(getWeekStart()));
+  const [weeklyPlan, setWeeklyPlan] = useState(() => loadLocalPlan(toWeekKey(getWeekStart())));
   // true saat plan user sedang dihidrasi dari DB (dipakai Planner & Belanja untuk
   // menampilkan skeleton, bukan flash empty-state). Guest pakai localStorage → false.
   const [loading, setLoading] = useState(false);
@@ -83,9 +109,9 @@ export function PlanProvider({ children }) {
         pendingRef.current.push({ type: "set", recipe, day, mealType, servings });
       }
     } else {
-      localStorage.setItem('weeklyPlan', JSON.stringify(nextPlan));
+      localStorage.setItem(localKey(weekStart), JSON.stringify(nextPlan));
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, weekStart]);
 
   const persistRemove = useCallback((day, mealType, nextPlan) => {
     if (isAuthenticated) {
@@ -96,25 +122,30 @@ export function PlanProvider({ children }) {
         pendingRef.current.push({ type: "remove", day, mealType });
       }
     } else {
-      localStorage.setItem('weeklyPlan', JSON.stringify(nextPlan));
+      localStorage.setItem(localKey(weekStart), JSON.stringify(nextPlan));
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, weekStart]);
 
-  // Saat status login berubah: muat plan dari DB + flush antrian. Saat logout,
-  // kembali ke localStorage.
+  // Saat status login ATAU minggu yang dilihat berubah: muat plan minggu tsb dari
+  // DB + flush antrian. Saat logout/guest, baca localStorage per-minggu.
   useEffect(() => {
     let active = true;
     if (!isAuthenticated) {
       planIdRef.current = null;
       // setState ditunda (queueMicrotask) agar tidak sinkron di body effect.
-      queueMicrotask(() => { if (active) { setLoading(false); setWeeklyPlan(loadLocalPlan()); } });
+      queueMicrotask(() => { if (active) { setLoading(false); setWeeklyPlan(loadLocalPlan(weekStart)); } });
       return () => { active = false; };
     }
+
+    // planId minggu lama tidak berlaku saat berpindah minggu: nolkan dulu supaya
+    // mutasi yang masuk sebelum load baru selesai diantrekan, bukan ditulis ke
+    // plan minggu yang salah.
+    planIdRef.current = null;
 
     (async () => {
       setLoading(true);
       try {
-        const { planId, plan } = await planService.getCurrentPlan();
+        const { planId, plan } = await planService.getCurrentPlan(weekStart);
         if (!active) return;
         planIdRef.current = planId;
 
@@ -128,9 +159,10 @@ export function PlanProvider({ children }) {
           } catch (e) { console.error("flush pending gagal:", e.message); }
         }
 
-        // Migrasi sekali: kalau DB kosong tapi ada data localStorage, dorong ke DB.
+        // Migrasi sekali: kalau DB kosong tapi ada data localStorage minggu ini,
+        // dorong ke DB.
         const dbEmpty = Object.values(plan).every((d) => MEAL_TYPES.every((mm) => !d[mm]));
-        const local = loadLocalPlan();
+        const local = loadLocalPlan(weekStart);
         const localHasData = Object.values(local).some((d) => MEAL_TYPES.some((mm) => d[mm]));
 
         if (dbEmpty && localHasData && pending.length === 0) {
@@ -146,13 +178,13 @@ export function PlanProvider({ children }) {
             }
           }
           // Hanya hapus localStorage bila SEMUA slot berhasil dimigrasi (audit #7).
-          if (migratedOk) localStorage.removeItem('weeklyPlan');
-          const refreshed = await planService.getCurrentPlan();
+          if (migratedOk) localStorage.removeItem(localKey(weekStart));
+          const refreshed = await planService.getCurrentPlan(weekStart);
           if (active) setWeeklyPlan(refreshed.plan);
         } else {
           // Bila ada pending yang baru di-flush, reload agar konsisten.
           if (pending.length > 0) {
-            const refreshed = await planService.getCurrentPlan();
+            const refreshed = await planService.getCurrentPlan(weekStart);
             if (active) setWeeklyPlan(refreshed.plan);
           } else {
             setWeeklyPlan(plan);
@@ -160,14 +192,14 @@ export function PlanProvider({ children }) {
         }
       } catch (e) {
         console.error("muat plan gagal:", e.message);
-        if (active) setWeeklyPlan(loadLocalPlan());
+        if (active) setWeeklyPlan(loadLocalPlan(weekStart));
       } finally {
         if (active) setLoading(false);
       }
     })();
 
     return () => { active = false; };
-  }, [isAuthenticated]);
+  }, [isAuthenticated, weekStart]);
 
   const isInPlan = useCallback(
     (recipeId) => {
@@ -245,11 +277,11 @@ export function PlanProvider({ children }) {
         }
       }
     } else {
-      localStorage.setItem('weeklyPlan', JSON.stringify(nextPlan));
+      localStorage.setItem(localKey(weekStart), JSON.stringify(nextPlan));
     }
 
     return undoList;
-  }, [isAuthenticated]);
+  }, [isAuthenticated, weekStart]);
 
   const removeSlot = useCallback((day, mealType) => {
     let nextPlan;
@@ -271,9 +303,21 @@ export function PlanProvider({ children }) {
         pendingRef.current = [];
       }
     } else {
-      localStorage.setItem('weeklyPlan', JSON.stringify(emptyPlan));
+      localStorage.setItem(localKey(weekStart), JSON.stringify(emptyPlan));
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, weekStart]);
+
+  // Navigasi antar-minggu. goToWeek(+1/-1) menggeser relatif; goToCurrentWeek
+  // kembali ke minggu berjalan. Mengubah weekStart memicu reload via effect.
+  const goToWeek = useCallback((offset) => {
+    setWeekStart((prev) => toWeekKey(addWeeks(weekKeyToDate(prev), offset)));
+  }, []);
+
+  const goToCurrentWeek = useCallback(() => {
+    setWeekStart(toWeekKey(getWeekStart()));
+  }, []);
+
+  const isCurrentWeek = weekStart === toWeekKey(getWeekStart());
 
   const restoreSlot = useCallback((day, mealType, slotData) => {
     let nextPlan;
@@ -309,7 +353,11 @@ export function PlanProvider({ children }) {
     restoreSlot,
     clearAllSlots,
     plannedCount,
-  }), [toast, showToast, isInPlan, weeklyPlan, loading, setSlot, applySlots, removeSlot, restoreSlot, clearAllSlots, plannedCount]);
+    weekStart,
+    isCurrentWeek,
+    goToWeek,
+    goToCurrentWeek,
+  }), [toast, showToast, isInPlan, weeklyPlan, loading, setSlot, applySlots, removeSlot, restoreSlot, clearAllSlots, plannedCount, weekStart, isCurrentWeek, goToWeek, goToCurrentWeek]);
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
 }

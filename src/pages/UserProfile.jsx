@@ -1,8 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
+import { getMyOrders, formatRupiah } from '../services/orderService.js';
+import { ORDER_STATUS_META, PAYMENT_STATUS_META, STATUS_TONE_CLS } from '../utils/orderStatus.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
 import { getActiveDietTags } from '../services/dietService.js';
+import { checkIsAdmin } from '../services/adminService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
@@ -25,14 +28,131 @@ const SETTINGS_NAV = [
 // Panel yang kontennya belum dibangun — render placeholder Coming Soon konsisten
 // dengan kartu Manajemen Langganan.
 const COMING_SOON = {
-  orders: { icon: 'receipt_long', title: 'Riwayat Pesanan', desc: 'Lacak pesanan bahan & paket masakanmu di sini.' },
   addresses: { icon: 'location_on', title: 'Alamat', desc: 'Simpan alamat pengiriman untuk checkout lebih cepat.' }
 };
+
+const fmtOrderDate = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(iso));
+  } catch { return iso; }
+};
+
+// Panel "Riwayat Pesanan": daftar pesanan milik user (RLS owner-only) dengan
+// rincian item yang bisa di-expand. Fetch sendiri saat panel dirender (tab aktif).
+function OrderHistoryPanel() {
+  const { showToast } = usePlan();
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    getMyOrders()
+      .then((data) => { if (active) setOrders(data); })
+      .catch((err) => {
+        console.error('Gagal memuat riwayat pesanan:', err);
+        if (active) showToast('Gagal memuat riwayat pesanan.', { variant: 'error' });
+      })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [showToast]);
+
+  return (
+    <section className="space-y-6">
+      <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
+        Riwayat Pesanan
+      </h3>
+
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
+          <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-2" aria-hidden="true">progress_activity</span>
+          <p className="text-sm">Memuat riwayat pesanan…</p>
+        </div>
+      ) : orders.length === 0 ? (
+        <div className="text-center py-12 text-on-surface-variant">
+          <span className="material-symbols-outlined text-5xl text-outline-variant mb-2 block">receipt_long</span>
+          <p className="text-sm">Belum ada pesanan.</p>
+          <p className="text-xs mt-1">Pesanan dari "Belanja di Kami" akan muncul di sini.</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {orders.map((o) => {
+            const om = ORDER_STATUS_META[o.orderStatus] ?? { label: o.orderStatus ?? '—', tone: 'info' };
+            const pm = PAYMENT_STATUS_META[o.paymentStatus] ?? { label: o.paymentStatus ?? '—', tone: 'info' };
+            const grand = (o.total_price ?? 0) + (o.delivery_fee ?? 0);
+            const isOpen = expanded === o.id;
+            return (
+              <div key={o.id} className="rounded-2xl border border-outline-variant bg-white overflow-hidden">
+                <button
+                  onClick={() => setExpanded(isOpen ? null : o.id)}
+                  className="w-full flex items-center gap-3 p-4 text-left cursor-pointer hover:bg-surface-container-lowest transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-on-surface text-sm">{o.id}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${STATUS_TONE_CLS[om.tone]}`}>{om.label}</span>
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${STATUS_TONE_CLS[pm.tone]}`}>{pm.label}</span>
+                    </div>
+                    <p className="text-xs text-on-surface-variant mt-1 truncate">
+                      {o.items?.length ?? 0} item · {fmtOrderDate(o.createdAt)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="block font-bold text-primary">{formatRupiah(grand)}</span>
+                    <span className="material-symbols-outlined text-on-surface-variant text-[20px]">{isOpen ? 'expand_less' : 'expand_more'}</span>
+                  </div>
+                </button>
+
+                {isOpen && (
+                  <div className="border-t border-outline-variant/60 p-4 space-y-4 bg-surface-container-lowest">
+                    {o.delivery_address && (
+                      <div>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Alamat</span>
+                        <span className="block text-sm text-on-surface break-words">{o.delivery_address}</span>
+                      </div>
+                    )}
+                    {o.items?.length > 0 && (
+                      <div className="rounded-xl border border-outline-variant bg-white divide-y divide-outline-variant/40 overflow-hidden">
+                        {o.items.map((it) => (
+                          <div key={it.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                            <span className="text-on-surface">{it.name}</span>
+                            <span className="text-on-surface-variant">{it.amount} {it.unit}
+                              {it.priceIdr > 0 && <span className="ml-2 text-primary font-semibold">{formatRupiah(it.priceIdr)}</span>}
+                            </span>
+                          </div>
+                        ))}
+                        <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream">
+                          <span className="text-on-surface-variant">Ongkir</span>
+                          <span className="font-semibold text-on-surface">{formatRupiah(o.delivery_fee ?? 0)}</span>
+                        </div>
+                        <div className="flex items-center justify-between px-3 py-2.5">
+                          <span className="font-bold text-primary">Total</span>
+                          <span className="font-bold text-primary">{formatRupiah(grand)}</span>
+                        </div>
+                      </div>
+                    )}
+                    {o.notes && (
+                      <div>
+                        <span className="block text-[11px] font-semibold uppercase tracking-wide text-on-surface-variant">Catatan</span>
+                        <span className="block text-sm text-on-surface break-words">{o.notes}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
 
 // Daftar navigasi Pengaturan + blok Bantuan & Legal. Dipakai di sidebar desktop
 // (asTablist: tab ARIA penuh + navigasi panah) dan di dalam SettingsDrawer mobile
 // (asTablist=false: menu navigasi biasa, hindari duplikasi id tab di DOM).
-function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = false, asTablist = false }) {
+function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = false, asTablist = false, isAdmin = false, onNavigate }) {
   const tabRefs = useRef({});
 
   // Navigasi panah antar-tab (roving tabindex) — hanya pada mode tablist desktop.
@@ -102,6 +222,20 @@ function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = f
           Kebijakan Privasi
         </button>
       </div>
+      {isAdmin && (
+        <div className="pt-6 mt-6 border-t border-outline-variant">
+          <h3 className="text-xs font-semibold text-on-surface mb-3 px-4 uppercase tracking-widest">
+            Admin
+          </h3>
+          <button
+            onClick={() => onNavigate?.('/admin')}
+            className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
+          >
+            <span className="material-symbols-outlined text-[20px]">admin_panel_settings</span>
+            Panel Admin
+          </button>
+        </div>
+      )}
       <div className="pt-4 mt-4 border-t border-outline-variant">
         <button
           onClick={onLogout}
@@ -168,6 +302,14 @@ function UserProfile() {
     getProfile()
       .then((p) => { if (active) setProfile(p); })
       .catch((err) => { console.error('Gagal memuat profil:', err); });
+    return () => { active = false; };
+  }, []);
+
+  // Tautan menu Admin hanya muncul untuk admin (gerbang sebenarnya tetap RLS).
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    let active = true;
+    checkIsAdmin().then((ok) => { if (active) setIsAdmin(ok); });
     return () => { active = false; };
   }, []);
 
@@ -462,6 +604,9 @@ function UserProfile() {
     if (COMING_SOON[activeNav]) return <ComingSoonPanel {...COMING_SOON[activeNav]} />;
 
     switch (activeNav) {
+      case 'orders':
+        return <OrderHistoryPanel />;
+
       case 'saved':
         return (
           <section className="space-y-6">
@@ -820,7 +965,7 @@ function UserProfile() {
           {/* ---------------- Sidebar Settings (desktop) ---------------- */}
           <aside className="hidden md:block col-span-3 space-y-2 sticky top-[100px] self-start">
             <h2 className="font-headline-md text-headline-md text-primary mb-6">Pengaturan</h2>
-            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} onLogout={handleSignOut} signingOut={signingOut} asTablist />
+            <SettingsNavList activeNav={activeNav} onSelect={setActiveNav} onSoon={soon} onLogout={handleSignOut} signingOut={signingOut} isAdmin={isAdmin} onNavigate={navigate} asTablist />
           </aside>
 
           {/* ---------------- Panel aktif ---------------- */}
@@ -838,7 +983,7 @@ function UserProfile() {
 
       {/* ---------------- Drawer navigasi (mobile) ---------------- */}
       <SettingsDrawer isOpen={navDrawerOpen} onClose={() => setNavDrawerOpen(false)}>
-        <SettingsNavList activeNav={activeNav} onSelect={handleSelectNav} onSoon={handleDrawerSoon} onLogout={handleSignOut} signingOut={signingOut} />
+        <SettingsNavList activeNav={activeNav} onSelect={handleSelectNav} onSoon={handleDrawerSoon} onLogout={handleSignOut} signingOut={signingOut} isAdmin={isAdmin} onNavigate={navigate} />
       </SettingsDrawer>
 
       {/* ---------------- Modal Edit Profil ---------------- */}

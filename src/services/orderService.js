@@ -4,9 +4,9 @@ import { supabase } from "../lib/supabase.js";
 // URL WhatsApp dengan teks terformat berisi ID pesanan unik (CP-YYYYMMDD-XXXX).
 
 // Nomor WA admin CookPlan. Set via env (Vercel/Vite) sebagai VITE_WA_ADMIN_NUMBER
-// agar tidak hardcoded di repo. Fallback placeholder dipakai cuma di dev kalau
-// env belum di-set — produksi WAJIB override lewat Vercel env vars.
-const WA_ADMIN_NUMBER = import.meta.env.VITE_WA_ADMIN_NUMBER || "6281234567890";
+// agar mudah diganti tanpa rebuild. Fallback = nomor resmi CookPlan
+// (085167542103 -> 6285167542103) supaya tetap jalan kalau env belum di-set.
+const WA_ADMIN_NUMBER = import.meta.env.VITE_WA_ADMIN_NUMBER || "6285167542103";
 
 function formatRupiah(num) {
   return new Intl.NumberFormat("id-ID", {
@@ -39,6 +39,10 @@ export async function createOrder(payload) {
       customer_phone: payload.phone ?? null,
       payment_method: payload.paymentMethod ?? null,
       notes: payload.notes ?? null,
+      // Order lahir sebagai 'draft' — belum jadi "pesanan masuk". Dipromosikan ke
+      // 'received' oleh confirmOrderSent() saat user menekan "Buka WhatsApp" di
+      // layar konfirmasi. Mencegah phantom order kalau user batal kirim WA.
+      order_status: "draft",
     })
     .select("*")
     .single();
@@ -62,9 +66,79 @@ export async function createOrder(payload) {
       await supabase.from("orders").delete().eq("id", order.id);
       throw itErr;
     }
+
+    // total_price & delivery_fee otoritas server (trigger DB menurunkan
+    // total_price = SUM(price_idr) saat item masuk + mengunci delivery_fee).
+    // Baris `order` di atas diambil SEBELUM item ada → total-nya masih nilai
+    // klien. Ambil ulang agar yang dikembalikan = nilai server final.
+    const { data: fresh, error: refErr } = await supabase
+      .from("orders")
+      .select("*")
+      .eq("id", order.id)
+      .single();
+    if (!refErr && fresh) return fresh;
   }
 
   return order;
+}
+
+// Metadata status badge = sumber tunggal di utils/orderStatus.js
+// (ORDER_STATUS_META / PAYMENT_STATUS_META). Konsumen impor langsung dari sana.
+
+const MY_ORDERS_SELECT = `
+  id, output_type, total_price, delivery_fee,
+  delivery_address, customer_name, customer_phone, payment_method,
+  orderStatus:order_status, paymentStatus:payment_status,
+  notes, createdAt:created_at,
+  items:order_items ( id, name, amount, unit, category, priceIdr:price_idr )
+`;
+
+// Riwayat pesanan milik user yang login (terbaru dulu) + rincian item.
+// RLS owner-policy (orders_owner) sudah membatasi ke user_id sendiri; filter
+// eksplisit di sini = defense-in-depth + query lebih ringan. 'draft' (order
+// yang belum dikonfirmasi kirim WA) disembunyikan dari riwayat.
+export async function getMyOrders() {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) throw new Error("Belum login.");
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select(MY_ORDERS_SELECT)
+    .eq("user_id", user.id)
+    .neq("order_status", "draft")
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Ambil satu order milik user (untuk layar konfirmasi pasca-checkout). RLS
+// owner-policy membatasi akses; getUser() = defense-in-depth.
+export async function getOrderById(orderId) {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) throw new Error("Belum login.");
+
+  const { data, error } = await supabase
+    .from("orders")
+    .select(MY_ORDERS_SELECT)
+    .eq("id", orderId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Tandai order sudah dikirim ke WhatsApp: draft → received. Dipanggil saat user
+// menekan "Buka WhatsApp" di layar konfirmasi. Hanya mempromosikan draft (tidak
+// menimpa status lanjutan yang mungkin sudah diubah admin). Best-effort: kegagalan
+// tidak boleh memblok pembukaan WhatsApp.
+export async function confirmOrderSent(orderId) {
+  const { error } = await supabase
+    .from("orders")
+    .update({ order_status: "received" })
+    .eq("id", orderId)
+    .eq("order_status", "draft");
+  if (error) throw error;
 }
 
 // Susun teks WhatsApp terformat untuk sebuah order + daftar item.

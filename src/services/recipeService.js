@@ -5,7 +5,7 @@ import { supabase } from "../lib/supabase.js";
 // mockRecipes lama — komponen (RecipeCatalog, WeeklyPlanner, ShoppingList) hampir
 // tidak perlu diubah.
 
-const RECIPE_SELECT = `
+export const RECIPE_SELECT = `
   id, title, description, calories, difficulty, cuisine, badges, tags, instructions,
   imageUrl:image_url,
   priceIdr:price_idr,
