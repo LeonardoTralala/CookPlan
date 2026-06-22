@@ -45,11 +45,24 @@ export function RecipeManager() {
 
   // Master bahan (untuk picker + resolusi ingredient_id by nama). Dimuat sekali.
   const [master, setMaster] = useState([]);
+  const [aliases, setAliases] = useState([]); // {alias, ingredientId}
   const masterByName = useMemo(() => {
     const m = new Map();
     for (const ing of master) m.set(ing.name.trim().toLowerCase(), ing);
     return m;
   }, [master]);
+  const aliasToId = useMemo(() => {
+    const m = new Map();
+    for (const a of aliases) m.set(a.alias, a.ingredientId);
+    return m;
+  }, [aliases]);
+  // Cocokkan nama bersih ke master: nama kanonik dulu, lalu alias (sinonim).
+  const findMaster = useCallback((name) => {
+    const key = name.trim().toLowerCase();
+    if (masterByName.has(key)) return masterByName.get(key);
+    const id = aliasToId.get(key);
+    return id ? (master.find((x) => x.id === id) ?? { id }) : null;
+  }, [masterByName, aliasToId, master]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -70,6 +83,7 @@ export function RecipeManager() {
       if (ok) {
         refresh();
         ingredientService.listIngredients().then((d) => { if (active) setMaster(d); }).catch(() => {});
+        ingredientService.listAllAliases().then((d) => { if (active) setAliases(d); }).catch(() => {});
       }
     });
     return () => { active = false; };
@@ -122,7 +136,7 @@ export function RecipeManager() {
   const setIngredientName = (key, name) =>
     setIngredients((rows) => rows.map((r) => {
       if (r._key !== key) return r;
-      const m = masterByName.get(name.trim().toLowerCase());
+      const m = findMaster(name);
       return {
         ...r, name,
         ingredientId: m?.id ?? null,
@@ -143,7 +157,7 @@ export function RecipeManager() {
       const p = parseIngredient(r.name);
       const cleanName = p.name || r.name.trim();
       if (cleanName === r.name.trim() && p.amount == null && !p.unit) return r; // tak ada yang dipisah
-      const m = masterByName.get(cleanName.toLowerCase());
+      const m = findMaster(cleanName);
       return {
         ...r,
         name: cleanName,
@@ -161,7 +175,7 @@ export function RecipeManager() {
   const resolveIngredientId = async (row) => {
     if (row.ingredientId) return row.ingredientId;
     const cleanName = (parseIngredient(row.name).name || row.name).trim();
-    const found = masterByName.get(cleanName.toLowerCase());
+    const found = findMaster(cleanName);
     if (found) return found.id;
     const created = await ingredientService.createIngredient({
       name: cleanName, category: row.category || null,

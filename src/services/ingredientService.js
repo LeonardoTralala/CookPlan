@@ -111,3 +111,48 @@ export async function deleteOverride(ingredientId, unit) {
     .eq("unit", unit);
   if (error) throw error;
 }
+
+// --- Alias bahan (sinonim → master kanonik) ----------------------------------
+// Dipakai resolve nama di entri resep (RecipeManager) supaya varian seperti
+// "santan instant" nempel ke master "santan instan", bukan bikin master kembar.
+
+const normAlias = (s) => String(s ?? "").trim().toLowerCase();
+
+// Semua alias (alias → ingredientId), untuk peta lookup sekali muat.
+export async function listAllAliases() {
+  await requireUser();
+  const { data, error } = await supabase
+    .from("ingredient_aliases")
+    .select("alias, ingredientId:ingredient_id");
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listAliases(ingredientId) {
+  await requireUser();
+  const { data, error } = await supabase
+    .from("ingredient_aliases")
+    .select("alias")
+    .eq("ingredient_id", ingredientId)
+    .order("alias");
+  if (error) throw error;
+  return data ?? [];
+}
+
+// Tambah/pindah alias ke sebuah master. alias selalu disimpan ternormalisasi.
+// Tolak alias yang sama dengan nama master kanonik mana pun (itu bukan alias).
+export async function addAlias(ingredientId, alias) {
+  await requireUser();
+  const a = normAlias(alias);
+  if (a.length < 2) throw new Error("Alias terlalu pendek.");
+  const { error } = await supabase
+    .from("ingredient_aliases")
+    .upsert({ alias: a, ingredient_id: ingredientId }, { onConflict: "alias" });
+  if (error) throw error;
+}
+
+export async function deleteAlias(alias) {
+  await requireUser();
+  const { error } = await supabase.from("ingredient_aliases").delete().eq("alias", normAlias(alias));
+  if (error) throw error;
+}
