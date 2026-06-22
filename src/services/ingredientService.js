@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { validateIngredientName } from "../utils/parseIngredient.js";
 
 // Service layer untuk Master Bahan (/admin/ingredients) — sumber kebenaran harga.
 // Tulis langsung lewat RLS admin (public.is_admin()); harga di recipe_ingredients &
@@ -38,6 +39,8 @@ export async function listIngredients({ unpriced = false } = {}) {
 
 export async function createIngredient(patch) {
   await requireUser();
+  const nameErr = validateIngredientName(patch.name);
+  if (nameErr) throw new Error(nameErr);
   const { data, error } = await supabase
     .from("ingredients")
     .insert(toRow(patch))
@@ -49,7 +52,19 @@ export async function createIngredient(patch) {
 
 export async function updateIngredient(id, patch) {
   await requireUser();
+  if ("name" in patch) {
+    const nameErr = validateIngredientName(patch.name);
+    if (nameErr) throw new Error(nameErr);
+  }
   const { error } = await supabase.from("ingredients").update(toRow(patch)).eq("id", id);
+  if (error) throw error;
+}
+
+// Hapus bahan master. recipe_ingredients.ingredient_id → NULL otomatis (FK on
+// delete set null), jadi resep tak ikut hilang — hanya tautan harganya lepas.
+export async function deleteIngredient(id) {
+  await requireUser();
+  const { error } = await supabase.from("ingredients").delete().eq("id", id);
   if (error) throw error;
 }
 

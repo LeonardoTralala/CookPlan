@@ -44,6 +44,9 @@ graphify-out/
 # Preview email yang di-generate lokal (lihat scripts/preview-email.mjs)
 scripts/.preview/
 
+# SQL recovery bahan yang di-generate (lihat scripts/recover-ingredients.mjs) — sekali pakai
+scripts/ri-recovery.sql
+
 # Claude Code project guidance (local only)
 CLAUDE.md
 .claude

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { checkIsAdmin } from '../../services/adminService.js';
 import * as recipeAdmin from '../../services/adminRecipeService.js';
 import * as ingredientService from '../../services/ingredientService.js';
+import { parseIngredient } from '../../utils/parseIngredient.js';
 import { usePlan } from '../../hooks/usePlan.js';
 import { formatRupiah } from '../../utils/buildShoppingList.js';
 
@@ -22,7 +23,7 @@ const EMPTY_RECIPE = {
 const numOrNull = (v) => (v === '' || v == null ? null : Number(v));
 let rowKey = 0;
 // priceIdr di baris = biaya terhitung (read-only, dari trigger); _id = id baris existing.
-const newRow = () => ({ _key: `r${++rowKey}`, _id: null, ingredientId: null, name: '', amount: '', unit: '', category: '', priceIdr: null });
+const newRow = () => ({ _key: `r${++rowKey}`, _id: null, ingredientId: null, name: '', amount: '', unit: '', category: '', priceIdr: null, rawText: '' });
 
 // Admin UI: kelola bank resep (harga, foto, deskripsi, bahan, langkah).
 // Tulis langsung lewat RLS admin (adminRecipeService) — tanpa Edge Function.
@@ -132,14 +133,38 @@ export function RecipeManager() {
   const addRow = () => setIngredients((rows) => [...rows, newRow()]);
   const removeRow = (key) => setIngredients((rows) => rows.filter((r) => r._key !== key));
 
-  // Pastikan baris punya ingredient_id: cocokkan ke master by nama, atau buat master baru.
+  // Saat selesai mengetik/menempel nama (blur): pisahkan kuantitas & bersihkan nama
+  // via parser kanonik supaya "100 ml air" → nama "air" + jml 100 + satuan ml, bukan
+  // jadi baris master mentah. Teks asli disimpan ke rawText (provenance). Hanya isi
+  // jml/satuan bila masih kosong (jangan timpa input admin).
+  const applyParseToRow = (key) =>
+    setIngredients((rows) => rows.map((r) => {
+      if (r._key !== key || !r.name?.trim()) return r;
+      const p = parseIngredient(r.name);
+      const cleanName = p.name || r.name.trim();
+      if (cleanName === r.name.trim() && p.amount == null && !p.unit) return r; // tak ada yang dipisah
+      const m = masterByName.get(cleanName.toLowerCase());
+      return {
+        ...r,
+        name: cleanName,
+        rawText: r.rawText || (r.name.trim() !== cleanName ? r.name.trim() : ''),
+        amount: r.amount || (p.amount ?? ''),
+        unit: r.unit || p.unit || (m?.baseUnit ?? ''),
+        ingredientId: m?.id ?? null,
+        category: m ? (m.category ?? r.category) : r.category,
+      };
+    }));
+
+  // Pastikan baris punya ingredient_id: nama dibersihkan dulu via parser (jaring
+  // pengaman bila blur tak sempat jalan), cocokkan ke master, atau buat master baru
+  // dengan nama KANONIK (createIngredient memvalidasi & menolak nama mentah/junk).
   const resolveIngredientId = async (row) => {
     if (row.ingredientId) return row.ingredientId;
-    const key = row.name.trim().toLowerCase();
-    const found = masterByName.get(key);
+    const cleanName = (parseIngredient(row.name).name || row.name).trim();
+    const found = masterByName.get(cleanName.toLowerCase());
     if (found) return found.id;
     const created = await ingredientService.createIngredient({
-      name: row.name.trim(), category: row.category || null,
+      name: cleanName, category: row.category || null,
     });
     setMaster((m) => [...m, created]); // cache lokal agar baris lain ikut kebaca
     return created.id;
@@ -152,7 +177,16 @@ export function RecipeManager() {
     for (const id of deleted) await recipeAdmin.deleteIngredient(id);
     for (const row of kept) {
       const ingredientId = await resolveIngredientId(row);
-      const payload = { ...row, ingredientId };
+      const p = parseIngredient(row.name);
+      const cleanName = p.name || row.name.trim();
+      const payload = {
+        ...row,
+        ingredientId,
+        name: cleanName,
+        amount: row.amount || (p.amount ?? ''),
+        unit: row.unit || p.unit || '',
+        rawText: row.rawText || (row.name.trim() !== cleanName ? row.name.trim() : ''),
+      };
       if (row._id) await recipeAdmin.updateIngredient(row._id, payload);
       else await recipeAdmin.addIngredient(recipeId, payload);
     }
@@ -356,7 +390,7 @@ export function RecipeManager() {
                 <div className="space-y-2">
                   {ingredients.map((row) => (
                     <div key={row._key} className="grid grid-cols-12 gap-1.5 items-center">
-                      <input list="master-ingredients" value={row.name} onChange={(e) => setIngredientName(row._key, e.target.value)} placeholder="Nama bahan" className="col-span-4 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                      <input list="master-ingredients" value={row.name} onChange={(e) => setIngredientName(row._key, e.target.value)} onBlur={() => applyParseToRow(row._key)} placeholder="Nama bahan / tempel “100 ml air”" className="col-span-4 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
                       <input value={row.amount} onChange={(e) => setIngredient(row._key, 'amount', e.target.value)} placeholder="Jml" type="number" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
                       <input value={row.unit} onChange={(e) => setIngredient(row._key, 'unit', e.target.value)} placeholder="gr" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
                       <span className="col-span-3 text-right text-xs font-semibold text-on-surface-variant pr-1" title={row.ingredientId ? '' : 'Bahan baru — akan ditambahkan ke Master Bahan'}>
