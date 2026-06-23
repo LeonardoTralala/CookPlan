@@ -50,3 +50,7 @@ scripts/ri-recovery.sql
 # Claude Code project guidance (local only)
 CLAUDE.md
 .claude
+
+# Excel price-list sources & temp lock files (data, not source)
+*.xlsx
+~$*
