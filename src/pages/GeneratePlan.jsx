@@ -75,6 +75,8 @@ export function GeneratePlan() {
   const [error, setError] = useState('');
   // Konfirmasi sebelum pindah ke "Belanja di Kami" (keluar dari wizard generate).
   const [confirmSwitchShop, setConfirmSwitchShop] = useState(false);
+  // Modal teaser "Coming soon" untuk antar FoodPrep ke rumah (fitur belum siap).
+  const [showFoodPrepSoon, setShowFoodPrepSoon] = useState(false);
   const [history, setHistory] = useState([]);
   const [usageCount, setUsageCount] = useState(null);
   // dietPool = semua preferensi (dari diet_tags). dietSample = subset acak yang
@@ -318,6 +320,25 @@ export function GeneratePlan() {
                 <p className="text-[11px] text-on-surface-variant font-semibold mt-2 flex items-center gap-1 group-hover:text-primary">
                   <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                   Lihat paket
+                </p>
+              </button>
+
+              {/* Coming soon: kami masakkan FoodPrep sesuai hasil generate & antar
+                  ke rumah. Belum siap — klik memunculkan toast "Coming soon". */}
+              <button
+                type="button"
+                onClick={() => setShowFoodPrepSoon(true)}
+                className="relative rounded-xl border border-dashed border-outline-variant bg-surface-container/40 p-4 text-left transition-colors hover:border-primary/50 cursor-pointer sm:col-span-2"
+              >
+                <span className="absolute right-3 top-3 rounded-full bg-secondary-container px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-on-secondary-container">
+                  Coming soon
+                </span>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="material-symbols-outlined text-on-surface-variant text-xl">takeout_dining</span>
+                  <span className="font-bold text-on-surface text-sm">Antar FoodPrep ke Rumah</span>
+                </div>
+                <p className="text-xs text-on-surface-variant">
+                  Pilih Paket FoodPrep yang kami sediakan, kami antar sampai rumah! Kami antar FoodPrep sesuai yang kamu generate.
                 </p>
               </button>
             </div>
@@ -600,6 +621,35 @@ export function GeneratePlan() {
               className="flex-1 min-h-11 rounded-full text-sm font-semibold text-on-primary bg-primary hover:opacity-90 transition-opacity cursor-pointer"
             >
               Ya, pindah
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Teaser "Coming soon" — antar FoodPrep ke rumah sesuai hasil generate */}
+      <Modal isOpen={showFoodPrepSoon} onClose={() => setShowFoodPrepSoon(false)}>
+        <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-canvas-white shadow-xl">
+          {/* Banner ilustratif di atas */}
+          <div className="relative bg-primary/10 px-6 pt-8 pb-6 text-center">
+            <span className="inline-flex items-center rounded-full bg-secondary-container px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-on-secondary-container">
+              Coming soon
+            </span>
+            <div className="mt-4 flex justify-center">
+              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-on-primary shadow-md">
+                <span className="material-symbols-outlined text-[34px]">takeout_dining</span>
+              </span>
+            </div>
+          </div>
+          <div className="px-6 pb-6 pt-5 text-center">
+            <h2 className="text-lg font-bold text-on-surface">Antar FoodPrep ke Rumah</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              Sebentar lagi! Kamu bisa pilih Paket FoodPrep yang kami sediakan, kami antar FoodPrep sesuai yang kamu generate. 🚚
+            </p>
+            <button
+              onClick={() => setShowFoodPrepSoon(false)}
+              className="mt-6 w-full min-h-11 rounded-full bg-primary text-sm font-semibold text-on-primary hover:opacity-90 active:scale-95 transition cursor-pointer"
+            >
+              Oke, ditunggu!
             </button>
           </div>
         </div>
