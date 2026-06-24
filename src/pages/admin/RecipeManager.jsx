@@ -91,19 +91,24 @@ function CoverageBadge({ priced, total }) {
   );
 }
 
-function RowStatusChip({ cost, unitOpts }) {
+function RowStatusChip({ cost, unitOpts, onFix }) {
   const meta = STATUS_META[cost.status] ?? STATUS_META.new;
-  const title =
+  const baseTitle =
     cost.status === 'bad-unit' ? `Satuan tak dikenali untuk bahan ini. Pakai: ${unitOpts.slice(0, 10).join(', ')}` :
-    cost.status === 'unpriced' ? 'Bahan ada di Master tapi belum diisi harga — set di Master Bahan.' :
+    cost.status === 'unpriced' ? 'Bahan ada di Master tapi belum diisi harga.' :
     cost.status === 'new' ? 'Bahan belum ada di Master — akan dibuat otomatis saat simpan.' :
     cost.status === 'no-qty' ? 'Isi jumlah & satuan supaya biaya terhitung.' : 'Terhitung dari Master Bahan.';
-  return (
-    <span title={title} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold max-w-full ${meta.cls}`}>
-      <span className="material-symbols-outlined text-[14px] leading-none">{meta.icon}</span>
+  const cls = `inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold max-w-full ${meta.cls}`;
+  const inner = (
+    <>
+      <span className="material-symbols-outlined text-[14px] leading-none">{onFix ? 'build' : meta.icon}</span>
       <span className="truncate">{cost.status === 'ok' ? formatRupiah(cost.price) : meta.label}</span>
-    </span>
+    </>
   );
+  if (onFix) {
+    return <button type="button" onClick={onFix} title={`${baseTitle} Klik untuk perbaiki di sini.`} className={`${cls} cursor-pointer hover:brightness-95`}>{inner}</button>;
+  }
+  return <span title={baseTitle} className={cls}>{inner}</span>;
 }
 
 // Admin UI: kelola bank resep (harga, foto, deskripsi, bahan, langkah).
@@ -126,6 +131,9 @@ export function RecipeManager() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [saving, setSaving] = useState(false);
+  // Quick-fix dari chip status baris: { rowKey, ing, kind:'price'|'unit', unit, value }.
+  const [quickFix, setQuickFix] = useState(null);
+  const [quickSaving, setQuickSaving] = useState(false);
 
   // Master bahan (untuk picker + resolusi ingredient_id by nama). Dimuat sekali.
   const [master, setMaster] = useState([]);
@@ -287,6 +295,42 @@ export function RecipeManager() {
     }));
   const addRow = () => setIngredients((rows) => [...rows, newRow()]);
   const removeRow = (key) => setIngredients((rows) => rows.filter((r) => r._key !== key));
+
+  // Perbaiki bahan dari chip status tanpa pindah halaman: isi harga master (status
+  // 'unpriced') atau tambah konversi satuan (status 'bad-unit'). Setelah simpan,
+  // master/override lokal diperbarui → preview biaya baris langsung ikut terhitung.
+  const openQuickFix = (row, cost) => {
+    const ing = masterById.get(row.ingredientId);
+    if (!ing) return;
+    if (cost.status === 'unpriced') setQuickFix({ rowKey: row._key, ing, kind: 'price', value: '' });
+    else if (cost.status === 'bad-unit') setQuickFix({ rowKey: row._key, ing, kind: 'unit', unit: String(row.unit ?? '').trim().toLowerCase(), value: '' });
+  };
+  const saveQuickFix = async () => {
+    if (!quickFix) return;
+    const val = Number(quickFix.value);
+    if (quickFix.value === '' || Number.isNaN(val) || val < 0) { showToast('Angka tidak valid.', { variant: 'error' }); return; }
+    setQuickSaving(true);
+    try {
+      if (quickFix.kind === 'price') {
+        await ingredientService.updateIngredient(quickFix.ing.id, { pricePerBase: val });
+        setMaster((m) => m.map((x) => (x.id === quickFix.ing.id ? { ...x, pricePerBase: val } : x)));
+        showToast('Harga bahan disimpan.');
+      } else {
+        if (!quickFix.unit) { showToast('Satuan kosong.', { variant: 'error' }); setQuickSaving(false); return; }
+        await ingredientService.upsertOverride(quickFix.ing.id, quickFix.unit, val);
+        setOverrides((o) => [
+          ...o.filter((x) => !(x.ingredientId === quickFix.ing.id && x.unit === quickFix.unit)),
+          { ingredientId: quickFix.ing.id, unit: quickFix.unit, factorToBase: val },
+        ]);
+        showToast('Konversi satuan disimpan.');
+      }
+      setQuickFix(null);
+    } catch (e) {
+      showToast(e.message, { variant: 'error' });
+    } finally {
+      setQuickSaving(false);
+    }
+  };
 
   // Saat selesai mengetik/menempel nama (blur): pisahkan kuantitas & bersihkan nama
   // via parser kanonik supaya "100 ml air" → nama "air" + jml 100 + satuan ml, bukan
@@ -574,7 +618,7 @@ export function RecipeManager() {
                     <span className="material-symbols-outlined text-[18px]">add</span> Baris
                   </button>
                 </div>
-                <p className="text-[11px] text-on-surface-variant mb-2">Biaya & status muncul <span className="font-semibold">live</span>: <span className="text-primary font-semibold">Rp = terhitung</span> · <span className="text-blue-700 font-semibold">bahan baru</span> · <span className="text-error font-semibold">belum berharga</span> · <span className="text-amber-700 font-semibold">satuan tak dikenali</span>. Arahkan kursor ke status untuk solusinya.</p>
+                <p className="text-[11px] text-on-surface-variant mb-2">Biaya & status muncul <span className="font-semibold">live</span>: <span className="text-primary font-semibold">Rp = terhitung</span> · <span className="text-blue-700 font-semibold">bahan baru</span> · <span className="text-error font-semibold">belum berharga</span> · <span className="text-amber-700 font-semibold">satuan tak dikenali</span>. <span className="font-semibold">Klik status 🔴/🟠</span> untuk perbaiki harga/satuan di tempat.</p>
                 <datalist id="master-ingredients">
                   {master.map((m) => <option key={m.id} value={m.name} />)}
                 </datalist>
@@ -590,7 +634,7 @@ export function RecipeManager() {
                         <input value={row.unit} list={unitOpts.length ? `units-${row._key}` : undefined} onChange={(e) => setIngredient(row._key, 'unit', e.target.value)} placeholder={ing?.baseUnit || 'gr'} className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
                         {unitOpts.length > 0 && <datalist id={`units-${row._key}`}>{unitOpts.map((u) => <option key={u} value={u} />)}</datalist>}
                         <div className="col-span-3 flex justify-end min-w-0">
-                          <RowStatusChip cost={cost} unitOpts={unitOpts} />
+                          <RowStatusChip cost={cost} unitOpts={unitOpts} onFix={(cost.status === 'unpriced' || cost.status === 'bad-unit') ? () => openQuickFix(row, cost) : undefined} />
                         </div>
                         <button onClick={() => removeRow(row._key)} className="col-span-1 flex justify-center text-error cursor-pointer" title="Hapus bahan">
                           <span className="material-symbols-outlined text-[20px]">close</span>
@@ -611,6 +655,46 @@ export function RecipeManager() {
               <button onClick={closeForm} disabled={saving} className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50">Batal</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2">
                 {saving && <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>}
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick-fix dari chip status: set harga master / tambah konversi satuan */}
+      {quickFix && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-on-surface/60 backdrop-blur-sm" onClick={() => !quickSaving && setQuickFix(null)}>
+          <div className="bg-white w-full max-w-xs rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            {quickFix.kind === 'price' ? (
+              <>
+                <h3 className="font-semibold text-on-surface mb-1">Set harga: {quickFix.ing.name}</h3>
+                <p className="text-[11px] text-on-surface-variant mb-3">Harga per <b>{quickFix.ing.baseUnit}</b> (satuan dasar). Mis. Rp40.000/kg → isi <b>40</b> (per gram).</p>
+                <input type="number" step="any" autoFocus value={quickFix.value}
+                  onChange={(e) => setQuickFix((q) => ({ ...q, value: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveQuickFix(); }}
+                  placeholder={`Rp per ${quickFix.ing.baseUnit}`}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+              </>
+            ) : (
+              <>
+                <h3 className="font-semibold text-on-surface mb-1">Konversi satuan: {quickFix.ing.name}</h3>
+                <p className="text-[11px] text-on-surface-variant mb-3">1 <b>{quickFix.unit}</b> = berapa <b>{quickFix.ing.baseUnit}</b>? Mis. 1 siung = <b>5</b> (gram).</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-on-surface-variant shrink-0">1 {quickFix.unit} =</span>
+                  <input type="number" step="any" autoFocus value={quickFix.value}
+                    onChange={(e) => setQuickFix((q) => ({ ...q, value: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveQuickFix(); }}
+                    placeholder={quickFix.ing.baseUnit}
+                    className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                  <span className="text-sm text-on-surface-variant shrink-0">{quickFix.ing.baseUnit}</span>
+                </div>
+              </>
+            )}
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setQuickFix(null)} disabled={quickSaving} className="flex-1 py-2.5 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50">Batal</button>
+              <button onClick={saveQuickFix} disabled={quickSaving} className="flex-1 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2">
+                {quickSaving && <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>}
                 Simpan
               </button>
             </div>
