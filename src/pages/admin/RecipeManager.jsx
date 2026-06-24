@@ -69,6 +69,28 @@ const STATUS_META = {
   'bad-unit': { cls: 'bg-amber-50 text-amber-700', icon: 'help', label: 'satuan?' },
 };
 
+// Coverage harga sebuah resep dari bahan-bahannya (priceIdr per baris sudah ikut
+// RECIPE_SELECT). Dipakai badge daftar resep agar tim cepat lihat mana yang perlu digarap.
+function coverageOf(r) {
+  const ings = r.ingredients ?? [];
+  const total = ings.length;
+  const priced = ings.filter((x) => x.priceIdr != null).length;
+  return { priced, total };
+}
+
+function CoverageBadge({ priced, total }) {
+  if (!total) {
+    return <span className="text-[10px] font-bold uppercase bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded-full">tanpa bahan</span>;
+  }
+  const pct = Math.round((priced / total) * 100);
+  const cls = pct === 100 ? 'bg-primary/10 text-primary' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-error/10 text-error';
+  return (
+    <span title={`${priced} dari ${total} bahan sudah terhitung biayanya (${pct}%)`} className={`inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${cls}`}>
+      <span className="material-symbols-outlined text-[13px] leading-none">{pct === 100 ? 'task_alt' : 'pending'}</span>{priced}/{total}
+    </span>
+  );
+}
+
 function RowStatusChip({ cost, unitOpts }) {
   const meta = STATUS_META[cost.status] ?? STATUS_META.new;
   const title =
@@ -94,6 +116,7 @@ export function RecipeManager() {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [onlyIncomplete, setOnlyIncomplete] = useState(false);
 
   const [editing, setEditing] = useState(null); // recipe camelCase | null
   const [ingredients, setIngredients] = useState([]);
@@ -188,9 +211,19 @@ export function RecipeManager() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return recipes;
-    return recipes.filter((r) => r.title?.toLowerCase().includes(q));
-  }, [recipes, query]);
+    return recipes.filter((r) => {
+      if (q && !r.title?.toLowerCase().includes(q)) return false;
+      if (onlyIncomplete) {
+        const { priced, total } = coverageOf(r);
+        if (total > 0 && priced >= total) return false; // sudah lengkap → sembunyikan
+      }
+      return true;
+    });
+  }, [recipes, query, onlyIncomplete]);
+  const incompleteCount = useMemo(
+    () => recipes.filter((r) => { const { priced, total } = coverageOf(r); return total === 0 || priced < total; }).length,
+    [recipes],
+  );
 
   const openCreate = () => {
     setEditing({ ...EMPTY_RECIPE });
@@ -385,19 +418,31 @@ export function RecipeManager() {
         </button>
       </div>
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Cari resep…"
-        className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
-      />
+      <div className="flex flex-col sm:flex-row gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari resep…"
+          className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+        />
+        <button
+          onClick={() => setOnlyIncomplete((v) => !v)}
+          className={`px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0 border ${onlyIncomplete ? 'bg-primary text-on-primary border-primary' : 'bg-white text-on-surface-variant border-outline-variant'}`}
+          title="Tampilkan hanya resep yang biayanya belum lengkap"
+        >
+          <span className="material-symbols-outlined text-[20px]">{onlyIncomplete ? 'filter_alt' : 'filter_alt_off'}</span>
+          Belum lengkap ({incompleteCount})
+        </button>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span></div>
       ) : (
         <div className="space-y-3">
           {filtered.length === 0 && <p className="text-center text-sm text-on-surface-variant py-8">Tidak ada resep.</p>}
-          {filtered.map((r) => (
+          {filtered.map((r) => {
+            const cov = coverageOf(r);
+            return (
             <div key={r.id} className={`rounded-2xl border p-3 flex items-center gap-3 ${r.isActive ? 'border-outline-variant' : 'border-error/30 bg-error/5'}`}>
               <div className="w-14 h-14 rounded-xl bg-surface-container-high overflow-hidden shrink-0">
                 {r.imageUrl && <img src={r.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
@@ -407,16 +452,18 @@ export function RecipeManager() {
                   <span className="font-semibold text-on-surface truncate">{r.title}</span>
                   {!r.isActive && <span className="text-[10px] font-bold uppercase bg-error text-white px-2 py-0.5 rounded-full">Disembunyikan</span>}
                 </div>
-                <p className="text-xs text-on-surface-variant mt-0.5">
-                  {formatRupiah(r.priceIdr)} · {r.ingredients?.length ?? 0} bahan
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs text-on-surface-variant">{formatRupiah(r.priceIdr)} · {cov.total} bahan</p>
+                  <CoverageBadge priced={cov.priced} total={cov.total} />
+                </div>
               </div>
               <div className="flex gap-2 shrink-0">
                 <button onClick={() => openEdit(r)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container-low cursor-pointer">Edit</button>
                 <button onClick={() => handleDelete(r)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-error/40 text-error hover:bg-error/10 cursor-pointer">Hapus</button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
