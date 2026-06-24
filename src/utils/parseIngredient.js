@@ -42,6 +42,21 @@ const UNIT_PHRASES = [
   [/\bsdk teh\b/gi, "sdt"],
 ];
 
+// Singkatan satuan ala scraping → token kanonik (mis. "250 grm ayam", "2 bh tahu",
+// "3 btr telur"). Terpisah dari UNIT_TOKENS supaya hanya berlaku saat DETEKSI satuan
+// (di depan body), bukan sebagai kata-benda bahan yang sah.
+const UNIT_ABBREV = new Map([
+  ["grm", "gram"],
+  ["btr", "butir"],
+  ["bh", "buah"],
+  ["btng", "batang"],
+  ["btg", "batang"],
+  ["bks", "bungkus"],
+  ["sct", "sachet"],
+  ["ptg", "potong"],
+  ["lbr", "lembar"],
+]);
+
 // Kata yang menandai kuantitas tak terukur ("secukupnya", "sesuai selera").
 const UNMEASURED_RE = /\b(secukupnya|sesuai selera|seperlunya|secukup ?nya)\b/i;
 
@@ -116,12 +131,13 @@ export function parseIngredient(raw) {
   let body = rest;
   let unit = null;
 
-  // 4) token pertama setelah angka → unit (bila dikenali)
+  // 4) token pertama setelah angka → unit (bila dikenali / singkatan scraping)
   const firstTokenMatch = body.match(/^([\p{L}]+)\b/u);
   if (firstTokenMatch) {
     const tok = firstTokenMatch[1].toLowerCase();
-    if (UNIT_TOKENS.has(tok)) {
-      unit = tok;
+    const canonUnit = UNIT_ABBREV.get(tok) ?? (UNIT_TOKENS.has(tok) ? tok : null);
+    if (canonUnit) {
+      unit = canonUnit;
       body = body.slice(firstTokenMatch[0].length).trimStart();
     }
   }
