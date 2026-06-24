@@ -25,6 +25,65 @@ let rowKey = 0;
 // priceIdr di baris = biaya terhitung (read-only, dari trigger); _id = id baris existing.
 const newRow = () => ({ _key: `r${++rowKey}`, _id: null, ingredientId: null, name: '', amount: '', unit: '', category: '', priceIdr: null, rawText: '' });
 
+// Dimensi base_unit (selaras unit_conversions.dimension).
+const BASE_DIM = { g: 'mass', ml: 'volume', pcs: 'count' };
+
+// Preview biaya baris di KLIEN — mirror persis fungsi DB resolve_ingredient_cost
+// (override per-bahan → unit==base → unit_conversions sedimensi). Dipakai supaya
+// admin lihat hasil sebelum simpan + tahu PERSIS kenapa belum terhitung.
+// status: 'ok' | 'new' | 'unpriced' | 'no-qty' | 'bad-unit'.
+function resolveRowCost(row, { masterById, convByUnit, ovByIng }) {
+  const ing = row.ingredientId ? masterById.get(row.ingredientId) : null;
+  if (!ing) return { status: 'new', price: null };
+  if (ing.pricePerBase == null) return { status: 'unpriced', price: null };
+  const amt = Number(row.amount);
+  const unit = String(row.unit ?? '').trim().toLowerCase();
+  if (!row.amount || Number.isNaN(amt) || !unit) return { status: 'no-qty', price: null };
+  let factor = ovByIng.get(ing.id)?.get(unit);
+  if (factor == null && unit === ing.baseUnit) factor = 1;
+  if (factor == null) {
+    const c = convByUnit.get(unit);
+    if (c && c.dimension === BASE_DIM[ing.baseUnit]) factor = c.toBaseFactor;
+  }
+  if (factor == null) return { status: 'bad-unit', price: null };
+  return { status: 'ok', price: Math.round(amt * factor * Number(ing.pricePerBase)) };
+}
+
+// Satuan yang VALID untuk sebuah bahan (base + override + konversi global sedimensi).
+function unitOptionsFor(ing, { convByUnit, ovByIng }) {
+  if (!ing) return [];
+  const set = new Set();
+  if (ing.baseUnit) set.add(ing.baseUnit);
+  ovByIng.get(ing.id)?.forEach((_, u) => set.add(u));
+  const dim = BASE_DIM[ing.baseUnit];
+  convByUnit.forEach((c, u) => { if (c.dimension === dim) set.add(u); });
+  return [...set];
+}
+
+// Tampilan status biaya per baris (warna + makna jelas → tim tahu apa yang difix).
+const STATUS_META = {
+  ok:         { cls: 'bg-primary/10 text-primary', icon: 'check_circle' },
+  new:        { cls: 'bg-blue-50 text-blue-700', icon: 'add_circle', label: 'bahan baru' },
+  unpriced:   { cls: 'bg-error/10 text-error', icon: 'price_change', label: 'belum berharga' },
+  'no-qty':   { cls: 'bg-surface-container-high text-on-surface-variant', icon: 'edit', label: 'isi jml/satuan' },
+  'bad-unit': { cls: 'bg-amber-50 text-amber-700', icon: 'help', label: 'satuan?' },
+};
+
+function RowStatusChip({ cost, unitOpts }) {
+  const meta = STATUS_META[cost.status] ?? STATUS_META.new;
+  const title =
+    cost.status === 'bad-unit' ? `Satuan tak dikenali untuk bahan ini. Pakai: ${unitOpts.slice(0, 10).join(', ')}` :
+    cost.status === 'unpriced' ? 'Bahan ada di Master tapi belum diisi harga — set di Master Bahan.' :
+    cost.status === 'new' ? 'Bahan belum ada di Master — akan dibuat otomatis saat simpan.' :
+    cost.status === 'no-qty' ? 'Isi jumlah & satuan supaya biaya terhitung.' : 'Terhitung dari Master Bahan.';
+  return (
+    <span title={title} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold max-w-full ${meta.cls}`}>
+      <span className="material-symbols-outlined text-[14px] leading-none">{meta.icon}</span>
+      <span className="truncate">{cost.status === 'ok' ? formatRupiah(cost.price) : meta.label}</span>
+    </span>
+  );
+}
+
 // Admin UI: kelola bank resep (harga, foto, deskripsi, bahan, langkah).
 // Tulis langsung lewat RLS admin (adminRecipeService) — tanpa Edge Function.
 export function RecipeManager() {
@@ -46,11 +105,47 @@ export function RecipeManager() {
   // Master bahan (untuk picker + resolusi ingredient_id by nama). Dimuat sekali.
   const [master, setMaster] = useState([]);
   const [aliases, setAliases] = useState([]); // {alias, ingredientId}
+  const [conversions, setConversions] = useState([]); // {unit, dimension, toBaseFactor}
+  const [overrides, setOverrides] = useState([]); // {ingredientId, unit, factorToBase}
   const masterByName = useMemo(() => {
     const m = new Map();
     for (const ing of master) m.set(ing.name.trim().toLowerCase(), ing);
     return m;
   }, [master]);
+  const masterById = useMemo(() => {
+    const m = new Map();
+    for (const ing of master) m.set(ing.id, ing);
+    return m;
+  }, [master]);
+  const convByUnit = useMemo(() => {
+    const m = new Map();
+    for (const c of conversions) m.set(c.unit, c);
+    return m;
+  }, [conversions]);
+  const ovByIng = useMemo(() => {
+    const m = new Map();
+    for (const o of overrides) {
+      if (!m.has(o.ingredientId)) m.set(o.ingredientId, new Map());
+      m.get(o.ingredientId).set(o.unit, Number(o.factorToBase));
+    }
+    return m;
+  }, [overrides]);
+  const costCtx = useMemo(() => ({ masterById, convByUnit, ovByIng }), [masterById, convByUnit, ovByIng]);
+  // Biaya tiap baris dihitung live (klien) untuk feedback instan saat mengedit.
+  const rowCosts = useMemo(() => {
+    const m = new Map();
+    for (const r of ingredients) m.set(r._key, resolveRowCost(r, costCtx));
+    return m;
+  }, [ingredients, costCtx]);
+  const liveSummary = useMemo(() => {
+    const named = ingredients.filter((r) => r.name?.trim());
+    let total = 0, priced = 0;
+    for (const r of named) {
+      const c = rowCosts.get(r._key);
+      if (c?.status === 'ok') { total += c.price; priced += 1; }
+    }
+    return { total, priced, count: named.length };
+  }, [ingredients, rowCosts]);
   const aliasToId = useMemo(() => {
     const m = new Map();
     for (const a of aliases) m.set(a.alias, a.ingredientId);
@@ -84,6 +179,8 @@ export function RecipeManager() {
         refresh();
         ingredientService.listIngredients().then((d) => { if (active) setMaster(d); }).catch(() => {});
         ingredientService.listAllAliases().then((d) => { if (active) setAliases(d); }).catch(() => {});
+        ingredientService.listConversions().then((d) => { if (active) setConversions(d); }).catch(() => {});
+        ingredientService.listAllOverrides().then((d) => { if (active) setOverrides(d); }).catch(() => {});
       }
     });
     return () => { active = false; };
@@ -371,9 +468,17 @@ export function RecipeManager() {
                 <Field label="Porsi dasar"><TextInput type="number" value={editing.baseServings ?? 2} onChange={(v) => setField('baseServings', v)} /></Field>
               </div>
 
-              <div className="flex items-center justify-between rounded-xl bg-surface-container-low border border-outline-variant px-4 py-2.5">
-                <span className="text-xs font-semibold text-on-surface">Harga total (otomatis dari Master Bahan)</span>
-                <span className="font-bold text-primary">{editing.id ? formatRupiah(editing.priceIdr) : '— simpan dulu'}</span>
+              <div className="rounded-xl bg-surface-container-low border border-outline-variant px-4 py-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-on-surface">Estimasi biaya (live, dari Master Bahan)</span>
+                  <span className="font-bold text-primary">{formatRupiah(liveSummary.total)}</span>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="h-1.5 flex-1 rounded-full bg-surface-container-high overflow-hidden">
+                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${liveSummary.count ? Math.round((liveSummary.priced / liveSummary.count) * 100) : 0}%` }} />
+                  </div>
+                  <span className="text-[11px] font-semibold text-on-surface-variant shrink-0">{liveSummary.priced}/{liveSummary.count} bahan terhitung</span>
+                </div>
               </div>
 
               <Field label="Tag (pisahkan dengan koma)">
@@ -399,24 +504,30 @@ export function RecipeManager() {
                     <span className="material-symbols-outlined text-[18px]">add</span> Baris
                   </button>
                 </div>
-                <p className="text-[11px] text-on-surface-variant mb-2">Pilih bahan dari daftar; harga & total dihitung otomatis dari Master Bahan setelah disimpan.</p>
+                <p className="text-[11px] text-on-surface-variant mb-2">Biaya & status muncul <span className="font-semibold">live</span>: <span className="text-primary font-semibold">Rp = terhitung</span> · <span className="text-blue-700 font-semibold">bahan baru</span> · <span className="text-error font-semibold">belum berharga</span> · <span className="text-amber-700 font-semibold">satuan tak dikenali</span>. Arahkan kursor ke status untuk solusinya.</p>
                 <datalist id="master-ingredients">
                   {master.map((m) => <option key={m.id} value={m.name} />)}
                 </datalist>
                 <div className="space-y-2">
-                  {ingredients.map((row) => (
-                    <div key={row._key} className="grid grid-cols-12 gap-1.5 items-center">
-                      <input list="master-ingredients" value={row.name} onChange={(e) => setIngredientName(row._key, e.target.value)} onBlur={() => applyParseToRow(row._key)} placeholder="Nama bahan / tempel “100 ml air”" className="col-span-4 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
-                      <input value={row.amount} onChange={(e) => setIngredient(row._key, 'amount', e.target.value)} placeholder="Jml" type="number" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
-                      <input value={row.unit} onChange={(e) => setIngredient(row._key, 'unit', e.target.value)} placeholder="gr" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
-                      <span className="col-span-3 text-right text-xs font-semibold text-on-surface-variant pr-1" title={row.ingredientId ? '' : 'Bahan baru — akan ditambahkan ke Master Bahan'}>
-                        {row.priceIdr != null ? formatRupiah(row.priceIdr) : (row.ingredientId ? 'perlu harga' : 'baru')}
-                      </span>
-                      <button onClick={() => removeRow(row._key)} className="col-span-1 flex justify-center text-error cursor-pointer" title="Hapus bahan">
-                        <span className="material-symbols-outlined text-[20px]">close</span>
-                      </button>
-                    </div>
-                  ))}
+                  {ingredients.map((row) => {
+                    const cost = rowCosts.get(row._key) ?? { status: 'new', price: null };
+                    const ing = row.ingredientId ? masterById.get(row.ingredientId) : null;
+                    const unitOpts = unitOptionsFor(ing, costCtx);
+                    return (
+                      <div key={row._key} className="grid grid-cols-12 gap-1.5 items-center">
+                        <input list="master-ingredients" value={row.name} onChange={(e) => setIngredientName(row._key, e.target.value)} onBlur={() => applyParseToRow(row._key)} placeholder="Nama bahan / tempel “100 ml air”" className="col-span-4 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                        <input value={row.amount} onChange={(e) => setIngredient(row._key, 'amount', e.target.value)} placeholder="Jml" type="number" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                        <input value={row.unit} list={unitOpts.length ? `units-${row._key}` : undefined} onChange={(e) => setIngredient(row._key, 'unit', e.target.value)} placeholder={ing?.baseUnit || 'gr'} className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                        {unitOpts.length > 0 && <datalist id={`units-${row._key}`}>{unitOpts.map((u) => <option key={u} value={u} />)}</datalist>}
+                        <div className="col-span-3 flex justify-end min-w-0">
+                          <RowStatusChip cost={cost} unitOpts={unitOpts} />
+                        </div>
+                        <button onClick={() => removeRow(row._key)} className="col-span-1 flex justify-center text-error cursor-pointer" title="Hapus bahan">
+                          <span className="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
