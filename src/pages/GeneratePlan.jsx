@@ -26,9 +26,9 @@ const VARIASI_MAX = 3;
 // atau siang + malam); minimal satu. Urutan ini = urutan kanonik yang dipakai
 // server (breakfast → lunch → dinner).
 const MEAL_OPTIONS = [
-  { value: 'breakfast', label: 'Sarapan' },
-  { value: 'lunch', label: 'Makan Siang' },
-  { value: 'dinner', label: 'Makan Malam' },
+  { value: 'breakfast', label: 'Sarapan', hint: 'Pagi hari', icon: 'wb_twilight' },
+  { value: 'lunch', label: 'Makan Siang', hint: 'Tengah hari', icon: 'light_mode' },
+  { value: 'dinner', label: 'Makan Malam', hint: 'Sore / malam', icon: 'bedtime' },
 ];
 
 // Opsi diet sekarang diambil dinamis dari tabel diet_tags (lihat dietService).
@@ -340,19 +340,6 @@ export function GeneratePlan() {
             </p>
           </Field>
 
-          <Field label="Waktu makan per hari">
-            <div className="flex flex-wrap gap-2">
-              {MEAL_OPTIONS.map((opt) => (
-                <Chip key={opt.value} active={meals.includes(opt.value)} onClick={() => toggleMeal(opt.value)}>
-                  {opt.label}
-                </Chip>
-              ))}
-            </div>
-            <p className="text-xs text-on-surface-variant mt-2">
-              Pilih jam makan yang mau direncanakan (mis. cuma makan siang, atau siang + malam). Minimal satu — {mealCount}× makan/hari.
-            </p>
-          </Field>
-
           <Field label="Berapa variasi menu dalam sehari?">
             <Stepper
               value={variasiPerHari}
@@ -366,6 +353,25 @@ export function GeneratePlan() {
                 : variasiPerHari >= mealCount
                   ? 'Tiap waktu makan menu berbeda.'
                   : `${variasiPerHari} menu berbeda, dipakai ulang menutup ${mealCount} waktu makan.`}
+            </p>
+          </Field>
+
+          <Field label="Waktu makan per hari">
+            <p className="text-xs text-on-surface-variant mb-2.5">
+              Ketuk jam makan yang mau direncanakan. Boleh lebih dari satu.
+            </p>
+            <div className="grid grid-cols-3 gap-2.5">
+              {MEAL_OPTIONS.map((opt) => (
+                <MealCard
+                  key={opt.value}
+                  option={opt}
+                  selected={meals.includes(opt.value)}
+                  onToggle={() => toggleMeal(opt.value)}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-on-surface-variant mt-2">
+              Terpilih: <strong>{mealCount}× makan/hari</strong>. Minimal satu.
             </p>
           </Field>
 
@@ -608,6 +614,38 @@ function Field({ label, children }) {
       <p className="text-sm font-semibold text-on-surface mb-2.5">{label}</p>
       {children}
     </div>
+  );
+}
+
+// Kartu pilih waktu makan: tap target besar yang jelas multi-pilih (beda dari
+// chip lama yang terlihat seperti tombol pilih-satu). Ikon ✓ di pojok menandai
+// kartu yang sedang aktif; kartu non-aktif tampil meredup.
+function MealCard({ option, selected, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={selected}
+      className={`relative flex flex-col items-center gap-1 rounded-2xl border p-4 text-center transition-all cursor-pointer active:scale-95 ${selected
+        ? 'border-primary bg-primary/5'
+        : 'border-outline-variant bg-white hover:border-primary/50'
+        }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full transition-colors ${selected ? 'bg-primary text-on-primary' : 'border border-outline-variant text-transparent'
+          }`}
+      >
+        <span className="material-symbols-outlined text-[14px]">check</span>
+      </span>
+      <span className={`material-symbols-outlined text-[26px] ${selected ? 'text-primary' : 'text-on-surface-variant'}`}>
+        {option.icon}
+      </span>
+      <span className={`text-sm font-semibold ${selected ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+        {option.label}
+      </span>
+      <span className="text-xs text-on-surface-variant">{option.hint}</span>
+    </button>
   );
 }
 
