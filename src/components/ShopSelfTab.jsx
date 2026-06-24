@@ -15,9 +15,11 @@ const DELIVERY_FEE = 15000;
 // Dua mode tampilan: per-bahan (gabung & checklist) atau per-menu (kelompok resep).
 export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
   const { showToast, loading: planLoading } = usePlan();
-  // Default: semua bahan dianggap perlu dibeli (tercentang). Set ini menampung
-  // bahan yang user CANCEL karena sudah punya → tidak ikut dibeli & dihitung.
-  const [ownedItems, setOwnedItems] = useState(() => new Set());
+  // Checklist belanja: MULAI KOSONG (tidak auto-centang). User mencentang sendiri
+  // tiap bahan yang sudah diambil/dibeli saat belanja. removedItems = bahan yang
+  // dihapus user karena tidak diperlukan (keluar dari daftar & estimasi biaya).
+  const [checkedItems, setCheckedItems] = useState(() => new Set());
+  const [removedItems, setRemovedItems] = useState(() => new Set());
   const [recipes, setRecipes] = useState([]);
   const [recipesLoading, setRecipesLoading] = useState(true);
   const [view, setView] = useState('bahan'); // 'bahan' | 'menu'
@@ -57,40 +59,55 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
   );
   const menus = useMemo(() => buildMenuListFromSlots(slots), [slots]);
 
-  // Toggle "sudah punya": kalau dibatalkan, bahan masuk ownedItems (tidak dibeli).
+  // Centang/uncentang bahan (penanda sudah diambil saat belanja).
   const toggleItem = (id) => {
-    setOwnedItems((prev) => {
+    setCheckedItems((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
-  // Hitung ulang hanya bahan yang masih perlu dibeli (di luar ownedItems).
-  const { neededCount, neededCost } = useMemo(() => {
-    let count = 0;
+  // Hapus bahan yang tidak diperlukan: keluar dari daftar & estimasi biaya.
+  const removeItem = (id) => {
+    setRemovedItems((prev) => new Set(prev).add(id));
+    setCheckedItems((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  // Hitung bahan yang masih ada (tidak dihapus): total, berapa yang sudah dicentang,
+  // dan estimasi biaya. Centang TIDAK memengaruhi biaya — hanya penanda progres.
+  const { visibleCount, checkedCount, estCost } = useMemo(() => {
+    let total = 0;
+    let checked = 0;
     let cost = 0;
     for (const section of sections) {
       for (const item of section.items) {
-        if (ownedItems.has(item.id)) continue;
-        count += 1;
+        if (removedItems.has(item.id)) continue;
+        total += 1;
         cost += item.priceIdr || 0;
+        if (checkedItems.has(item.id)) checked += 1;
       }
     }
-    return { neededCount: count, neededCost: Math.round(cost) };
-  }, [sections, ownedItems]);
+    return { visibleCount: total, checkedCount: checked, estCost: Math.round(cost) };
+  }, [sections, removedItems, checkedItems]);
 
-  const total = neededCost + (neededCount > 0 ? DELIVERY_FEE : 0);
-  const ownedCount = totalItems - neededCount;
+  const total = estCost + (visibleCount > 0 ? DELIVERY_FEE : 0);
+  const removedCount = totalItems - visibleCount;
 
   const handleSave = () => {
-    // Simpan hanya bahan yang benar-benar dibeli (yang sudah punya dilewati).
-    const neededSections = sections
-      .map((s) => ({ ...s, items: s.items.filter((it) => !ownedItems.has(it.id)) }))
+    // Simpan semua bahan yang tidak dihapus (centang hanya penanda sudah diambil,
+    // jadi bahan tercentang tetap ikut tersimpan).
+    const keptSections = sections
+      .map((s) => ({ ...s, items: s.items.filter((it) => !removedItems.has(it.id)) }))
       .filter((s) => s.items.length > 0);
-    const items = flattenSections(neededSections);
+    const items = flattenSections(keptSections);
     if (items.length === 0) {
-      showToast('Tidak ada bahan untuk disimpan — semua sudah ditandai punya.', { variant: 'error' });
+      showToast('Tidak ada bahan untuk disimpan.', { variant: 'error' });
       return;
     }
     onSave?.({
@@ -98,7 +115,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
       sourceType: 'planner',
       sourceRef: null,
       items,
-      totalIdr: neededCost,
+      totalIdr: estCost,
     });
   };
 
@@ -148,59 +165,69 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
           </button>
         </div>
 
-        {/* Petunjuk: semua bahan otomatis dicentang, tinggal batalkan yang sudah punya. */}
+        {/* Petunjuk: checklist belanja — centang sendiri yang sudah diambil, hapus yang tak perlu. */}
         {view === 'bahan' && (
           <div className="flex items-start gap-2.5 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-sm text-on-surface-variant">
             <span className="material-symbols-outlined text-primary text-[20px] shrink-0">info</span>
-            <p>Semua bahan otomatis dicentang untuk dibeli. Batalkan centang bahan yang <span className="font-semibold text-on-surface">sudah kamu punya</span> — biaya & jumlah ikut menyesuaikan.</p>
+            <p>Centang bahan yang <span className="font-semibold text-on-surface">sudah kamu ambil/beli</span> saat belanja. Bahan yang tidak diperlukan bisa <span className="font-semibold text-on-surface">dihapus</span> lewat ikon tempat sampah.</p>
           </div>
         )}
 
         {/* ---- VIEW PER BAHAN (checklist, group kategori) ---- */}
-        {view === 'bahan' && sections.map((section) => (
-          <section key={section.key}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="material-symbols-outlined text-primary text-2xl">{section.meta.icon}</span>
-              <h3 className="font-headline-md text-headline-md text-on-surface">{section.meta.label}</h3>
-              <span className="ml-auto text-sm font-semibold text-outline">{section.items.length} bahan</span>
-            </div>
-            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
-              {section.items.map((item) => {
-                const owned = ownedItems.has(item.id); // sudah punya → dicancel
-                return (
-                  <button key={item.id} onClick={() => toggleItem(item.id)}
-                    aria-pressed={!owned}
-                    className="w-full text-left flex items-center justify-between p-4 md:p-5 border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors group cursor-pointer">
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
-                        owned ? 'border-outline-variant group-hover:border-primary' : 'bg-success-green border-success-green'}`}>
-                        <span className={`material-symbols-outlined text-sm transition-opacity ${
-                          owned ? 'text-primary opacity-0 group-hover:opacity-60' : 'text-white opacity-100'}`}>check</span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className={`font-semibold text-on-surface truncate ${owned ? 'line-through opacity-60' : ''}`}>{item.name}</p>
-                        {owned ? (
-                          <p className="text-xs text-on-surface-variant italic">Sudah punya · tidak dibeli</p>
-                        ) : (
-                          <p className="text-xs text-on-surface-variant">Beli di: <span className="text-primary font-bold">{section.meta.store}</span></p>
-                        )}
-                      </div>
+        {view === 'bahan' && sections.map((section) => {
+          const visibleItems = section.items.filter((it) => !removedItems.has(it.id));
+          if (visibleItems.length === 0) return null; // semua bahan di seksi ini dihapus
+          return (
+            <section key={section.key}>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="material-symbols-outlined text-primary text-2xl">{section.meta.icon}</span>
+                <h3 className="font-headline-md text-headline-md text-on-surface">{section.meta.label}</h3>
+                <span className="ml-auto text-sm font-semibold text-outline">{visibleItems.length} bahan</span>
+              </div>
+              <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
+                {visibleItems.map((item) => {
+                  const checked = checkedItems.has(item.id); // sudah diambil saat belanja
+                  return (
+                    <div key={item.id}
+                      className="flex items-stretch border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors group">
+                      <button onClick={() => toggleItem(item.id)} aria-pressed={checked}
+                        className="flex-1 min-w-0 text-left flex items-center justify-between p-4 md:p-5 cursor-pointer">
+                        <div className="flex items-center gap-4 min-w-0">
+                          <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
+                            checked ? 'bg-success-green border-success-green' : 'border-outline-variant group-hover:border-primary'}`}>
+                            <span className={`material-symbols-outlined text-sm transition-opacity ${
+                              checked ? 'text-white opacity-100' : 'text-primary opacity-0 group-hover:opacity-60'}`}>check</span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className={`font-semibold text-on-surface truncate ${checked ? 'opacity-60' : ''}`}>{item.name}</p>
+                            {checked ? (
+                              <p className="text-xs text-on-surface-variant italic">Sudah diambil</p>
+                            ) : (
+                              <p className="text-xs text-on-surface-variant">Beli di: <span className="text-primary font-bold">{section.meta.store}</span></p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 pl-3 flex flex-col items-end gap-1">
+                          <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                            checked ? 'bg-surface-container-low text-on-surface-variant' : 'bg-surface-cream text-on-surface'}`}>
+                            {formatAmount(item.amount)} {item.unit}
+                          </span>
+                          {item.priceIdr > 0 && (
+                            <span className={`text-xs font-bold ${checked ? 'text-on-surface-variant/50' : 'text-primary'}`}>{formatRupiah(Math.round(item.priceIdr))}</span>
+                          )}
+                        </div>
+                      </button>
+                      <button onClick={() => removeItem(item.id)} aria-label={`Hapus ${item.name}`} title="Hapus bahan"
+                        className="shrink-0 px-4 flex items-center text-on-surface-variant hover:text-error hover:bg-error/5 transition-colors cursor-pointer">
+                        <span className="material-symbols-outlined text-[20px]">delete</span>
+                      </button>
                     </div>
-                    <div className="text-right shrink-0 pl-3 flex flex-col items-end gap-1">
-                      <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-                        owned ? 'bg-surface-container-low text-on-surface-variant line-through' : 'bg-surface-cream text-on-surface'}`}>
-                        {formatAmount(item.amount)} {item.unit}
-                      </span>
-                      {item.priceIdr > 0 && (
-                        <span className={`text-xs font-bold ${owned ? 'text-on-surface-variant/50 line-through' : 'text-primary'}`}>{formatRupiah(Math.round(item.priceIdr))}</span>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        ))}
+                  );
+                })}
+              </div>
+            </section>
+          );
+        })}
 
         {/* ---- VIEW PER MENU (kelompok resep) ---- */}
         {view === 'menu' && menus.map((menu) => (
@@ -248,20 +275,20 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
             <h3 className="font-headline-md text-headline-md text-primary mb-5">Ringkasan</h3>
             <div className="mb-5">
               <div className="flex justify-between text-xs font-semibold text-on-surface-variant mb-2">
-                <span>Bahan yang dibeli</span>
-                <span>{neededCount} dari {totalItems}</span>
+                <span>Sudah dibeli</span>
+                <span>{checkedCount} dari {visibleCount}</span>
               </div>
               <div className="h-2.5 bg-white/60 rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all duration-700"
-                  style={{ width: `${Math.round((neededCount / totalItems) * 100)}%` }} />
+                  style={{ width: `${visibleCount > 0 ? Math.round((checkedCount / visibleCount) * 100) : 0}%` }} />
               </div>
-              {ownedCount > 0 && (
-                <p className="text-xs text-on-surface-variant mt-2">{ownedCount} bahan ditandai sudah punya</p>
+              {removedCount > 0 && (
+                <p className="text-xs text-on-surface-variant mt-2">{removedCount} bahan dihapus</p>
               )}
             </div>
             <div className="space-y-3 mb-6 text-sm">
-              <div className="flex justify-between"><span className="text-on-surface-variant">Bahan Dibeli</span><span className="font-bold text-on-surface">{neededCount} item</span></div>
-              <div className="flex justify-between"><span className="text-on-surface-variant">Estimasi Biaya</span><span className="font-bold text-on-surface">{formatRupiah(neededCost)}</span></div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">Total Bahan</span><span className="font-bold text-on-surface">{visibleCount} item</span></div>
+              <div className="flex justify-between"><span className="text-on-surface-variant">Estimasi Biaya</span><span className="font-bold text-on-surface">{formatRupiah(estCost)}</span></div>
               <div className="pt-3 border-t border-outline/20 flex justify-between"><span className="text-lg font-bold text-primary">Total</span><span className="text-lg font-bold text-primary">{formatRupiah(total)}</span></div>
             </div>
             <button onClick={handleSave}
@@ -281,7 +308,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
       <div className="lg:hidden fixed bottom-above-nav left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-outline-variant shadow-xl px-4 py-3">
         <div className="flex items-center gap-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-on-surface-variant leading-tight">{neededCount} dari {totalItems} bahan dibeli</p>
+            <p className="text-xs text-on-surface-variant leading-tight">{checkedCount} dari {visibleCount} bahan sudah dibeli</p>
             <p className="font-bold text-primary text-base leading-tight">{formatRupiah(total)}</p>
           </div>
           <button onClick={handleSave}
