@@ -91,6 +91,17 @@ export async function listOverrides(ingredientId) {
   return data ?? [];
 }
 
+// Semua override (ingredientId → {unit, factorToBase}), untuk preview biaya baris
+// di editor resep tanpa round-trip per bahan.
+export async function listAllOverrides() {
+  await requireUser();
+  const { data, error } = await supabase
+    .from("ingredient_unit_overrides")
+    .select("ingredientId:ingredient_id, unit, factorToBase:factor_to_base");
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function upsertOverride(ingredientId, unit, factorToBase) {
   await requireUser();
   const { error } = await supabase
