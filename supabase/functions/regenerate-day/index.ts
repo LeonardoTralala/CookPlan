@@ -19,6 +19,7 @@ import {
 import { callProvider, safeJsonExtract, estimateCost } from "../_shared/aiAdapter.ts";
 import type { AIProvider } from "../_shared/aiAdapter.ts";
 import { enforceVariety } from "../_shared/validate.ts";
+import { filterRecipesByDiet } from "../_shared/dietFilter.ts";
 import { buildShoppingList, type RecipeWithIngredients } from "../_shared/shoppingList.ts";
 
 const RATE_LIMIT_PER_DAY = 20; // berbagi kuota dengan generate-plan
@@ -138,14 +139,11 @@ Deno.serve(async (req) => {
   const RECIPE_COLS =
     "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings";
   const diet = Array.isArray(input.diet) ? (input.diet as string[]) : [];
-  let recipeQuery = admin.from("recipes").select(RECIPE_COLS).eq("is_active", true).limit(40);
-  if (diet.length > 0) recipeQuery = recipeQuery.overlaps("tags", diet);
-  let { data: candidates } = await recipeQuery;
-  if (!candidates || candidates.length < 3) {
-    const { data: allActive } = await admin
-      .from("recipes").select(RECIPE_COLS).eq("is_active", true).limit(40);
-    candidates = allActive ?? [];
-  }
+  // Filter preferensi di memori (selaras generate-plan & chip katalog) supaya slug
+  // non-tag ('tinggi-protein', 'cepat', 'hemat') ikut tersaring, bukan diabaikan.
+  const { data: allActive } = await admin
+    .from("recipes").select(RECIPE_COLS).eq("is_active", true);
+  const candidates = filterRecipesByDiet(allActive ?? [], diet).slice(0, 40);
   if (candidates.length === 0) {
     return json({ error: "Bank resep kosong. Tambahkan resep dulu." }, 422);
   }

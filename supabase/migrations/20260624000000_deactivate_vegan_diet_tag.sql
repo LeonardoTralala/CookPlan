@@ -1,0 +1,24 @@
+-- =============================================================================
+-- Migrasi: nonaktifkan chip diet 'vegan' (filter mati di katalog & wizard)
+-- -----------------------------------------------------------------------------
+-- Masalah: chip "Vegan" aktif tapi TIDAK ada satu pun resep ber-tag 'vegan'
+-- (recipes.tags). Pencocokan filter = exact membership, jadi memilih "Vegan"
+-- selalu 0 hasil ("Resep Tidak Ditemukan").
+--
+-- Kenapa tidak diturunkan dari 'vegetarian' seperti 'tinggi-protein'? Tag
+-- 'vegetarian' di data sekarang KOTOR — banyak resep berisi ayam/telur/sosis/keju
+-- (mis. "Kare Ayam-Tahu", "Tahu Telur Asin", "Bola-Bola Tahu Isi Sosis Keju")
+-- tetap ditandai vegetarian. Menurunkan klaim "vegan" yang ketat dari data ini
+-- berisiko melabeli hidangan berdaging sebagai vegan — lebih buruk dari sekadar
+-- menyembunyikan chip-nya.
+--
+-- Solusi: nonaktifkan chip-nya (selaras pola step 4 di 20260617000000). Aktifkan
+-- lagi (is_active=true) begitu data resep vegan dibersihkan & ditandai 'vegan'.
+--
+-- Catatan: chip 'tinggi-protein' juga tak pernah ditulis ke recipes.tags, tapi
+-- TETAP aktif karena kini DITURUNKAN di frontend (recipeMatchesDiet) dari tag
+-- sumber protein (ayam/ikan/sapi/kambing/telur/udang/daging/seafood/tahu/tempe).
+-- Tidak perlu perubahan DB untuk itu.
+-- =============================================================================
+
+update public.diet_tags set is_active = false where value = 'vegan';
