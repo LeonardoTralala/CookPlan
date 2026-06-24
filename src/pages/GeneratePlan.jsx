@@ -26,9 +26,9 @@ const VARIASI_MAX = 3;
 // atau siang + malam); minimal satu. Urutan ini = urutan kanonik yang dipakai
 // server (breakfast → lunch → dinner).
 const MEAL_OPTIONS = [
-  { value: 'breakfast', label: 'Sarapan' },
-  { value: 'lunch', label: 'Makan Siang' },
-  { value: 'dinner', label: 'Makan Malam' },
+  { value: 'breakfast', label: 'Sarapan', hint: 'Pagi hari', icon: 'wb_twilight' },
+  { value: 'lunch', label: 'Makan Siang', hint: 'Tengah hari', icon: 'light_mode' },
+  { value: 'dinner', label: 'Makan Malam', hint: 'Sore / malam', icon: 'bedtime' },
 ];
 
 // Opsi diet sekarang diambil dinamis dari tabel diet_tags (lihat dietService).
@@ -75,6 +75,11 @@ export function GeneratePlan() {
   const [error, setError] = useState('');
   // Konfirmasi sebelum pindah ke "Belanja di Kami" (keluar dari wizard generate).
   const [confirmSwitchShop, setConfirmSwitchShop] = useState(false);
+  // Modal teaser "Coming soon" untuk antar FoodPrep ke rumah (fitur belum siap).
+  const [showFoodPrepSoon, setShowFoodPrepSoon] = useState(false);
+  // Panel (bottom-sheet) riwayat generate — dibuka dari tombol di atas Step 1 supaya
+  // form generate tidak ikut tergeser/hilang saat user mau lihat hasil lama.
+  const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
   const [usageCount, setUsageCount] = useState(null);
   // dietPool = semua preferensi (dari diet_tags). dietSample = subset acak yang
@@ -291,6 +296,19 @@ export function GeneratePlan() {
       {/* STEP 1 */}
       {step === 1 && (
         <div className="space-y-7 animate-fade-in">
+          {/* Buka riwayat sebagai panel; form generate di belakang tetap utuh. */}
+          {history.length > 0 && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowHistory(true)}
+                className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-white px-4 py-2 text-sm font-semibold text-on-surface-variant hover:border-primary/50 hover:text-primary active:scale-95 transition cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[18px]">history</span>
+                Riwayat Generate ({history.length})
+              </button>
+            </div>
+          )}
           {/* Pilihan mode belanja (notulen: di page generate ada pilihan belanja sendiri / di kami). */}
           <div className="bg-surface-container-low rounded-2xl p-5">
             <p className="text-sm font-semibold text-on-surface mb-3">Mau belanja gimana?</p>
@@ -312,12 +330,31 @@ export function GeneratePlan() {
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary text-xl">local_shipping</span>
-                  <span className="font-bold text-on-surface text-sm">Belanja di Kami</span>
+                  <span className="font-bold text-on-surface text-sm">Belanja Paket di Kami</span>
                 </div>
                 <p className="text-xs text-on-surface-variant">Pilih paket menu fiks, bahan kami siapkan & antar.</p>
                 <p className="text-[11px] text-on-surface-variant font-semibold mt-2 flex items-center gap-1 group-hover:text-primary">
                   <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                   Lihat paket
+                </p>
+              </button>
+
+              {/* Coming soon: kami masakkan FoodPrep sesuai hasil generate & antar
+                  ke rumah. Belum siap — klik memunculkan toast "Coming soon". */}
+              <button
+                type="button"
+                onClick={() => setShowFoodPrepSoon(true)}
+                className="relative rounded-xl border border-dashed border-outline-variant bg-surface-container/40 p-4 text-left transition-colors hover:border-primary/50 cursor-pointer sm:col-span-2"
+              >
+                <span className="absolute right-3 top-3 rounded-full bg-secondary-container px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-on-secondary-container">
+                  Coming soon
+                </span>
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="material-symbols-outlined text-on-surface-variant text-xl">shopping_bag</span>
+                  <span className="font-bold text-on-surface text-sm">Belanja di Kami</span>
+                </div>
+                <p className="text-xs text-on-surface-variant">
+                  Pilih Paket FoodPrep yang kami sediakan, kami antar sampai rumah! Kami antar FoodPrep sesuai yang kamu generate.
                 </p>
               </button>
             </div>
@@ -340,19 +377,6 @@ export function GeneratePlan() {
             </p>
           </Field>
 
-          <Field label="Waktu makan per hari">
-            <div className="flex flex-wrap gap-2">
-              {MEAL_OPTIONS.map((opt) => (
-                <Chip key={opt.value} active={meals.includes(opt.value)} onClick={() => toggleMeal(opt.value)}>
-                  {opt.label}
-                </Chip>
-              ))}
-            </div>
-            <p className="text-xs text-on-surface-variant mt-2">
-              Pilih jam makan yang mau direncanakan (mis. cuma makan siang, atau siang + malam). Minimal satu — {mealCount}× makan/hari.
-            </p>
-          </Field>
-
           <Field label="Berapa variasi menu dalam sehari?">
             <Stepper
               value={variasiPerHari}
@@ -369,48 +393,30 @@ export function GeneratePlan() {
             </p>
           </Field>
 
+          <Field label="Waktu makan per hari">
+            <p className="text-xs text-on-surface-variant mb-2.5">
+              Ketuk jam makan yang mau direncanakan. Boleh lebih dari satu.
+            </p>
+            <div className="grid grid-cols-3 gap-2.5">
+              {MEAL_OPTIONS.map((opt) => (
+                <MealBubble
+                  key={opt.value}
+                  option={opt}
+                  selected={meals.includes(opt.value)}
+                  onToggle={() => toggleMeal(opt.value)}
+                />
+              ))}
+            </div>
+            <p className="text-xs text-on-surface-variant mt-2">
+              Terpilih: <strong>{mealCount}× makan/hari</strong>. Minimal satu.
+            </p>
+          </Field>
+
           <div className="flex justify-end pt-2">
             <button onClick={() => setStep(2)} className="px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer">
               Lanjut
             </button>
           </div>
-
-          {/* Riwayat generate — hasil lama tetap bisa dibuka lagi dari sini */}
-          {history.length > 0 && (
-            <div className="pt-4 border-t border-outline-variant/60">
-              <h2 className="text-sm font-semibold text-on-surface mb-3 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[20px] text-primary">history</span>
-                Hasil Generate Sebelumnya
-              </h2>
-              <div className="space-y-2">
-                {history.map((h) => (
-                  <div
-                    key={h.id}
-                    onClick={() => navigate(`/generate/${h.id}`)}
-                    className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-outline-variant bg-white hover:border-primary/50 transition-colors text-left cursor-pointer"
-                  >
-                    <span className="material-symbols-outlined text-primary shrink-0">restaurant_menu</span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-sm font-semibold text-on-surface truncate">
-                        {h.input_json?.periode ? `${h.input_json.periode} hari` : 'Plan'}
-                        {h.input_json?.porsi ? ` × ${h.input_json.porsi} porsi` : ''}
-                      </span>
-                      <span className="block text-xs text-on-surface-variant">
-                        {new Date(h.created_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}
-                      </span>
-                    </span>
-                    <button
-                      onClick={(e) => handleDeleteHistory(h.id, e)}
-                      className="p-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors shrink-0 cursor-pointer"
-                      title="Hapus riwayat"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">delete</span>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -598,6 +604,88 @@ export function GeneratePlan() {
           </div>
         </div>
       </Modal>
+
+      {/* Teaser "Coming soon" — antar FoodPrep ke rumah sesuai hasil generate */}
+      <Modal isOpen={showFoodPrepSoon} onClose={() => setShowFoodPrepSoon(false)}>
+        <div className="w-full max-w-sm overflow-hidden rounded-3xl bg-canvas-white shadow-xl">
+          {/* Banner ilustratif di atas */}
+          <div className="relative bg-primary/10 px-6 pt-8 pb-6 text-center">
+            <span className="inline-flex items-center rounded-full bg-secondary-container px-3 py-1 text-[11px] font-bold uppercase tracking-wide text-on-secondary-container">
+              Coming soon
+            </span>
+            <div className="mt-4 flex justify-center">
+              <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary text-on-primary shadow-md">
+                <span className="material-symbols-outlined text-[34px]">shopping_bag</span>
+              </span>
+            </div>
+          </div>
+          <div className="px-6 pb-6 pt-5 text-center">
+            <h2 className="text-lg font-bold text-on-surface">Belanja di Kami</h2>
+            <p className="mt-2 text-sm text-on-surface-variant">
+              Sebentar lagi! Kamu bisa pilih Paket FoodPrep yang kami sediakan, kami antar FoodPrep sesuai yang kamu generate. 🚚
+            </p>
+            <button
+              onClick={() => setShowFoodPrepSoon(false)}
+              className="mt-6 w-full min-h-11 rounded-full bg-primary text-sm font-semibold text-on-primary hover:opacity-90 active:scale-95 transition cursor-pointer"
+            >
+              Oke, ditunggu!
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Panel riwayat generate — dibuka dari tombol "Riwayat Generate" di atas Step 1.
+          Form generate di belakang tetap utuh saat panel ini ditutup. */}
+      <Modal isOpen={showHistory} onClose={() => setShowHistory(false)}>
+        <div className="w-full max-w-md rounded-3xl bg-canvas-white shadow-xl">
+          <div className="flex items-center justify-between gap-3 border-b border-outline-variant/60 px-5 py-4">
+            <h2 className="flex items-center gap-1.5 text-base font-bold text-on-surface">
+              <span className="material-symbols-outlined text-[20px] text-primary">history</span>
+              Hasil Generate Sebelumnya
+            </h2>
+            <button
+              onClick={() => setShowHistory(false)}
+              aria-label="Tutup"
+              className="p-1.5 rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[22px]">close</span>
+            </button>
+          </div>
+          <div className="max-h-[60vh] overflow-y-auto px-5 py-4">
+            {history.length === 0 ? (
+              <p className="py-8 text-center text-sm text-on-surface-variant">Belum ada riwayat generate.</p>
+            ) : (
+              <div className="space-y-2">
+                {history.map((h) => (
+                  <div
+                    key={h.id}
+                    onClick={() => { setShowHistory(false); navigate(`/generate/${h.id}`); }}
+                    className="w-full flex items-center gap-3 p-3.5 rounded-2xl border border-outline-variant bg-white hover:border-primary/50 transition-colors text-left cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-primary shrink-0">restaurant_menu</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-semibold text-on-surface truncate">
+                        {h.input_json?.periode ? `${h.input_json.periode} hari` : 'Plan'}
+                        {h.input_json?.porsi ? ` × ${h.input_json.porsi} porsi` : ''}
+                      </span>
+                      <span className="block text-xs text-on-surface-variant">
+                        {new Date(h.created_at).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' })}
+                      </span>
+                    </span>
+                    <button
+                      onClick={(e) => handleDeleteHistory(h.id, e)}
+                      className="p-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors shrink-0 cursor-pointer"
+                      title="Hapus riwayat"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">delete</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
@@ -608,6 +696,39 @@ function Field({ label, children }) {
       <p className="text-sm font-semibold text-on-surface mb-2.5">{label}</p>
       {children}
     </div>
+  );
+}
+
+// Kartu pilih waktu makan bergaya "chat bubble": sudut sangat membulat dengan satu
+// sudut bawah dipotong (rounded-bl-md) jadi terasa seperti gelembung chat, bukan
+// kotak. Cara kerja sama seperti kartu sebelumnya — ikon, label, hint, dan ✓ di
+// pojok saat aktif; multi-pilih.
+function MealBubble({ option, selected, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-pressed={selected}
+      className={`relative flex flex-col items-center gap-1 rounded-3xl rounded-bl-md p-4 text-center transition-all cursor-pointer active:scale-95 ${selected
+        ? 'bg-primary/10 ring-2 ring-primary shadow-sm'
+        : 'bg-surface-container hover:bg-surface-container-high'
+        }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`absolute right-2.5 top-2.5 flex h-5 w-5 items-center justify-center rounded-full transition-colors ${selected ? 'bg-primary text-on-primary' : 'bg-white/70 text-transparent'
+          }`}
+      >
+        <span className="material-symbols-outlined text-[14px]">check</span>
+      </span>
+      <span className={`material-symbols-outlined text-[26px] ${selected ? 'text-primary' : 'text-on-surface-variant'}`}>
+        {option.icon}
+      </span>
+      <span className={`text-sm font-semibold ${selected ? 'text-on-surface' : 'text-on-surface-variant'}`}>
+        {option.label}
+      </span>
+      <span className="text-xs text-on-surface-variant">{option.hint}</span>
+    </button>
   );
 }
 
