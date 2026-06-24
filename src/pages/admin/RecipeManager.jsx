@@ -117,6 +117,8 @@ export function RecipeManager() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+  const [status, setStatus] = useState('all'); // all | active | hidden
+  const [sort, setSort] = useState('default'); // default | coverage | name
 
   const [editing, setEditing] = useState(null); // recipe camelCase | null
   const [ingredients, setIngredients] = useState([]);
@@ -211,15 +213,24 @@ export function RecipeManager() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return recipes.filter((r) => {
+    const list = recipes.filter((r) => {
       if (q && !r.title?.toLowerCase().includes(q)) return false;
+      if (status === 'active' && !r.isActive) return false;
+      if (status === 'hidden' && r.isActive) return false;
       if (onlyIncomplete) {
         const { priced, total } = coverageOf(r);
         if (total > 0 && priced >= total) return false; // sudah lengkap → sembunyikan
       }
       return true;
     });
-  }, [recipes, query, onlyIncomplete]);
+    if (sort === 'coverage') {
+      // coverage terendah dulu (yang paling perlu digarap di atas); tanpa bahan = paling atas.
+      const ratio = (r) => { const { priced, total } = coverageOf(r); return total ? priced / total : -1; };
+      return [...list].sort((a, b) => ratio(a) - ratio(b));
+    }
+    if (sort === 'name') return [...list].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+    return list;
+  }, [recipes, query, onlyIncomplete, status, sort]);
   const incompleteCount = useMemo(
     () => recipes.filter((r) => { const { priced, total } = coverageOf(r); return total === 0 || priced < total; }).length,
     [recipes],
@@ -418,13 +429,25 @@ export function RecipeManager() {
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-2">
+      <div className="flex flex-wrap gap-2">
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Cari resep…"
-          className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+          className="flex-1 min-w-[10rem] px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
         />
+        <select value={status} onChange={(e) => setStatus(e.target.value)} title="Filter status"
+          className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
+          <option value="all">Semua status</option>
+          <option value="active">Aktif</option>
+          <option value="hidden">Disembunyikan</option>
+        </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} title="Urutkan"
+          className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
+          <option value="default">Urutan default</option>
+          <option value="coverage">Coverage terendah</option>
+          <option value="name">Nama A–Z</option>
+        </select>
         <button
           onClick={() => setOnlyIncomplete((v) => !v)}
           className={`px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0 border ${onlyIncomplete ? 'bg-primary text-on-primary border-primary' : 'bg-white text-on-surface-variant border-outline-variant'}`}
