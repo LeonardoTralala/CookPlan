@@ -326,13 +326,13 @@ export function GeneratePlan() {
               </div>
               <button
                 onClick={() => isAnonymous ? navigate('/auth') : setConfirmSwitchShop(true)}
-                className="rounded-xl border border-outline-variant hover:border-primary/50 p-4 text-left transition-colors cursor-pointer group"
+                className="rounded-xl border-2 border-outline-variant hover:border-primary/50 p-4 text-left transition-colors cursor-pointer group"
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary text-xl">local_shipping</span>
-                  <span className="font-bold text-on-surface text-sm">Belanja Paket di Kami</span>
+                  <span className="font-bold text-on-surface text-sm">Belanja di Kami (Menu Fix Kami)</span>
                 </div>
-                <p className="text-xs text-on-surface-variant">Pilih paket menu fiks, bahan kami siapkan & antar.</p>
+                <p className="text-xs text-on-surface-variant">Pilih Paket FoodPrep Menu khusus yang Kami sediakan, Kami antar sampai rumah.</p>
                 <p className="text-[11px] text-on-surface-variant font-semibold mt-2 flex items-center gap-1 group-hover:text-primary">
                   <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                   Lihat paket
@@ -344,17 +344,17 @@ export function GeneratePlan() {
               <button
                 type="button"
                 onClick={() => setShowFoodPrepSoon(true)}
-                className="relative rounded-xl border border-dashed border-outline-variant bg-surface-container/40 p-4 text-left transition-colors hover:border-primary/50 cursor-pointer sm:col-span-2"
+                className="relative rounded-xl border-2 border-dashed border-outline-variant bg-surface-container/40 p-4 pb-12 text-left transition-colors hover:border-primary/50 cursor-pointer sm:col-span-2"
               >
-                <span className="absolute right-3 top-3 rounded-full bg-secondary-container px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-on-secondary-container">
+                <span className="absolute right-3 bottom-3 rounded-full bg-secondary-container px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-primary">
                   Coming soon
                 </span>
                 <div className="flex items-center gap-2 mb-1.5">
-                  <span className="material-symbols-outlined text-on-surface-variant text-xl">shopping_bag</span>
-                  <span className="font-bold text-on-surface text-sm">Belanja di Kami</span>
+                  <span className="material-symbols-outlined text-on-surface-variant text-xl">local_shipping</span>
+                  <span className="font-bold text-on-surface text-sm">Belanja di Kami (Menu Pilihan Kamu)</span>
                 </div>
                 <p className="text-xs text-on-surface-variant">
-                  Pilih Paket FoodPrep yang kami sediakan, kami antar sampai rumah! Kami antar FoodPrep sesuai yang kamu generate.
+                  AI susun menu, Kamu pilih daftar belanja, Kami antar sampai rumah!
                 </p>
               </button>
             </div>
