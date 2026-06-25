@@ -69,11 +69,12 @@ export async function getAdminStats() {
       .in("order_status", ["received", "processed", "shipped"]);
     return error ? 0 : count ?? 0;
   };
-  const [recipes, ingredients, packages, ordersActive] = await Promise.all([
+  const [recipes, ingredients, packages, ordersActive, feedback] = await Promise.all([
     tally("recipes"),
     tally("ingredients"),
     tally("packages"),
     tallyActiveOrders(),
+    tally("feedback"),
   ]);
-  return { recipes, ingredients, packages, ordersActive };
+  return { recipes, ingredients, packages, ordersActive, feedback };
 }
