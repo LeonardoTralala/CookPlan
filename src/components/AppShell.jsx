@@ -2,7 +2,6 @@ import { useState, useEffect, Suspense } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Logo } from './Logo.jsx';
 import { Modal } from './Modal.jsx';
-import { FeedbackButton } from './FeedbackButton.jsx';
 import { RouteFallback } from './RouteFallback.jsx';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -185,9 +184,6 @@ export function AppShell({ children }) {
         </div>
       </nav>
       )}
-
-      {/* Tombol masukan mengambang — tersedia di seluruh halaman untuk evaluasi */}
-      <FeedbackButton />
 
       {/* Konfirmasi keluar */}
       <Modal isOpen={confirmOpen} onClose={() => !signingOut && setConfirmOpen(false)}>
