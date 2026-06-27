@@ -9,7 +9,7 @@
 // Bahan pokok dapur (air, garam, dll) dikecualikan otomatis dari daftar belanja
 // — lihat utils/pantryStaples.js.
 
-import { isPantryStaple } from './pantryStaples.js';
+import { isPantryStaple, pantryStapleKey } from './pantryStaples.js';
 
 // Metadata tampilan tiap kategori bahan: label, ikon, toko lokal penyedia.
 // Urutan menentukan urutan section.
@@ -39,9 +39,14 @@ export function formatAmount(amount) {
 
 // Agregasi daftar belanja dari kumpulan slot.
 // slots: [{ recipe, servings }] — recipe shape camelCase (punya ingredients[] & baseServings).
-// Return { sections, totalItems, estimatedCost }.
+// Return { sections, totalItems, estimatedCost, pantryItems }.
+//
+// pantryItems: daftar NAMA bahan pokok dapur (garam, minyak, dll) yang dikecualikan
+// dari belanja & biaya — dikumpulkan terpisah sebagai reminder "cek stok di rumah".
+// Tanpa jumlah/harga (staple = "secukupnya"); dedup lintas resep via pantryStapleKey.
 export function buildShoppingListFromSlots(slots) {
   const itemMap = new Map(); // key: `${name}__${unit}` -> { name, unit, amount, priceIdr, category }
+  const pantryMap = new Map(); // key kanonik -> nama tampil (bentuk asli pertama yang ketemu)
 
   for (const slot of slots ?? []) {
     const recipe = slot?.recipe;
@@ -50,7 +55,12 @@ export function buildShoppingListFromSlots(slots) {
     const factor = (slot.servings || base) / base;
 
     for (const ing of recipe.ingredients ?? []) {
-      if (isPantryStaple(ing.name)) continue; // bahan pokok dapur — tak masuk belanja
+      if (isPantryStaple(ing.name)) {
+        // Bahan pokok dapur — tak masuk belanja/biaya, hanya dikumpulkan jadi reminder.
+        const pk = pantryStapleKey(ing.name);
+        if (!pantryMap.has(pk)) pantryMap.set(pk, String(ing.name ?? '').trim());
+        continue;
+      }
       const key = `${ing.name}__${ing.unit}`;
       const existing = itemMap.get(key);
       if (existing) {
@@ -87,7 +97,9 @@ export function buildShoppingListFromSlots(slots) {
     sections.push({ key: cat, meta: CATEGORY_META[cat] || CATEGORY_FALLBACK, items });
   });
 
-  return { sections, totalItems: itemMap.size, estimatedCost: Math.round(estimatedCost) };
+  const pantryItems = [...pantryMap.values()].sort((a, b) => a.localeCompare(b, 'id'));
+
+  return { sections, totalItems: itemMap.size, estimatedCost: Math.round(estimatedCost), pantryItems };
 }
 
 // Bentuk slot dari weeklyPlan (shape PlanContext: { Senin:{breakfast,lunch,dinner}, ... }).

@@ -48,3 +48,10 @@ export function isPantryStaple(name) {
   const n = normalize(name);
   return n.length > 0 && STAPLE_SET.has(n);
 }
+
+// Kunci kanonik (nama ter-normalisasi) untuk men-dedup staple lintas resep —
+// "Garam", "garam", "Garam (halus)" → "garam". Dipakai saat mengumpulkan daftar
+// "cek stok dapur" agar tiap staple muncul sekali saja.
+export function pantryStapleKey(name) {
+  return normalize(name);
+}
