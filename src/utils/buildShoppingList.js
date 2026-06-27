@@ -5,6 +5,11 @@
 //
 // Resep dipakai dalam bentuk camelCase dari recipeService (ingredients: [{name,
 // amount, unit, category, priceIdr}], baseServings).
+//
+// Bahan pokok dapur (air, garam, dll) dikecualikan otomatis dari daftar belanja
+// — lihat utils/pantryStaples.js.
+
+import { isPantryStaple } from './pantryStaples.js';
 
 // Metadata tampilan tiap kategori bahan: label, ikon, toko lokal penyedia.
 // Urutan menentukan urutan section.
@@ -45,6 +50,7 @@ export function buildShoppingListFromSlots(slots) {
     const factor = (slot.servings || base) / base;
 
     for (const ing of recipe.ingredients ?? []) {
+      if (isPantryStaple(ing.name)) continue; // bahan pokok dapur — tak masuk belanja
       const key = `${ing.name}__${ing.unit}`;
       const existing = itemMap.get(key);
       if (existing) {
@@ -150,13 +156,15 @@ export function buildMenuListFromSlots(slots) {
   for (const { recipe, totalServings, count } of menuMap.values()) {
     const base = recipe.baseServings && recipe.baseServings > 0 ? recipe.baseServings : DEFAULT_BASE_SERVINGS;
     const factor = totalServings / base;
-    const items = (recipe.ingredients ?? []).map((ing) => ({
-      name: ing.name,
-      unit: ing.unit,
-      amount: (Number(ing.amount) || 0) * factor,
-      priceIdr: (Number(ing.priceIdr) || 0) * factor,
-      category: ing.category,
-    }));
+    const items = (recipe.ingredients ?? [])
+      .filter((ing) => !isPantryStaple(ing.name)) // bahan pokok dapur — tak masuk belanja
+      .map((ing) => ({
+        name: ing.name,
+        unit: ing.unit,
+        amount: (Number(ing.amount) || 0) * factor,
+        priceIdr: (Number(ing.priceIdr) || 0) * factor,
+        category: ing.category,
+      }));
     const subtotal = Math.round(items.reduce((s, i) => s + (i.priceIdr || 0), 0));
     menus.push({
       recipeId: recipe.id,
