@@ -363,7 +363,7 @@ function RecipeCatalog({ onAddToPlan }) {
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-primary flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-xl">tune</span>
-                Batasan Memasak & Budget
+                Filter Waktu & Anggaran
               </h4>
               <button
                 onClick={() => setShowAdvancedFilters(false)}
@@ -419,9 +419,9 @@ function RecipeCatalog({ onAddToPlan }) {
                           : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/30'
                       }`}
                     >
-                      {cat === 'Hemat' ? 'Hemat (< Rp 15k)' : 
-                       cat === 'Standar' ? 'Standar (Rp 15k - 30k)' : 
-                       cat === 'Premium' ? 'Premium (> Rp 30k)' : 'Semua'}
+                      {cat === 'Hemat' ? 'Hemat (< Rp 15.000)' : 
+                       cat === 'Standar' ? 'Standar (Rp 15.000 - 30.000)' : 
+                       cat === 'Premium' ? 'Premium (> Rp 30.000)' : 'Semua'}
                     </button>
                   ))}
                 </div>
@@ -448,7 +448,7 @@ function RecipeCatalog({ onAddToPlan }) {
             </span>
             <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Resep Tidak Ditemukan</h3>
             <p className="text-on-surface-variant text-sm max-w-md mx-auto">
-              Maaf, kami tidak dapat menemukan resep yang sesuai dengan kriteria pencarian dan filter Anda. Silakan coba atur ulang filter.
+              Maaf, kami tidak dapat menemukan resep yang sesuai dengan kriteria pencarian dan filtermu. Silakan coba atur ulang filter.
             </p>
             <button
               onClick={handleResetFilters}
@@ -734,7 +734,7 @@ function RecipeCatalog({ onAddToPlan }) {
               {/* Meal Type Selection */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-on-surface uppercase tracking-wider block">
-                  Pilih Jenis Makan
+                  Pilih Waktu Makan
                 </label>
                 <select
                   value={planMeal}
@@ -797,7 +797,7 @@ function RecipeCatalog({ onAddToPlan }) {
               <div className="mt-5 flex items-start gap-2.5 p-3 rounded-2xl bg-warning/10 border border-warning/30">
                 <span className="material-symbols-outlined text-base text-warning shrink-0 mt-0.5" aria-hidden="true">warning</span>
                 <p className="text-xs font-medium text-on-surface-variant leading-snug">
-                  Slot <strong className="text-on-surface">{mealOptions.find((m) => m.value === planMeal)?.label}</strong> hari <strong className="text-on-surface">{planDay}</strong> sudah terisi dengan <strong className="text-on-surface">{existingSlot.title}</strong>. Konfirmasi akan menggantikan resep tersebut.
+                  Slot <strong className="text-on-surface">{mealOptions.find((m) => m.value === planMeal)?.label}</strong> hari <strong className="text-on-surface">{planDay}</strong> sudah terisi dengan <strong className="text-on-surface">{existingSlot.title}</strong>. Konfirmasi untuk mengganti menu tersebut.
                 </p>
               </div>
             )}

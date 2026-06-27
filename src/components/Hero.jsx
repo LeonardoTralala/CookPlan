@@ -56,11 +56,11 @@ export function Hero({ onNavigate }) {
           <span className="inline-block px-4 py-1.5 bg-secondary-container text-on-secondary-container rounded-full font-label-sm text-label-sm uppercase tracking-wider font-semibold">
             Dapur Cerdas Dimulai di Sini
           </span>
-          <h1 className="font-headline-xl text-headline-xl text-primary leading-tight">
+          <h1 className="font-headline-xl text-headline-xl text-primary leading-tight italic">
             Plan It, Cook It, Waste Nothing.
           </h1>
           <p className="font-body-lg text-body-lg text-on-surface-variant max-w-lg">
-            Susun menu mingguanmu, dapatkan daftar belanja otomatis, dan kurangi food waste mulai dari sekarang.
+            Susun menu mingguanmu, dapatkan daftar belanja otomatis, dan kurangi sampah makanan (<i>food waste</i>) mulai dari sekarang.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 pt-4">
             <button

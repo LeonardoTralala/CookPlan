@@ -48,18 +48,18 @@ export function FeedbackButton() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (rating < 1) {
-      showToast('Pilih rating 1–5 bintang dulu ya.', { variant: 'error' });
+      showToast('Pilih rating 1–5 bintang dulu, ya.', { variant: 'error' });
       return;
     }
     if (message.trim() === '') {
-      showToast('Ceritakan sedikit masukanmu ya.', { variant: 'error' });
+      showToast('Ceritakan sedikit masukanmu, ya.', { variant: 'error' });
       return;
     }
     setSubmitting(true);
     try {
       await submitFeedback({ rating, category, message, page: pathname });
       setOpen(false);
-      showToast('Terima kasih! Masukanmu sangat membantu kami. 🙏');
+      showToast('Terima kasih! Masukanmu sangat berharga bagi perkembangan CookPlan. 🙏');
     } catch (err) {
       showToast(err.message || 'Gagal mengirim feedback. Coba lagi.', { variant: 'error' });
     } finally {
@@ -98,7 +98,7 @@ export function FeedbackButton() {
           <div>
             <h3 className="font-headline-md text-headline-md text-primary">Beri Masukan</h3>
             <p className="text-sm text-on-surface-variant mt-1">
-              Pendapatmu membantu kami menyempurnakan CookPlan.
+              Pendapatmu sangat membantu kami dalam menyempurnakan CookPlan.
             </p>
           </div>
 
@@ -142,7 +142,7 @@ export function FeedbackButton() {
 
           {/* Kategori */}
           <div className="space-y-2">
-            <span className="block text-sm font-medium text-on-surface">Jenis masukan</span>
+            <span className="block text-sm font-medium text-on-surface">Jenis Masukan</span>
             <div className="flex flex-wrap gap-2">
               {FEEDBACK_CATEGORIES.map((cat) => {
                 const active = category === cat.value;
@@ -175,7 +175,7 @@ export function FeedbackButton() {
               id="feedback-message"
               value={message}
               onChange={(e) => setMessage(e.target.value.slice(0, MAX_MESSAGE_LEN))}
-              placeholder="Ceritakan apa yang kamu suka atau yang bisa kami perbaiki…"
+              placeholder="Ceritakan apa yang kamu sukai atau hal yang perlu kami tingkatkan..."
               rows={4}
               className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
             />
@@ -198,7 +198,7 @@ export function FeedbackButton() {
               disabled={submitting}
               className="px-6 py-3 bg-primary text-on-primary rounded-full text-sm font-semibold hover:bg-surface-tint transition-colors shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait"
             >
-              {submitting ? 'Mengirim…' : 'Kirim Masukan'}
+              {submitting ? 'Mengirim...' : 'Kirim Masukan'}
             </button>
           </div>
         </form>

@@ -6,19 +6,19 @@ import { Toast } from "../components/Toast.jsx";
 const FAQ_ITEMS = [
   {
     question: "Bagaimana cara merencanakan menu mingguan?",
-    answer: "Setelah mendaftar, Anda bisa masuk ke halaman 'Katalog Resep'. Dapatkan rekomendasi resep yang sesuai dengan preferensi Anda, tentukan porsi dan hari apa Anda ingin memasaknya, lalu klik 'Tambahkan ke Rencana'. Sistem kami akan otomatis mengatur jadwal mingguan Anda."
+    answer: "Setelah mendaftar, kamu bisa masuk ke halaman 'Katalog Resep'. Dapatkan rekomendasi resep yang sesuai dengan preferensimu, tentukan porsi serta hari memasaknya, lalu klik 'Tambahkan ke Rencana'. Sistem kami akan otomatis mengatur jadwal mingguanmu."
   },
   {
     question: "Apakah saya bisa mengubah daftar belanja otomatis?",
-    answer: "Tentu saja! Daftar belanja yang dibuat otomatis dari rencana menu Anda sepenuhnya bisa diedit. Anda bisa menghapus bahan yang sudah ada di kulkas atau menambah item lain sesuai kebutuhan."
+    answer: "Tentu saja! Daftar belanja yang dibuat otomatis dari rencana menumu sepenuhnya bisa kamu edit. Kamu bisa menghapus bahan yang sudah ada di kulkas atau menambah item lain sesuai kebutuhan."
   },
   {
     question: "Bagaimana sistem pengiriman bahan makanan bekerja?",
-    answer: "Setelah Anda memfinalisasi daftar belanja, Anda bisa menekan tombol 'Pesan Bahan'. Pesanan akan diteruskan ke mitra produsen dan distributor lokal kami terdekat, lalu kurir akan mengantarkan bahan tersebut segar ke alamat Anda sesuai slot waktu yang Anda pilih."
+    answer: "Setelah kamu memfinalisasi rencana belanja, kamu bisa menekan tombol 'Pesan Bahan'. Pesanan akan diteruskan ke mitra produsen dan distributor lokal kami terdekat, lalu kurir akan mengantarkan bahan segar tersebut ke alamatmu sesuai slot waktu yang kamu pilih."
   },
   {
     question: "Apakah CookPlan tersedia di kota saya?",
-    answer: "Saat ini untuk fase rilis awal, layanan CookPlan hanya melayani area Malang Kota. Namun, fitur perencanaan menu dan daftar belanja dapat digunakan oleh siapa saja di seluruh Indonesia."
+    answer: "Saat ini untuk fase rilis awal, layanan CookPlan baru mencakup wilayah Kota Malang. Namun, fitur perencanaan menu dan daftar belanja dapat digunakan oleh siapa saja di seluruh Indonesia."
   },
   {
     question: "Apa metode pembayaran yang didukung?",
@@ -56,7 +56,7 @@ export function HelpCenter({ onNavigate }) {
             </span>
             <input
               type="text"
-              placeholder="Cari kendala (misal: 'cara ganti password')..."
+              placeholder="Cari bantuan (misalnya: 'cara ganti kata sandi')..."
               className="w-full pl-12 pr-4 py-4 rounded-full bg-surface-container-lowest border border-outline-variant/30 text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all shadow-sm"
             />
           </div>
@@ -98,14 +98,14 @@ export function HelpCenter({ onNavigate }) {
             </span>
             <h2 className="font-headline-lg text-primary mb-3">Masih Butuh Bantuan?</h2>
             <p className="text-on-surface-variant max-w-lg mx-auto mb-6">
-              Tim support kami selalu siap membantu Anda. Jangan ragu untuk menghubungi kami jika kendala Anda belum terjawab di FAQ.
+              Tim bantuan kami selalu siap membantumu. Jangan ragu untuk menghubungi kami jika pertanyaanmu belum terjawab di FAQ.
             </p>
             <a
               href="mailto:cookplanofficial@gmail.com"
               className="inline-flex py-3 px-8 bg-primary text-on-primary rounded-full font-label-md text-label-md hover:shadow-lg transition-shadow cursor-pointer font-semibold items-center gap-2"
             >
               <span className="material-symbols-outlined text-[18px]">mail</span>
-              Kirim Email ke Support
+              Hubungi Bantuan via Email
             </a>
           </div>
 

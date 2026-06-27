@@ -13,8 +13,8 @@ const benefits = [
   },
   {
     icon: "payments",
-    title: "Harga Terjangkau",
-    desc: "Belanja bahan sesuai dengan budget yang kamu tentukan. Kami menyarankan alternatif bahan yang lebih hemat.",
+    title: "Hemat Anggaran",
+    desc: "Belanja bahan sesuai dengan anggaran yang kamu tentukan. Kami menyarankan alternatif bahan yang lebih hemat.",
   },
 ];
 
@@ -41,7 +41,7 @@ export function WhyCookPlan() {
           </div>
         </div>
         <div className="order-1 md:order-2 space-y-12">
-          <h2 className="font-headline-lg text-headline-lg text-primary">Keunggulan CookPlan?</h2>
+          <h2 className="font-headline-lg text-headline-lg text-primary">Apa Keunggulan CookPlan?</h2>
           <div className="space-y-8">
             {benefits.map((benefit) => (
               <div key={benefit.title} className="flex gap-6">

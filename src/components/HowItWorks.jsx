@@ -2,17 +2,17 @@ const steps = [
   {
     icon: "menu_book",
     title: "Rekomendasi Resep",
-    desc: "Dapatkan rekomendasi berbagai resep yang cocok untuk semua gaya hidup dan kebutuhan Anda.",
+    desc: "Dapatkan rekomendasi berbagai resep yang cocok untuk semua gaya hidup dan kebutuhanmu.",
   },
   {
     icon: "calendar_month",
     title: "Atur Jadwal",
-    desc: "Atur jadwal memasak anda, rencanakan menu sesuai kebutuhan dan nutrisi harian anda.",
+    desc: "Atur jadwal memasakmu, rencanakan menu sesuai kebutuhan dan nutrisi harianmu.",
   },
   {
     icon: "local_mall",
     title: "Belanja Otomatis",
-    desc: "Daftar belanja langsung terkirim ke supplier lokal dan bahan segar sampai di depan pintu.",
+    desc: "Daftar belanja langsung terkirim ke pemasok lokal dan bahan segar sampai di depan pintu.",
   },
 ];
 
@@ -25,7 +25,7 @@ export function HowItWorks() {
       <div className="max-w-container-max mx-auto text-center mb-10 md:mb-16">
         <h2 className="font-headline-lg text-headline-lg text-primary mb-4">Cara Kerja CookPlan</h2>
         <p className="font-body-md text-body-md text-on-surface-variant">
-          Hanya butuh 3 langkah untuk mempermudah hidup Anda.
+          Hanya butuh 3 langkah mudah untuk mempermudah hidupmu.
         </p>
       </div>
       <div className="max-w-container-max mx-auto grid md:grid-cols-3 gap-6 md:gap-8">

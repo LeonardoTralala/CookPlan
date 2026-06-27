@@ -14,7 +14,7 @@ export function TermsOfService({ onNavigate }) {
                 Syarat dan Ketentuan
               </h1>
               <p className="text-on-surface-variant text-sm">
-                Terakhir Diperbarui: 7 Juni 2026
+                Terakhir diperbarui: 7 Juni 2026
               </p>
             </div>
 

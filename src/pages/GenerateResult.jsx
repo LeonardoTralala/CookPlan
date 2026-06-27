@@ -195,7 +195,7 @@ export function GenerateResult() {
         <h1 className="font-headline-md text-headline-md text-on-surface mb-2">Gagal Memuat Hasil</h1>
         <p className="text-on-surface-variant text-sm mb-6">{error || 'Data tidak ditemukan.'}</p>
         <button onClick={() => navigate('/generate')} className="px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer">
-          Generate Ulang
+          Buat Ulang Rencana
         </button>
       </div>
     );
@@ -207,7 +207,7 @@ export function GenerateResult() {
       <div>
         <div className="flex items-center gap-2 mb-2">
           <span className="material-symbols-outlined text-primary text-3xl">restaurant_menu</span>
-          <h1 className="font-headline-lg text-headline-lg text-primary">Foodplan Kamu</h1>
+          <h1 className="font-headline-lg text-headline-lg text-primary">Rencana Makanmu</h1>
         </div>
         {plan.plan_summary && <p className="text-on-surface-variant text-body-md">{plan.plan_summary}</p>}
         {result.meta?.model && (
@@ -224,7 +224,7 @@ export function GenerateResult() {
         <div className="flex items-center justify-between gap-3 rounded-2xl bg-success-green/10 border border-success-green/30 px-4 py-3">
           <p className="text-sm text-on-surface flex items-center gap-2">
             <span className="material-symbols-outlined text-success-green text-[20px]">check_circle</span>
-            Menu sudah masuk ke Rencana Masak Mingguan.
+            Menu telah berhasil dimasukkan ke Rencana Masak Mingguan.
           </p>
           <button
             onClick={() => navigate('/planner')}
@@ -256,7 +256,7 @@ export function GenerateResult() {
           >
             <span className="text-sm font-semibold text-on-surface flex items-center gap-2">
               <span className="material-symbols-outlined text-[20px] text-primary">psychology</span>
-              Cara AI Berpikir
+              Analisis AI CookPlan
             </span>
             <span className={`material-symbols-outlined transition-transform ${showReasoning ? 'rotate-180' : ''}`}>expand_more</span>
           </button>
@@ -302,14 +302,14 @@ export function GenerateResult() {
             {isNoteOpen && (
               <div className="mb-3 rounded-xl border border-outline-variant bg-white p-3 animate-fade-in">
                 <label htmlFor={`note-${di}`} className="block text-xs font-semibold text-on-surface mb-1.5">
-                  Catatan buat AI (opsional)
+                  Catatan untuk AI (opsional)
                 </label>
                 <textarea
                   id={`note-${di}`}
                   value={noteDraft}
                   onChange={(e) => setNoteDraft(e.target.value.slice(0, 200))}
                   rows={2}
-                  placeholder="mis. pengen yang ada ayamnya, atau kosongkan aja kalau cuma pengen menu lain"
+                  placeholder="Contoh: Ingin menu olahan ayam, atau kosongkan saja jika hanya ingin mencari alternatif menu lain."
                   className="w-full px-3 py-2 rounded-lg bg-surface-container-low border border-outline-variant text-base md:text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
                 />
                 <div className="flex items-center justify-between mt-1.5">
@@ -330,7 +330,7 @@ export function GenerateResult() {
                       <span className={`material-symbols-outlined text-[16px] ${isRegenerating ? 'animate-spin' : ''}`}>
                         {isRegenerating ? 'progress_activity' : 'auto_awesome'}
                       </span>
-                      Generate Ulang
+                      Buat Ulang Rencana
                     </button>
                   </div>
                 </div>
@@ -390,7 +390,7 @@ export function GenerateResult() {
           </div>
           <p className="flex items-start gap-1.5 px-1 text-xs text-on-surface-variant/80">
             <span className="material-symbols-outlined text-[16px] shrink-0">info</span>
-            <span>Harga yang tertera adalah harga estimasi, bisa berbeda dari harga sebenarnya di pasar/toko tergantung lokasi, musim, dan ketersediaan bahan.</span>
+            <span>Harga yang tertera merupakan estimasi rata-rata dan dapat bervariasi tergantung pada lokasi pembelian, musim, serta ketersediaan bahan di pasar atau toko setempat.</span>
           </p>
         </section>
       )}
@@ -398,7 +398,7 @@ export function GenerateResult() {
       {/* Prep instructions (foodprep & full) */}
       {(plan.prep_instructions?.length ?? 0) > 0 && (
         <section className="space-y-3">
-          <h2 className="font-headline-md text-headline-md text-on-surface">Tips Foodprep</h2>
+          <h2 className="font-headline-md text-headline-md text-on-surface">Panduan Food Prep</h2>
           <ol className="space-y-2">
             {plan.prep_instructions.map((step, i) => (
               <li key={i} className="flex gap-3 text-sm">
@@ -414,14 +414,14 @@ export function GenerateResult() {
       {isAnonymous && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 px-4 py-4 text-center space-y-3">
           <p className="text-sm text-on-surface">
-            Suka hasilnya? Daftar gratis untuk menyimpan & menerapkan menu ini ke Rencana Masak Mingguan.
+            Suka dengan hasilnya? Daftar akun sekarang untuk menyimpan dan menerapkan menu ini ke Rencana Masak Mingguan.
           </p>
           <Link
             to="/auth"
             className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer"
           >
             <span className="material-symbols-outlined text-[20px]">person_add</span>
-            Daftar untuk simpan & terapkan
+            Daftar untuk menyimpan dan menerapkan
           </Link>
         </div>
       )}
@@ -433,7 +433,7 @@ export function GenerateResult() {
           className="flex-1 px-6 py-3 border border-primary text-on-surface-variant rounded-full font-semibold text-sm hover:bg-surface-container-low active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
         >
           <span className="material-symbols-outlined text-[20px]">refresh</span>
-          Generate Lagi
+          Buat Ulang Rencana
         </button>
         {!isAnonymous && (
           <button
@@ -458,7 +458,7 @@ export function GenerateResult() {
                 Masuk ke Planner?
               </h3>
               <p className="text-sm text-on-surface-variant">
-                Menu ini akan diterapkan ke Rencana Masak Mingguan kamu. Slot yang sudah terisi akan ditimpa.
+                Menu ini akan diterapkan ke Rencana Masak Mingguanmu. Jadwal makan yang sudah terisi akan digantikan.
               </p>
             </div>
             <div className="flex gap-3">

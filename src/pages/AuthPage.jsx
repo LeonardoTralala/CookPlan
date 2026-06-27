@@ -12,10 +12,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function friendlyError(error) {
   const msg = (error?.message || "").toLowerCase();
   if (msg.includes("invalid login credentials")) return "Email atau kata sandi salah.";
-  if (msg.includes("email not confirmed")) return "Email belum dikonfirmasi. Cek kotak masuk kamu dulu.";
+  if (msg.includes("email not confirmed")) return "Email belum dikonfirmasi. Silakan periksa kotak masuk email kamu.";
   if (msg.includes("already registered") || msg.includes("already been registered")) return "Email sudah terdaftar. Silakan masuk.";
   if (msg.includes("password should be at least")) return "Kata sandi minimal 6 karakter.";
-  if (msg.includes("rate limit") || msg.includes("too many")) return "Terlalu banyak percobaan. Coba lagi sebentar lagi.";
+  if (msg.includes("rate limit") || msg.includes("too many")) return "Terlalu banyak percobaan. Silakan coba lagi beberapa saat lagi.";
   if (msg.includes("provider is not enabled")) return "Login Google belum diaktifkan di server. Hubungi admin.";
   return error?.message || "Terjadi kesalahan. Coba lagi.";
 }
@@ -53,7 +53,7 @@ export default function AuthPage() {
   const [notice, setNotice] = useState(() => {
     try {
       return sessionStorage.getItem(SESSION_EXPIRED_FLAG)
-        ? "Sesi kamu sudah berakhir. Silakan masuk lagi untuk melanjutkan."
+        ? "Sesi kamu telah berakhir. Silakan masuk kembali untuk melanjutkan."
         : "";
     } catch {
       return "";
@@ -124,7 +124,7 @@ export default function AuthPage() {
       const { error: err } = await resetPassword(email);
       setLoading(false);
       if (err) return setError(friendlyError(err));
-      setNotice("Tautan reset kata sandi sudah dikirim. Cek email kamu.");
+      setNotice("Tautan atur ulang kata sandi telah dikirim. Silakan periksa email kamu.");
       return;
     }
 
@@ -144,7 +144,7 @@ export default function AuthPage() {
 
       // Bila konfirmasi email diaktifkan, belum ada sesi → minta cek email.
       if (!data.session) {
-        setNotice("Akun dibuat! Cek email kamu untuk konfirmasi sebelum masuk.");
+        setNotice("Akun berhasil dibuat! Silakan periksa email kamu untuk melakukan konfirmasi sebelum masuk.");
         switchMode("login");
         return;
       }
@@ -183,10 +183,10 @@ export default function AuthPage() {
   const subheading = isUpdate
     ? "Masukkan kata sandi baru untuk akunmu."
     : isForgot
-      ? "Masukkan email akunmu, kami kirimkan tautan untuk mengatur ulang kata sandi."
+      ? "Masukkan email akunmu untuk menerima tautan atur ulang kata sandi."
       : isRegister
         ? "Gratis dan hanya butuh satu menit."
-        : "Masuk untuk lanjut merencanakan masakanmu.";
+        : "Masuk untuk melanjutkan rencana memasakmu.";
 
   const inputWrap = "relative";
   const iconClass = "material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px] pointer-events-none";
@@ -208,7 +208,7 @@ export default function AuthPage() {
 
         <div className="relative">
           <h2 className="font-headline-lg text-headline-lg leading-tight">
-            Rencanakan masakan,<br />hemat budget.
+            Rencanakan masakan,<br />hemat anggaran.
           </h2>
           <p className="mt-4 max-w-sm text-body-md text-on-primary-container/90">
             Susun menu mingguan, buat daftar belanja otomatis, dan masak makanan sehat dengan bahan lokal.
@@ -395,7 +395,7 @@ export default function AuthPage() {
               {loading && (
                 <span className="material-symbols-outlined animate-spin text-[20px]" aria-hidden="true">progress_activity</span>
               )}
-              {isUpdate ? "Simpan kata sandi" : isForgot ? "Kirim tautan reset" : isRegister ? "Daftar" : "Masuk"}
+              {isUpdate ? "Simpan kata sandi" : isForgot ? "Kirim tautan atur ulang" : isRegister ? "Daftar" : "Masuk"}
             </button>
           </form>
 

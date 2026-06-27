@@ -9,7 +9,7 @@ const TEAM_MEMBERS = [
     name: 'Zilfi Alvin Mubarok',
     role: 'Direktur Utama',
     desc: 'Mengatur visi proyek dan memastikan seluruh elemen tim selaras dengan misi CookPlan.',
-    image: '/foto/al .jpeg'
+    image: '/foto/al.jpeg'
   },
   {
     name: 'Tiara Eka Wahyuningayu Vasha',
@@ -53,10 +53,10 @@ export function TeamProfile({ onNavigate }) {
         {/* ---------------- Hero ---------------- */}
       <section className="w-full max-w-container-max mx-auto px-5 md:px-10 section-padding text-center flex flex-col items-center">
         <h1 className="font-headline-xl text-headline-lg md:text-headline-xl tracking-tight text-primary max-w-3xl mb-6 leading-tight">
-          Menyederhanakan Perencanaan Makan untuk Pikiran yang Sibuk
+          Perencanaan Masak Praktis untuk Kamu yang Super Sibuk
         </h1>
         <p className="text-lg text-on-surface-variant max-w-2xl mb-12 leading-relaxed">
-          Berawal dari pergumulan sehari-hari mahasiswa dan pekerja kantoran, CookPlan hadir untuk
+          Terinspirasi dari tantangan sehari-hari mahasiswa dan pekerja kantoran, CookPlan hadir untuk
           membawa kembali keteraturan, kesehatan, dan kesederhanaan ke dapur. Kami percaya makanan
           yang baik tidak seharusnya menjadi sumber stres.
         </p>
@@ -72,7 +72,7 @@ export function TeamProfile({ onNavigate }) {
           <div className="mb-12 text-center md:text-left">
             <h2 className="font-headline-lg text-headline-md md:text-headline-lg text-on-surface mb-4">Kenali Tim Kami</h2>
             <p className="text-base text-on-surface-variant">
-              Para individu penuh semangat yang membangun asisten dapur favorit Anda berikutnya.
+              Tim penuh semangat yang siap membangun asisten dapur andalanmu berikutnya!
             </p>
           </div>
 

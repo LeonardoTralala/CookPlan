@@ -31,7 +31,7 @@ export function Footer() {
           })}
         </div>
         <p className="font-label-sm text-label-sm text-on-surface-variant/60">
-          ©2026 CookPlan Hak Cipta Dilindungi.
+          © 2026 CookPlan. Hak Cipta Dilindungi.
         </p>
       </div>
     </footer>

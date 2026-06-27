@@ -134,7 +134,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
         </div>
         <h2 className="font-headline-md text-headline-md text-primary mb-2">Belum Ada Menu di Rencana</h2>
         <p className="text-on-surface-variant text-sm max-w-md mb-6">
-          Susun menu di Rencana Mingguan, bahan-bahannya otomatis terkumpul di sini.
+          Yuk, susun menu masakanmu di Rencana Mingguan! Bahan belanjaanmu akan otomatis terkumpul dengan rapi di sini.
         </p>
         <button onClick={onGoToPlanner}
           className="bg-primary text-white px-7 py-3.5 rounded-full shadow-lg shadow-primary/30 flex items-center gap-2 active:scale-95 cursor-pointer font-bold">
@@ -169,7 +169,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
         {view === 'bahan' && (
           <div className="flex items-start gap-2.5 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-sm text-on-surface-variant">
             <span className="material-symbols-outlined text-primary text-[20px] shrink-0">info</span>
-            <p>Centang bahan yang <span className="font-semibold text-on-surface">sudah kamu ambil/beli</span> saat belanja. Bahan yang tidak diperlukan bisa <span className="font-semibold text-on-surface">dihapus</span> lewat ikon tempat sampah.</p>
+            <p>Centang bahan yang sudah kamu ambil saat berbelanja. Jika ada bahan yang tidak kamu perlukan, silakan hapus dengan menekan ikon tempat sampah.</p>
           </div>
         )}
 
@@ -265,7 +265,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
         {/* Disclaimer harga: estimasi, bukan harga final di pasar/toko. */}
         <p className="flex items-start gap-2 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-xs text-on-surface-variant">
           <span className="material-symbols-outlined text-[18px] shrink-0">info</span>
-          <span>Harga yang tertera adalah harga estimasi, bisa berbeda dari harga sebenarnya di pasar/toko tergantung lokasi, musim, dan ketersediaan bahan.</span>
+          <span>Harga yang tertera merupakan estimasi rata-rata dan dapat bervariasi tergantung pada lokasi pembelian, musim, serta ketersediaan bahan di pasar atau toko setempat.</span>
         </p>
       </div>
 
@@ -297,7 +297,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
               Simpan Daftar Belanja
             </button>
             <p className="text-xs text-on-surface-variant text-center mt-3">
-              Bahan menu ini kamu belanja sendiri. Mau dibelanjakan kami? Cek tab <span className="font-semibold text-primary">Belanja di Kami</span>.
+              Bahan masakan untuk menu ini perlu kamu beli sendiri. Ingin CookPlan yang menyiapkannya? Cek tab <span className="font-semibold text-primary">Belanja Lewat CookPlan</span>.
             </p>
           </div>
         </div>

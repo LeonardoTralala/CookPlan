@@ -16,7 +16,7 @@ export function FinalCTA({ onNavigate }) {
           Siap Ubah Gaya Masakmu?
         </h2>
         <p className="font-body-lg text-body-lg mb-10 text-on-primary-container/80 relative z-10">
-          Kamu yang tentukan menunya, kami yang bantu menyusunnya. Plan it, Cook It, Waste Nothing!
+          Kamu yang tentukan menunya, kami yang bantu menyusunnya. <i>Plan It, Cook It, Waste Nothing!</i>
         </p>
         <div className="flex flex-col sm:flex-row justify-center gap-4 relative z-10">
           <button
