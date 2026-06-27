@@ -2,10 +2,12 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPackages } from '../services/packageService.js';
 import { createOrder } from '../services/orderService.js';
+import { getPantryAddons } from '../services/ingredientService.js';
 import {
   buildShoppingListFromSlots, slotsFromPackageMeals, flattenSections,
   formatRupiah, formatAmount,
 } from '../utils/buildShoppingList.js';
+import { pantryStapleKey } from '../utils/pantryStaples.js';
 import { usePlan } from '../hooks/usePlan.js';
 
 const DELIVERY_FEE = 15000;
@@ -20,6 +22,10 @@ export function ShopWithUsTab({ onSave }) {
   const [selectedId, setSelectedId] = useState(null);
   const [servings, setServings] = useState(2);
   const [ordering, setOrdering] = useState(false);
+  // Katalog bumbu dapur add-on (garam, minyak, dll) + pilihan user. Default KOSONG
+  // (opt-in): yang sudah punya di rumah biarkan, yang butuh tinggal centang.
+  const [addonCatalog, setAddonCatalog] = useState([]);
+  const [selectedAddons, setSelectedAddons] = useState(() => new Set());
 
   useEffect(() => {
     let active = true;
@@ -33,6 +39,22 @@ export function ShopWithUsTab({ onSave }) {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [showToast]);
+
+  // Katalog add-on bersifat global (tak tergantung paket) → muat sekali.
+  // Gagal muat tidak fatal: section add-on cuma tak muncul.
+  useEffect(() => {
+    let active = true;
+    getPantryAddons()
+      .then((data) => { if (active) setAddonCatalog(data); })
+      .catch(() => { /* add-on opsional — abaikan kalau gagal */ });
+    return () => { active = false; };
+  }, []);
+
+  // Ganti paket → reset pilihan add-on (staple yang relevan bisa berbeda).
+  const selectPackage = (id) => {
+    setSelectedId(id);
+    setSelectedAddons(new Set());
+  };
 
   const selected = useMemo(
     () => packages.find((p) => p.id === selectedId) ?? null,
@@ -52,27 +74,74 @@ export function ShopWithUsTab({ onSave }) {
   }, [selected]);
 
   // Agregasi daftar belanja paket terpilih, skala sesuai porsi yang diminta.
-  const { sections, totalItems, estimatedCost } = useMemo(() => {
-    if (!selected) return { sections: [], totalItems: 0, estimatedCost: 0 };
+  const { sections, totalItems, estimatedCost, pantryItems } = useMemo(() => {
+    if (!selected) return { sections: [], totalItems: 0, estimatedCost: 0, pantryItems: [] };
     const slots = slotsFromPackageMeals(selected.meals, servings);
     return buildShoppingListFromSlots(slots);
   }, [selected, servings]);
 
-  const total = estimatedCost + (totalItems > 0 ? DELIVERY_FEE : 0);
+  // Add-on yang relevan utk paket ini: staple yang dipakai resep (pantryItems) DAN
+  // tersedia di katalog (punya harga kemasan). Dicocokkan via kunci ter-normalisasi.
+  const applicableAddons = useMemo(() => {
+    if (pantryItems.length === 0 || addonCatalog.length === 0) return [];
+    const usedKeys = new Set(pantryItems.map(pantryStapleKey));
+    return addonCatalog.filter((a) => usedKeys.has(pantryStapleKey(a.name)));
+  }, [pantryItems, addonCatalog]);
+
+  // Item add-on terpilih → baris pesanan (1 kemasan @ harga retail).
+  const addonItems = useMemo(
+    () => applicableAddons
+      .filter((a) => selectedAddons.has(a.id))
+      .map((a) => ({
+        name: a.name,
+        amount: 1,
+        unit: a.packLabel || 'pcs',
+        category: a.category || 'spices',
+        priceIdr: a.packPriceIdr,
+      })),
+    [applicableAddons, selectedAddons]
+  );
+
+  const addonsTotal = useMemo(
+    () => addonItems.reduce((s, it) => s + (it.priceIdr || 0), 0),
+    [addonItems]
+  );
+
+  // Staple yang dipakai tapi tak ada di katalog add-on (mis. penyedap belum
+  // berharga) → tetap diberitahukan "siapkan sendiri".
+  const selfPrepItems = useMemo(() => {
+    const covered = new Set(applicableAddons.map((a) => pantryStapleKey(a.name)));
+    return pantryItems.filter((n) => !covered.has(pantryStapleKey(n)));
+  }, [pantryItems, applicableAddons]);
+
+  const toggleAddon = (id) => {
+    setSelectedAddons((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const total = estimatedCost + addonsTotal + (totalItems > 0 ? DELIVERY_FEE : 0);
 
   const handleOrder = async () => {
     if (ordering || !selected || totalItems === 0) return;
     setOrdering(true);
     try {
-      const items = flattenSections(sections).map((it) => ({
-        name: it.name, amount: it.amount, unit: it.unit,
-        category: it.category, priceIdr: it.priceIdr,
-      }));
+      // Bahan paket + bumbu dapur add-on yang dicentang (harga server di-derive
+      // dari SUM order_items, jadi total ikut bertambah otomatis).
+      const items = [
+        ...flattenSections(sections).map((it) => ({
+          name: it.name, amount: it.amount, unit: it.unit,
+          category: it.category, priceIdr: it.priceIdr,
+        })),
+        ...addonItems,
+      ];
       const order = await createOrder({
         planId: null,
         outputType: 'package',
         items,
-        totalPrice: estimatedCost,
+        totalPrice: estimatedCost + addonsTotal,
         deliveryFee: DELIVERY_FEE,
         notes: `Paket: ${selected.name} (${servings} porsi/menu, ${selected.periodeDays} hari)`,
       });
@@ -92,8 +161,8 @@ export function ShopWithUsTab({ onSave }) {
       title: `${selected.name} — ${servings} porsi`,
       sourceType: 'package',
       sourceRef: String(selected.id),
-      items: flattenSections(sections),
-      totalIdr: estimatedCost,
+      items: [...flattenSections(sections), ...addonItems],
+      totalIdr: estimatedCost + addonsTotal,
     });
   };
 
@@ -123,7 +192,7 @@ export function ShopWithUsTab({ onSave }) {
         {packages.map((p) => (
           <button
             key={p.id}
-            onClick={() => setSelectedId(p.id)}
+            onClick={() => selectPackage(p.id)}
             className={`shrink-0 text-left rounded-2xl border p-4 w-56 transition-all cursor-pointer ${
               p.id === selectedId
                 ? 'border-primary bg-primary/5 ring-1 ring-primary'
@@ -229,12 +298,68 @@ export function ShopWithUsTab({ onSave }) {
             </section>
           ))}
 
+          {/* Bumbu dapur: bahan pokok TIDAK termasuk harga paket (biasanya sudah ada
+              di rumah). Ditawarkan sbg ADD-ON OPSIONAL — default mati. User yang dapurnya
+              kosong tinggal centang utk dibelikan sekalian di satuan jual terkecil.
+              Harga add-on di-derive dari master (pack_size × price_per_base). */}
+          {pantryItems.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="material-symbols-outlined text-primary text-2xl">kitchen</span>
+                <h3 className="font-headline-md text-headline-md text-on-surface">Bumbu Dapur</h3>
+                <span className="ml-auto text-sm text-outline">opsional</span>
+              </div>
+              <p className="text-sm text-on-surface-variant mb-3">
+                Bahan pokok ini <span className="font-semibold">tidak termasuk paket</span> karena biasanya sudah ada di dapur.
+                {applicableAddons.length > 0 && ' Centang yang mau kami belikan sekalian.'}
+              </p>
+
+              {applicableAddons.length > 0 && (
+                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant divide-y divide-outline-variant/40 overflow-hidden">
+                  {applicableAddons.map((a) => {
+                    const checked = selectedAddons.has(a.id);
+                    return (
+                      <button key={a.id} onClick={() => toggleAddon(a.id)} aria-pressed={checked}
+                        className="w-full text-left flex items-center gap-3 p-4 hover:bg-surface-container-low transition-colors group cursor-pointer">
+                        <div className={`w-6 h-6 shrink-0 rounded-md border-2 flex items-center justify-center transition-colors ${
+                          checked ? 'bg-primary border-primary' : 'border-outline-variant group-hover:border-primary'}`}>
+                          <span className={`material-symbols-outlined text-sm text-white transition-opacity ${checked ? 'opacity-100' : 'opacity-0'}`}>check</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold text-on-surface">{a.name}</span>
+                          <span className="block text-xs text-on-surface-variant">1 {a.packLabel}</span>
+                        </div>
+                        <span className="text-sm font-bold text-primary whitespace-nowrap">+{formatRupiah(a.packPriceIdr)}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {selfPrepItems.length > 0 && (
+                <p className="flex items-start gap-2 text-xs text-on-surface-variant mt-2.5 px-1">
+                  <span className="material-symbols-outlined text-[16px] shrink-0">info</span>
+                  <span>
+                    {applicableAddons.length > 0 ? 'Sisanya disiapkan sendiri ya: ' : 'Disiapkan sendiri ya: '}
+                    <span className="text-on-surface">{selfPrepItems.join(', ')}</span>.
+                  </span>
+                </p>
+              )}
+            </section>
+          )}
+
           {/* Ringkasan + aksi - disembunyikan di mobile (lihat sticky bar di bawah) */}
           <div className="hidden sm:block bg-surface-cream rounded-2xl p-5 space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-on-surface-variant">Total Bahan ({totalItems} item)</span>
               <span className="font-semibold text-on-surface">{formatRupiah(estimatedCost)}</span>
             </div>
+            {addonsTotal > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-on-surface-variant">Bumbu dapur ({addonItems.length} item)</span>
+                <span className="font-semibold text-on-surface">{formatRupiah(addonsTotal)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-sm">
               <span className="text-on-surface-variant">Biaya Pengantaran</span>
               <span className="font-semibold text-on-surface">{formatRupiah(DELIVERY_FEE)}</span>

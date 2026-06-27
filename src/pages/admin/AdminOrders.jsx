@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { checkIsAdmin } from '../../services/adminService.js';
 import { listOrders, updateOrder, waLink } from '../../services/adminOrderService.js';
+import { downloadReceiptImage, orderJenisLabel } from '../../services/orderService.js';
 import {
   ORDER_STATUSES, PAYMENT_STATUSES, STATUS_TONE_CLS as TONE_CLS, orderMeta, payMeta,
 } from '../../utils/orderStatus.js';
@@ -27,6 +28,7 @@ export function AdminOrders() {
   const [filter, setFilter] = useState('all'); // 'all' | order_status
   const [expanded, setExpanded] = useState(null);
   const [busyId, setBusyId] = useState(null);
+  const [strukId, setStrukId] = useState(null); // order sedang dibuatkan struk PNG
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -78,6 +80,19 @@ export function AdminOrders() {
       showToast(e.message, { variant: 'error' });
     } finally {
       setBusyId(null);
+    }
+  };
+
+  // Buat & unduh struk PNG untuk dikirim admin ke pembeli via WhatsApp.
+  const handleDownloadStruk = async (o) => {
+    setStrukId(o.id);
+    try {
+      await downloadReceiptImage(o, o.items ?? []);
+      showToast('Struk diunduh. Lampirkan ke chat WhatsApp pembeli ya.');
+    } catch (e) {
+      showToast(e.message || 'Gagal membuat struk.', { variant: 'error' });
+    } finally {
+      setStrukId(null);
     }
   };
 
@@ -177,7 +192,7 @@ export function AdminOrders() {
                       <Info label="Pelanggan" value={o.customer_name || '—'} />
                       <Info label="Telepon" value={o.customer_phone || '—'} />
                       <Info label="Pembayaran" value={o.payment_method || '—'} />
-                      <Info label="Jenis" value={o.output_type || '—'} />
+                      <Info label="Jenis" value={orderJenisLabel(o)} />
                       {o.delivery_address && <div className="sm:col-span-2"><Info label="Alamat" value={o.delivery_address} /></div>}
                       {o.notes && <div className="sm:col-span-2"><Info label="Catatan" value={o.notes} /></div>}
                     </div>
@@ -230,17 +245,29 @@ export function AdminOrders() {
                       </label>
                     </div>
 
-                    {waLink(o.customer_phone) && (
-                      <a
-                        href={waLink(o.customer_phone)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-md active:scale-95 transition cursor-pointer"
+                    <div className="flex flex-col sm:flex-row gap-3">
+                      <button
+                        onClick={() => handleDownloadStruk(o)}
+                        disabled={strukId === o.id}
+                        className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm hover:bg-surface-container-low active:scale-95 transition cursor-pointer disabled:opacity-60"
                       >
-                        <span className="material-symbols-outlined text-[20px]">chat</span>
-                        Hubungi via WhatsApp
-                      </a>
-                    )}
+                        <span className={`material-symbols-outlined text-[20px] ${strukId === o.id ? 'animate-spin' : ''}`}>
+                          {strukId === o.id ? 'progress_activity' : 'download'}
+                        </span>
+                        {strukId === o.id ? 'Membuat struk…' : 'Download Struk'}
+                      </button>
+                      {waLink(o.customer_phone) && (
+                        <a
+                          href={waLink(o.customer_phone)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-md active:scale-95 transition cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[20px]">chat</span>
+                          Hubungi via WhatsApp
+                        </a>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

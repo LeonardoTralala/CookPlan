@@ -25,6 +25,25 @@ function toRow(patch) {
   return row;
 }
 
+// --- Katalog bumbu dapur (add-on "Belanja di Kami") --------------------------
+
+// Bahan pokok yang ditawarkan sbg add-on opsional: hanya yang punya ukuran kemasan
+// jual + harga terhitung (pack_price_idr). Read publik via RLS — dipakai pembeli
+// di tab "Belanja di Kami", bukan hanya admin, jadi tanpa requireUser (seperti
+// getRecipes). pack_price_idr = pack_size × price_per_base (sumber tunggal harga).
+const ADDON_SELECT =
+  "id, name, category, baseUnit:base_unit, packSize:pack_size, packLabel:pack_label, packPriceIdr:pack_price_idr";
+
+export async function getPantryAddons() {
+  const { data, error } = await supabase
+    .from("ingredients")
+    .select(ADDON_SELECT)
+    .not("pack_price_idr", "is", null)
+    .order("name");
+  if (error) throw error;
+  return data ?? [];
+}
+
 // --- Master bahan ------------------------------------------------------------
 
 // Semua bahan (opsi { unpriced } untuk hanya yang belum berharga), urut nama.
