@@ -331,7 +331,7 @@ export function GeneratePlan() {
                   <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary text-xl">local_shipping</span>
                   <span className="font-bold text-on-surface text-sm">Belanja di Kami (Menu Fix Kami)</span>
                 </div>
-                <p className="text-xs text-on-surface-variant">Pilih Paket FoodPrep Menu khusus yang Kami sediakan, Kami antar sampai rumah.</p>
+                <p className="text-xs text-on-surface-variant">Pilih Paket FoodPrep Menu khusus yang Kami sediakan, Kami antar sampai rumah!</p>
                 <p className="text-[11px] text-on-surface-variant font-semibold mt-2 flex items-center gap-1 group-hover:text-primary">
                   <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                   Lihat paket
