@@ -11,9 +11,11 @@ export const RECIPE_SELECT = `
   priceIdr:price_idr,
   readyInMinutes:ready_in_minutes,
   baseServings:base_servings,
+  isVerified:is_verified,
   ingredientsText:ingredients_text,
   ingredients:recipe_ingredients (
-    name, amount, unit, category, priceIdr:price_idr
+    name, amount, unit, category, priceIdr:price_idr,
+    master:ingredients ( isStaple:is_staple )
   )
 `;
 

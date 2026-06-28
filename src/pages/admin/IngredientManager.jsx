@@ -30,12 +30,15 @@ export function IngredientManager() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [onlyUnpriced, setOnlyUnpriced] = useState(false);
+  const [onlyStaple, setOnlyStaple] = useState(false);
   const [category, setCategory] = useState(''); // '' = semua, '__none' = tanpa kategori
 
   const [editing, setEditing] = useState(null); // ingredient camelCase | null
   const [overrides, setOverrides] = useState([]);
   const [aliasRows, setAliasRows] = useState([]); // { alias, _new }
   const [saving, setSaving] = useState(false);
+  const [merging, setMerging] = useState(false); // panel "Gabung ke bahan lain"
+  const [mergeQuery, setMergeQuery] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -62,10 +65,11 @@ export function IngredientManager() {
     const q = query.trim().toLowerCase();
     return items.filter((i) =>
       (!onlyUnpriced || i.pricePerBase == null) &&
+      (!onlyStaple || i.isStaple) &&
       (category === '' || (category === '__none' ? i.category == null : i.category === category)) &&
       (!q || i.name.toLowerCase().includes(q))
     );
-  }, [items, query, onlyUnpriced, category]);
+  }, [items, query, onlyUnpriced, onlyStaple, category]);
 
   const pricedCount = useMemo(() => items.filter((i) => i.pricePerBase != null).length, [items]);
 
@@ -84,8 +88,35 @@ export function IngredientManager() {
       showToast(e.message, { variant: 'error' });
     }
   };
-  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '' }); setOverrides([]); setAliasRows([]); };
-  const close = () => { setEditing(null); setOverrides([]); setAliasRows([]); };
+  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '', isStaple: false, packSize: '', packLabel: '' }); setOverrides([]); setAliasRows([]); };
+  const close = () => { setEditing(null); setOverrides([]); setAliasRows([]); setMerging(false); setMergeQuery(''); };
+
+  // Kandidat target gabung: semua bahan lain (kecuali diri sendiri), terfilter cari.
+  const mergeCandidates = useMemo(() => {
+    if (!merging || !editing) return [];
+    const q = mergeQuery.trim().toLowerCase();
+    return items
+      .filter((i) => i.id !== editing.id && (!q || i.name.toLowerCase().includes(q)))
+      .slice(0, 40);
+  }, [merging, mergeQuery, items, editing]);
+
+  const handleMerge = async (targetId) => {
+    if (!editing?.id || saving) return;
+    const target = items.find((i) => i.id === targetId);
+    if (!target) return;
+    if (!window.confirm(`Gabung "${editing.name}" → "${target.name}"?\n\nSemua baris resep & alias "${editing.name}" pindah ke "${target.name}", lalu "${editing.name}" dihapus. Tindakan ini tak bisa dibatalkan.`)) return;
+    setSaving(true);
+    try {
+      await ingredientService.mergeIngredient(editing.id, targetId);
+      showToast(`Digabung ke "${target.name}".`);
+      close();
+      refresh();
+    } catch (e) {
+      showToast(e.message, { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const setField = (k, v) => setEditing((p) => ({ ...p, [k]: v }));
 
@@ -117,7 +148,7 @@ export function IngredientManager() {
     setSaving(true);
     try {
       let id = editing.id;
-      const patch = { name: editing.name, category: editing.category, baseUnit: editing.baseUnit, pricePerBase: editing.pricePerBase };
+      const patch = { name: editing.name, category: editing.category, baseUnit: editing.baseUnit, pricePerBase: editing.pricePerBase, isStaple: !!editing.isStaple, packSize: editing.isStaple ? editing.packSize : '', packLabel: editing.isStaple ? editing.packLabel : '' };
       if (id) await ingredientService.updateIngredient(id, patch);
       else id = (await ingredientService.createIngredient(patch)).id;
 
@@ -197,9 +228,12 @@ export function IngredientManager() {
         <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={onlyUnpriced} onChange={(e) => setOnlyUnpriced(e.target.checked)} /> Belum berharga
         </label>
+        <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
+          <input type="checkbox" checked={onlyStaple} onChange={(e) => setOnlyStaple(e.target.checked)} /> Bahan pokok
+        </label>
       </div>
-      {(query || category || onlyUnpriced) && (
-        <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setOnlyUnpriced(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
+      {(query || category || onlyUnpriced || onlyStaple) && (
+        <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setOnlyUnpriced(false); setOnlyStaple(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
       )}
 
       {loading ? (
@@ -211,7 +245,14 @@ export function IngredientManager() {
             <button key={ing.id} onClick={() => openEdit(ing)}
               className="w-full text-left rounded-xl border border-outline-variant p-3 flex items-center justify-between gap-3 hover:bg-surface-container-low cursor-pointer">
               <div className="min-w-0">
-                <span className="font-semibold text-on-surface truncate block">{ing.name}</span>
+                <span className="font-semibold text-on-surface truncate flex items-center gap-1.5">
+                  <span className="truncate">{ing.name}</span>
+                  {ing.isStaple && (
+                    <span title="Bahan pokok dapur — tak masuk daftar belanja" className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[10px] font-bold px-1.5 py-0.5">
+                      <span className="material-symbols-outlined text-[12px]">home</span> pokok
+                    </span>
+                  )}
+                </span>
                 <span className="text-xs text-on-surface-variant">{labelOf(CATEGORIES, ing.category)} · dasar {ing.baseUnit}</span>
               </div>
               <span className={`text-sm font-bold shrink-0 ${ing.pricePerBase == null ? 'text-error/70' : 'text-primary'}`}>
@@ -252,6 +293,46 @@ export function IngredientManager() {
               <p className="text-[11px] text-on-surface-variant -mt-1">
                 Contoh: bawang Rp40.000/kg → satuan dasar <b>g</b>, harga <b>40</b> (per gram).
               </p>
+
+              {/* Bahan pokok dapur — dikecualikan dari daftar belanja */}
+              <label className="flex items-start gap-2.5 rounded-xl border border-outline-variant p-3 cursor-pointer">
+                <input type="checkbox" checked={!!editing.isStaple} onChange={(e) => setField('isStaple', e.target.checked)} className="mt-0.5" />
+                <span>
+                  <span className="block text-sm font-semibold text-on-surface">Bahan pokok dapur (cek stok di rumah)</span>
+                  <span className="block text-[11px] text-on-surface-variant mt-0.5">
+                    Mis. garam, minyak, kaldu bubuk, penyedap. Jika dicentang, bahan ini <b>tidak masuk daftar belanja & tidak dihitung biaya</b> — hanya jadi pengingat “cek stok di rumah”.
+                  </span>
+                </span>
+              </label>
+
+              {/* Kemasan jual add-on — hanya untuk bahan pokok. Diisi -> bumbu ini
+                  jadi pilihan CENTANG "kami belikan sekalian" di Belanja di Kami;
+                  dikosongkan -> cuma jadi info "disiapkan sendiri". */}
+              {editing.isStaple && (
+                <div className="rounded-xl border border-outline-variant p-3 space-y-2">
+                  <span className="block text-xs font-semibold text-on-surface">Tawarkan sebagai add-on "kami belikan" (opsional)</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label={`Ukuran kemasan (${editing.baseUnit})`}>
+                      <input type="number" step="any" value={editing.packSize ?? ''} onChange={(e) => setField('packSize', e.target.value)} placeholder="250"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                    </Field>
+                    <Field label="Label kemasan">
+                      <input value={editing.packLabel ?? ''} onChange={(e) => setField('packLabel', e.target.value)} placeholder="bungkus / botol / sachet"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                    </Field>
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant">
+                    {(() => {
+                      const size = Number(editing.packSize);
+                      const price = Number(editing.pricePerBase);
+                      if (editing.packSize && editing.pricePerBase && size > 0 && price > 0) {
+                        return <>1 {editing.packLabel || 'kemasan'} = <b>Rp{formatNum(Math.round(size * price))}</b> (terhitung otomatis), muncul sebagai pilihan centang.</>;
+                      }
+                      return <>Isi ukuran kemasan jual <i>dan</i> harga/{editing.baseUnit} agar bahan ini bisa dicentang untuk dibelikan. Kosongkan = hanya jadi info "disiapkan sendiri".</>;
+                    })()}
+                  </p>
+                </div>
+              )}
 
               {/* Override satuan per-bahan (jembatan hitung↔berat) */}
               <div className="pt-1">
@@ -301,11 +382,42 @@ export function IngredientManager() {
               </div>
             </div>
 
+            {/* Panel gabung — pembersih duplikat tanpa loss */}
+            {editing.id && merging && (
+              <div className="mt-4 rounded-xl border border-primary/40 bg-primary/5 p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-semibold text-on-surface">Gabung “{editing.name}” ke…</span>
+                  <button onClick={() => { setMerging(false); setMergeQuery(''); }} className="text-on-surface-variant cursor-pointer inline-flex">
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mb-2">Pilih bahan kanonik. Semua baris resep & alias “{editing.name}” pindah ke sana, lalu bahan ini dihapus.</p>
+                <input value={mergeQuery} onChange={(e) => setMergeQuery(e.target.value)} placeholder="Cari bahan target…" autoFocus
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-outline-variant divide-y divide-outline-variant/40 bg-white">
+                  {mergeCandidates.length === 0 && <p className="p-3 text-xs text-on-surface-variant text-center">Tidak ada bahan cocok.</p>}
+                  {mergeCandidates.map((c) => (
+                    <button key={c.id} onClick={() => handleMerge(c.id)} disabled={saving}
+                      className="w-full text-left px-3 py-2.5 hover:bg-surface-container-low cursor-pointer flex items-center justify-between gap-2 disabled:opacity-50">
+                      <span className="text-sm text-on-surface truncate">{c.name}</span>
+                      <span className="text-[11px] shrink-0 text-on-surface-variant">{c.pricePerBase == null ? 'belum berharga' : `Rp${formatNum(c.pricePerBase)}/${c.baseUnit}`}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3 mt-5">
               {editing.id && (
                 <button onClick={handleDelete} disabled={saving} title="Hapus bahan"
                   className="py-3 px-4 border border-error/40 text-error rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50 inline-flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+              )}
+              {editing.id && (
+                <button onClick={() => setMerging((m) => !m)} disabled={saving} title="Gabung ke bahan lain"
+                  className={`py-3 px-4 border rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50 inline-flex items-center justify-center ${merging ? 'border-primary bg-primary/10 text-primary' : 'border-primary/40 text-primary'}`}>
+                  <span className="material-symbols-outlined text-[20px]">merge</span>
                 </button>
               )}
               <button onClick={close} disabled={saving} className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50">Batal</button>

@@ -17,7 +17,7 @@ const EMPTY_RECIPE = {
   title: '', description: '', cuisine: '', difficulty: 'easy',
   readyInMinutes: '', calories: '', baseServings: 2,
   badges: [], tags: [], instructions: [], ingredientsText: '',
-  imageUrl: '', isActive: true,
+  imageUrl: '', isActive: true, isVerified: false,
 };
 
 const numOrNull = (v) => (v === '' || v == null ? null : Number(v));
@@ -123,6 +123,7 @@ export function RecipeManager() {
   const [query, setQuery] = useState('');
   const [onlyIncomplete, setOnlyIncomplete] = useState(false);
   const [status, setStatus] = useState('all'); // all | active | hidden
+  const [verify, setVerify] = useState('all'); // all | verified | unverified
   const [sort, setSort] = useState('default'); // default | coverage | name
 
   const [editing, setEditing] = useState(null); // recipe camelCase | null
@@ -231,6 +232,8 @@ export function RecipeManager() {
       if (q && !r.title?.toLowerCase().includes(q)) return false;
       if (status === 'active' && !r.isActive) return false;
       if (status === 'hidden' && r.isActive) return false;
+      if (verify === 'verified' && !r.isVerified) return false;
+      if (verify === 'unverified' && r.isVerified) return false;
       if (onlyIncomplete) {
         const { priced, total } = coverageOf(r);
         if (total > 0 && priced >= total) return false; // sudah lengkap → sembunyikan
@@ -244,7 +247,7 @@ export function RecipeManager() {
     }
     if (sort === 'name') return [...list].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
     return list;
-  }, [recipes, query, onlyIncomplete, status, sort]);
+  }, [recipes, query, onlyIncomplete, status, verify, sort]);
   const incompleteCount = useMemo(
     () => recipes.filter((r) => { const { priced, total } = coverageOf(r); return total === 0 || priced < total; }).length,
     [recipes],
@@ -427,6 +430,7 @@ export function RecipeManager() {
         instructions: splitLines(instructionsRaw),
         ingredientsText: editing.ingredientsText || null,
         isActive: editing.isActive,
+        isVerified: !!editing.isVerified,
       };
 
       let id = editing.id;
@@ -500,6 +504,12 @@ export function RecipeManager() {
           <option value="active">Aktif</option>
           <option value="hidden">Disembunyikan</option>
         </select>
+        <select value={verify} onChange={(e) => setVerify(e.target.value)} title="Filter verifikasi"
+          className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
+          <option value="all">Semua verifikasi</option>
+          <option value="verified">Terverifikasi</option>
+          <option value="unverified">Belum diverifikasi</option>
+        </select>
         <select value={sort} onChange={(e) => setSort(e.target.value)} title="Urutkan"
           className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
           <option value="default">Urutan default</option>
@@ -531,6 +541,7 @@ export function RecipeManager() {
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold text-on-surface truncate">{r.title}</span>
+                  {r.isVerified && <span className="text-[10px] font-bold uppercase bg-primary/10 text-primary px-2 py-0.5 rounded-full inline-flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">verified</span>Terverifikasi</span>}
                   {!r.isActive && <span className="text-[10px] font-bold uppercase bg-error text-white px-2 py-0.5 rounded-full">Disembunyikan</span>}
                 </div>
                 <div className="flex items-center gap-2 mt-0.5">
@@ -663,6 +674,18 @@ export function RecipeManager() {
               <label className="flex items-center gap-2 text-sm text-on-surface cursor-pointer pt-1">
                 <input type="checkbox" checked={!editing.isActive} onChange={(e) => setField('isActive', !e.target.checked)} />
                 Sembunyikan dari katalog (is_active = false)
+              </label>
+              <label className="flex items-start gap-2.5 rounded-xl border border-outline-variant p-3 cursor-pointer">
+                <input type="checkbox" checked={!!editing.isVerified} onChange={(e) => setField('isVerified', e.target.checked)} className="mt-0.5" />
+                <span>
+                  <span className="block text-sm font-semibold text-on-surface inline-flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[18px] text-primary">verified</span>
+                    Terverifikasi admin
+                  </span>
+                  <span className="block text-[11px] text-on-surface-variant mt-0.5">
+                    Centang jika data resep ini sudah dicek & bersih. Memunculkan badge “Terverifikasi” di katalog (siapa & kapan dicatat otomatis).
+                  </span>
+                </span>
               </label>
             </div>
 

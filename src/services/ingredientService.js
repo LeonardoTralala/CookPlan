@@ -11,7 +11,9 @@ async function requireUser() {
   return data.user;
 }
 
-const SELECT = "id, name, category, baseUnit:base_unit, pricePerBase:price_per_base";
+const SELECT =
+  "id, name, category, baseUnit:base_unit, pricePerBase:price_per_base, isStaple:is_staple, " +
+  "packSize:pack_size, packLabel:pack_label, packPriceIdr:pack_price_idr";
 
 // Map patch camelCase → baris snake_case (hanya field yang dikenal).
 function toRow(patch) {
@@ -22,6 +24,12 @@ function toRow(patch) {
   if ("pricePerBase" in patch)
     row.price_per_base =
       patch.pricePerBase === "" || patch.pricePerBase == null ? null : Number(patch.pricePerBase);
+  if ("isStaple" in patch) row.is_staple = !!patch.isStaple;
+  // pack_size/pack_label = penentu add-on "Belanja di Kami". pack_price_idr
+  // TERHITUNG di DB (pack_size × price_per_base) — jangan ditulis manual.
+  if ("packSize" in patch)
+    row.pack_size = patch.packSize === "" || patch.packSize == null ? null : Number(patch.packSize);
+  if ("packLabel" in patch) row.pack_label = patch.packLabel?.trim() || null;
   return row;
 }
 
@@ -84,6 +92,18 @@ export async function updateIngredient(id, patch) {
 export async function deleteIngredient(id) {
   await requireUser();
   const { error } = await supabase.from("ingredients").delete().eq("id", id);
+  if (error) throw error;
+}
+
+// Gabung master `sourceId` ke `targetId` (pembersih duplikat tanpa loss): nama &
+// alias sumber jadi alias target, override + semua baris resep dipindah, lalu
+// sumber dihapus. Atomik & admin-only via RPC merge_ingredient (security definer).
+export async function mergeIngredient(sourceId, targetId) {
+  await requireUser();
+  const { error } = await supabase.rpc("merge_ingredient", {
+    p_source: sourceId,
+    p_target: targetId,
+  });
   if (error) throw error;
 }
 
