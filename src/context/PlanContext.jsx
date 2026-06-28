@@ -67,9 +67,22 @@ export function PlanProvider({ children }) {
   // berjalan. Mengubahnya memicu reload plan dari DB/localStorage (lihat effect).
   const [weekStart, setWeekStart] = useState(() => toWeekKey(getWeekStart()));
   const [weeklyPlan, setWeeklyPlan] = useState(() => loadLocalPlan(toWeekKey(getWeekStart())));
+  // Mirror SINKRON dari weeklyPlan terbaru. Sumber kebenaran untuk menghitung
+  // nextPlan di mutator (setSlot/removeSlot/applySlots/restoreSlot) tanpa
+  // bergantung pada eager-evaluation updater React (yang hanya jalan saat queue
+  // update kosong). Setiap penulisan state HARUS lewat commitPlan / set ref ini.
+  const planRef = useRef(weeklyPlan);
   // true saat plan user sedang dihidrasi dari DB (dipakai Planner & Belanja untuk
   // menampilkan skeleton, bukan flash empty-state). Guest pakai localStorage → false.
   const [loading, setLoading] = useState(false);
+
+  // Satu-satunya jalur tulis state plan: jaga ref tetap sinkron lalu set state.
+  // Nilai `next` harus sudah dihitung (bukan functional updater) supaya ref dan
+  // state selalu identik secara sinkron.
+  const commitPlan = useCallback((next) => {
+    planRef.current = next;
+    setWeeklyPlan(next);
+  }, []);
 
   // planId DB minggu berjalan (null saat belum login / belum dimuat).
   const planIdRef = useRef(null);
@@ -133,7 +146,13 @@ export function PlanProvider({ children }) {
     if (!isAuthenticated) {
       planIdRef.current = null;
       // setState ditunda (queueMicrotask) agar tidak sinkron di body effect.
-      queueMicrotask(() => { if (active) { setLoading(false); setWeeklyPlan(loadLocalPlan(weekStart)); } });
+      queueMicrotask(() => {
+        if (!active) return;
+        setLoading(false);
+        const next = loadLocalPlan(weekStart);
+        planRef.current = next;
+        setWeeklyPlan(next);
+      });
       return () => { active = false; };
     }
 
@@ -180,19 +199,24 @@ export function PlanProvider({ children }) {
           // Hanya hapus localStorage bila SEMUA slot berhasil dimigrasi (audit #7).
           if (migratedOk) localStorage.removeItem(localKey(weekStart));
           const refreshed = await planService.getCurrentPlan(weekStart);
-          if (active) setWeeklyPlan(refreshed.plan);
+          if (active) { planRef.current = refreshed.plan; setWeeklyPlan(refreshed.plan); }
         } else {
           // Bila ada pending yang baru di-flush, reload agar konsisten.
           if (pending.length > 0) {
             const refreshed = await planService.getCurrentPlan(weekStart);
-            if (active) setWeeklyPlan(refreshed.plan);
+            if (active) { planRef.current = refreshed.plan; setWeeklyPlan(refreshed.plan); }
           } else {
+            planRef.current = plan;
             setWeeklyPlan(plan);
           }
         }
       } catch (e) {
         console.error("muat plan gagal:", e.message);
-        if (active) setWeeklyPlan(loadLocalPlan(weekStart));
+        if (active) {
+          const next = loadLocalPlan(weekStart);
+          planRef.current = next;
+          setWeeklyPlan(next);
+        }
       } finally {
         if (active) setLoading(false);
       }
@@ -213,7 +237,9 @@ export function PlanProvider({ children }) {
     [weeklyPlan]
   );
 
-  // setSlot: hitung next state, set, lalu persist DI LUAR updater (audit #5).
+  // setSlot: hitung next state dari planRef (sinkron), commit, lalu persist DI
+  // LUAR updater (audit #5). nextPlan dijamin terdefinisi (tak bergantung pada
+  // eager-evaluation updater React).
   const setSlot = useCallback((recipe, day, mealType, servings) => {
     const slotData = {
       recipeId: recipe.id,
@@ -224,13 +250,11 @@ export function PlanProvider({ children }) {
       readyInMinutes: recipe.readyInMinutes,
       calories: recipe.calories,
     };
-    let nextPlan;
-    setWeeklyPlan((prev) => {
-      nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: slotData } };
-      return nextPlan;
-    });
+    const prev = planRef.current;
+    const nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: slotData } };
+    commitPlan(nextPlan);
     persistSlot(recipe, day, mealType, servings, nextPlan);
-  }, [persistSlot]);
+  }, [commitPlan, persistSlot]);
 
   // applySlots: terapkan banyak slot sekaligus (hasil generate AI → planner).
   // Satu setState + satu bulk upsert, bukan loop setSlot per slot.
@@ -241,31 +265,29 @@ export function PlanProvider({ children }) {
     for (const s of slotList ?? []) deduped.set(`${s.day}|${s.mealType}`, s);
     if (deduped.size === 0) return [];
 
-    // Mengandalkan eager evaluation updater React saat queue kosong — pola yang
-    // sama dengan nextPlan di setSlot/removeSlot di atas.
-    let nextPlan;
+    // Hitung nextPlan dari planRef (sinkron) — tak bergantung eager-evaluation
+    // updater React; pola yang sama dengan setSlot/removeSlot di atas.
+    const prev = planRef.current;
+    const nextPlan = { ...prev };
     const undoList = [];
-    setWeeklyPlan((prev) => {
-      nextPlan = { ...prev };
-      for (const { day, mealType } of deduped.values()) {
-        undoList.push({ day, mealType, prev: prev[day]?.[mealType] ?? null });
-      }
-      for (const { recipe, day, mealType, servings } of deduped.values()) {
-        nextPlan[day] = {
-          ...nextPlan[day],
-          [mealType]: {
-            recipeId: recipe.id,
-            title: recipe.title,
-            servings,
-            imageUrl: recipe.imageUrl,
-            priceIdr: recipe.priceIdr,
-            readyInMinutes: recipe.readyInMinutes,
-            calories: recipe.calories,
-          },
-        };
-      }
-      return nextPlan;
-    });
+    for (const { day, mealType } of deduped.values()) {
+      undoList.push({ day, mealType, prev: prev[day]?.[mealType] ?? null });
+    }
+    for (const { recipe, day, mealType, servings } of deduped.values()) {
+      nextPlan[day] = {
+        ...nextPlan[day],
+        [mealType]: {
+          recipeId: recipe.id,
+          title: recipe.title,
+          servings,
+          imageUrl: recipe.imageUrl,
+          priceIdr: recipe.priceIdr,
+          readyInMinutes: recipe.readyInMinutes,
+          calories: recipe.calories,
+        },
+      };
+    }
+    commitPlan(nextPlan);
 
     if (isAuthenticated) {
       if (planIdRef.current) {
@@ -281,20 +303,18 @@ export function PlanProvider({ children }) {
     }
 
     return undoList;
-  }, [isAuthenticated, weekStart]);
+  }, [commitPlan, isAuthenticated, weekStart]);
 
   const removeSlot = useCallback((day, mealType) => {
-    let nextPlan;
-    setWeeklyPlan((prev) => {
-      nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: null } };
-      return nextPlan;
-    });
+    const prev = planRef.current;
+    const nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: null } };
+    commitPlan(nextPlan);
     persistRemove(day, mealType, nextPlan);
-  }, [persistRemove]);
+  }, [commitPlan, persistRemove]);
 
   const clearAllSlots = useCallback(() => {
     const emptyPlan = createEmptyPlan();
-    setWeeklyPlan(emptyPlan);
+    commitPlan(emptyPlan);
     if (isAuthenticated) {
       if (planIdRef.current) {
         planService.clearAllSlots(planIdRef.current)
@@ -305,7 +325,7 @@ export function PlanProvider({ children }) {
     } else {
       localStorage.setItem(localKey(weekStart), JSON.stringify(emptyPlan));
     }
-  }, [isAuthenticated, weekStart]);
+  }, [commitPlan, isAuthenticated, weekStart]);
 
   // Navigasi antar-minggu. goToWeek(+1/-1) menggeser relatif; goToCurrentWeek
   // kembali ke minggu berjalan. Mengubah weekStart memicu reload via effect.
@@ -320,17 +340,15 @@ export function PlanProvider({ children }) {
   const isCurrentWeek = weekStart === toWeekKey(getWeekStart());
 
   const restoreSlot = useCallback((day, mealType, slotData) => {
-    let nextPlan;
-    setWeeklyPlan((prev) => {
-      nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: slotData } };
-      return nextPlan;
-    });
+    const prev = planRef.current;
+    const nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: slotData } };
+    commitPlan(nextPlan);
     if (slotData?.recipeId != null) {
       persistSlot({ id: slotData.recipeId, ...slotData }, day, mealType, slotData.servings ?? 2, nextPlan);
     } else {
       persistRemove(day, mealType, nextPlan);
     }
-  }, [persistSlot, persistRemove]);
+  }, [commitPlan, persistSlot, persistRemove]);
 
   const plannedCount = useMemo(() => {
     let count = 0;
