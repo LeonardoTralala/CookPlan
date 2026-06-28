@@ -67,6 +67,7 @@ function RecipeCatalog({ onAddToPlan }) {
   const [dietSample, setDietSample] = useState(() => DEFAULT_DIET_OPTIONS.slice(0, 8));
   const [maxTime, setMaxTime] = useState(120); // default max 120 minutes
   const [priceCategory, setPriceCategory] = useState('Semua'); // 'Semua', 'Hemat', 'Standar', 'Premium'
+  const [onlyVerified, setOnlyVerified] = useState(false); // hanya resep terverifikasi admin
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   // Pagination sisi-klien: berapa banyak resep yang sedang ditampilkan.
   const [visibleCount, setVisibleCount] = useState(RECIPES_PER_PAGE);
@@ -187,6 +188,7 @@ function RecipeCatalog({ onAddToPlan }) {
     setActiveFilters([]);
     setMaxTime(120);
     setPriceCategory('Semua');
+    setOnlyVerified(false);
   };
 
   // Filter recipes based on search query, quick filters, and advanced criteria
@@ -222,14 +224,17 @@ function RecipeCatalog({ onAddToPlan }) {
       if (priceCategory === 'Standar' && (recipe.priceIdr < 15000 || recipe.priceIdr > 30000)) return false;
       if (priceCategory === 'Premium' && recipe.priceIdr <= 30000) return false;
 
+      // 5. Hanya terverifikasi admin
+      if (onlyVerified && !recipe.isVerified) return false;
+
       return true;
     });
-  }, [recipes, searchQuery, activeFilters, maxTime, priceCategory, dietLabelOf]);
+  }, [recipes, searchQuery, activeFilters, maxTime, priceCategory, onlyVerified, dietLabelOf]);
 
   // Reset pagination ke halaman pertama tiap kali kriteria filter berubah, agar
   // user tidak "nyangkut" di posisi muat-banyak setelah memfilter. Pola adjust-
   // state-during-render (lint-safe), sama seperti recoverySynced di AuthPage.
-  const filterSig = `${searchQuery}|${activeFilters.join(',')}|${maxTime}|${priceCategory}`;
+  const filterSig = `${searchQuery}|${activeFilters.join(',')}|${maxTime}|${priceCategory}|${onlyVerified}`;
   const [lastFilterSig, setLastFilterSig] = useState(filterSig);
   if (filterSig !== lastFilterSig) {
     setLastFilterSig(filterSig);
@@ -346,7 +351,21 @@ function RecipeCatalog({ onAddToPlan }) {
             Filter
           </button>
 
-          {(searchQuery || activeFilters.length > 0 || maxTime < 120 || priceCategory !== 'Semua') && (
+          {/* Toggle "Hanya terverifikasi" — badge ✓ resep yang sudah dicek admin */}
+          <button
+            onClick={() => setOnlyVerified((v) => !v)}
+            aria-pressed={onlyVerified}
+            className={`inline-flex items-center justify-center min-h-[44px] gap-1.5 px-4 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
+              onlyVerified
+                ? 'bg-primary text-white border-primary shadow-sm'
+                : 'bg-white text-primary border-outline-variant hover:bg-primary/5'
+            }`}
+          >
+            <span className="material-symbols-outlined text-[18px]">verified</span>
+            Terverifikasi
+          </button>
+
+          {(searchQuery || activeFilters.length > 0 || maxTime < 120 || priceCategory !== 'Semua' || onlyVerified) && (
             <button
               onClick={handleResetFilters}
               className="min-h-[44px] text-xs md:text-sm font-bold text-error hover:text-error/80 transition-colors flex items-center gap-1 cursor-pointer pl-2"
@@ -489,6 +508,13 @@ function RecipeCatalog({ onAddToPlan }) {
                       </span>
                     </div>
                   )}
+                  {recipe.isVerified && (
+                    <div className="absolute top-2 right-2" title="Terverifikasi admin">
+                      <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center shadow-sm">
+                        <span className="material-symbols-outlined text-[15px]">verified</span>
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Content Section */}
@@ -572,6 +598,12 @@ function RecipeCatalog({ onAddToPlan }) {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
                 <div className="absolute bottom-6 left-6 text-white pr-10">
                   <div className="flex flex-wrap gap-1.5 mb-2">
+                    {selectedRecipeForDetail.isVerified && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-white text-primary font-bold text-[9px] uppercase tracking-wider inline-flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[12px]">verified</span>
+                        Terverifikasi
+                      </span>
+                    )}
                     {(selectedRecipeForDetail.badges ?? []).map((badge, idx) => (
                       <span
                         key={idx}

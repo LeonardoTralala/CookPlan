@@ -26,6 +26,7 @@ const FIELD_MAP = {
   ingredientsText: "ingredients_text",
   baseServings: "base_servings",
   isActive: "is_active",
+  isVerified: "is_verified",
 };
 
 // Ubah patch camelCase → baris snake_case (hanya field yang dikenal).
