@@ -219,10 +219,13 @@ function RecipeCatalog({ onAddToPlan }) {
       // 3. Max Cooking Time — 120 = "Semua" (tanpa batas), jadi skip filter.
       if (maxTime < 120 && recipe.readyInMinutes > maxTime) return false;
 
-      // 4. Price Category
-      if (priceCategory === 'Hemat' && recipe.priceIdr >= 15000) return false;
-      if (priceCategory === 'Standar' && (recipe.priceIdr < 15000 || recipe.priceIdr > 30000)) return false;
-      if (priceCategory === 'Premium' && recipe.priceIdr <= 30000) return false;
+      // 4. Price Category — bandingkan HARGA PER PORSI agar selaras dengan label
+      //    filter "(per porsi)". priceIdr di DB adalah total resep utk base_servings,
+      //    jadi dibagi dulu (guard baseServings null/0 → anggap 1 porsi).
+      const perServing = recipe.priceIdr / (recipe.baseServings || 1);
+      if (priceCategory === 'Hemat' && perServing >= 15000) return false;
+      if (priceCategory === 'Standar' && (perServing < 15000 || perServing > 30000)) return false;
+      if (priceCategory === 'Premium' && perServing <= 30000) return false;
 
       // 5. Hanya terverifikasi admin
       if (onlyVerified && !recipe.isVerified) return false;
@@ -623,6 +626,25 @@ function RecipeCatalog({ onAddToPlan }) {
                   "{selectedRecipeForDetail.description}"
                 </p>
 
+                {/* Banner harga — sengaja mengopel harga total ↔ jumlah porsi dalam satu
+                    unit menonjol, supaya user langsung membaca "harga segini UNTUK porsi
+                    segini" (bukan dua statistik terpisah). Baris per-porsi melawan kesan
+                    "kemahalan". */}
+                <div className="flex items-center gap-3 p-4 rounded-2xl bg-primary text-white shadow-sm">
+                  <span className="material-symbols-outlined text-3xl shrink-0">payments</span>
+                  <div className="leading-tight">
+                    <div className="text-xl md:text-2xl font-extrabold">
+                      {formatRupiah(selectedRecipeForDetail.priceIdr)}
+                      <span className="text-sm font-semibold opacity-90">
+                        {' '}untuk {selectedRecipeForDetail.baseServings ?? 2} porsi
+                      </span>
+                    </div>
+                    <div className="text-xs font-medium opacity-90">
+                      ≈ {formatRupiah(Math.round(selectedRecipeForDetail.priceIdr / (selectedRecipeForDetail.baseServings || 1)))} / porsi
+                    </div>
+                  </div>
+                </div>
+
                 {/* Quick Info Grid */}
                 <div className="grid grid-cols-3 gap-4 p-4 bg-secondary-container/20 rounded-2xl border border-outline-variant/60 text-center">
                   <div>
@@ -649,13 +671,13 @@ function RecipeCatalog({ onAddToPlan }) {
                   </div>
                   <div>
                     <span className="material-symbols-outlined text-primary text-2xl mb-1 block">
-                      payments
+                      group
                     </span>
                     <span className="text-[10px] uppercase font-bold text-on-surface tracking-wider block">
-                      Estimasi Harga
+                      Porsi
                     </span>
                     <span className="text-sm font-bold text-primary">
-                      {formatRupiah(selectedRecipeForDetail.priceIdr)}
+                      {selectedRecipeForDetail.baseServings ?? 2} porsi
                     </span>
                   </div>
                 </div>
