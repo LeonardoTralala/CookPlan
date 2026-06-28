@@ -30,6 +30,7 @@ export function IngredientManager() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [onlyUnpriced, setOnlyUnpriced] = useState(false);
+  const [onlyStaple, setOnlyStaple] = useState(false);
   const [category, setCategory] = useState(''); // '' = semua, '__none' = tanpa kategori
 
   const [editing, setEditing] = useState(null); // ingredient camelCase | null
@@ -62,10 +63,11 @@ export function IngredientManager() {
     const q = query.trim().toLowerCase();
     return items.filter((i) =>
       (!onlyUnpriced || i.pricePerBase == null) &&
+      (!onlyStaple || i.isStaple) &&
       (category === '' || (category === '__none' ? i.category == null : i.category === category)) &&
       (!q || i.name.toLowerCase().includes(q))
     );
-  }, [items, query, onlyUnpriced, category]);
+  }, [items, query, onlyUnpriced, onlyStaple, category]);
 
   const pricedCount = useMemo(() => items.filter((i) => i.pricePerBase != null).length, [items]);
 
@@ -84,7 +86,7 @@ export function IngredientManager() {
       showToast(e.message, { variant: 'error' });
     }
   };
-  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '' }); setOverrides([]); setAliasRows([]); };
+  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '', isStaple: false }); setOverrides([]); setAliasRows([]); };
   const close = () => { setEditing(null); setOverrides([]); setAliasRows([]); };
 
   const setField = (k, v) => setEditing((p) => ({ ...p, [k]: v }));
@@ -117,7 +119,7 @@ export function IngredientManager() {
     setSaving(true);
     try {
       let id = editing.id;
-      const patch = { name: editing.name, category: editing.category, baseUnit: editing.baseUnit, pricePerBase: editing.pricePerBase };
+      const patch = { name: editing.name, category: editing.category, baseUnit: editing.baseUnit, pricePerBase: editing.pricePerBase, isStaple: !!editing.isStaple };
       if (id) await ingredientService.updateIngredient(id, patch);
       else id = (await ingredientService.createIngredient(patch)).id;
 
@@ -197,9 +199,12 @@ export function IngredientManager() {
         <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={onlyUnpriced} onChange={(e) => setOnlyUnpriced(e.target.checked)} /> Belum berharga
         </label>
+        <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
+          <input type="checkbox" checked={onlyStaple} onChange={(e) => setOnlyStaple(e.target.checked)} /> Bahan pokok
+        </label>
       </div>
-      {(query || category || onlyUnpriced) && (
-        <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setOnlyUnpriced(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
+      {(query || category || onlyUnpriced || onlyStaple) && (
+        <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setOnlyUnpriced(false); setOnlyStaple(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
       )}
 
       {loading ? (
@@ -211,7 +216,14 @@ export function IngredientManager() {
             <button key={ing.id} onClick={() => openEdit(ing)}
               className="w-full text-left rounded-xl border border-outline-variant p-3 flex items-center justify-between gap-3 hover:bg-surface-container-low cursor-pointer">
               <div className="min-w-0">
-                <span className="font-semibold text-on-surface truncate block">{ing.name}</span>
+                <span className="font-semibold text-on-surface truncate flex items-center gap-1.5">
+                  <span className="truncate">{ing.name}</span>
+                  {ing.isStaple && (
+                    <span title="Bahan pokok dapur — tak masuk daftar belanja" className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[10px] font-bold px-1.5 py-0.5">
+                      <span className="material-symbols-outlined text-[12px]">home</span> pokok
+                    </span>
+                  )}
+                </span>
                 <span className="text-xs text-on-surface-variant">{labelOf(CATEGORIES, ing.category)} · dasar {ing.baseUnit}</span>
               </div>
               <span className={`text-sm font-bold shrink-0 ${ing.pricePerBase == null ? 'text-error/70' : 'text-primary'}`}>
@@ -252,6 +264,17 @@ export function IngredientManager() {
               <p className="text-[11px] text-on-surface-variant -mt-1">
                 Contoh: bawang Rp40.000/kg → satuan dasar <b>g</b>, harga <b>40</b> (per gram).
               </p>
+
+              {/* Bahan pokok dapur — dikecualikan dari daftar belanja */}
+              <label className="flex items-start gap-2.5 rounded-xl border border-outline-variant p-3 cursor-pointer">
+                <input type="checkbox" checked={!!editing.isStaple} onChange={(e) => setField('isStaple', e.target.checked)} className="mt-0.5" />
+                <span>
+                  <span className="block text-sm font-semibold text-on-surface">Bahan pokok dapur (cek stok di rumah)</span>
+                  <span className="block text-[11px] text-on-surface-variant mt-0.5">
+                    Mis. garam, minyak, kaldu bubuk, penyedap. Jika dicentang, bahan ini <b>tidak masuk daftar belanja & tidak dihitung biaya</b> — hanya jadi pengingat “cek stok di rumah”.
+                  </span>
+                </span>
+              </label>
 
               {/* Override satuan per-bahan (jembatan hitung↔berat) */}
               <div className="pt-1">

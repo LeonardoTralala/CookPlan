@@ -11,7 +11,7 @@ async function requireUser() {
   return data.user;
 }
 
-const SELECT = "id, name, category, baseUnit:base_unit, pricePerBase:price_per_base";
+const SELECT = "id, name, category, baseUnit:base_unit, pricePerBase:price_per_base, isStaple:is_staple";
 
 // Map patch camelCase → baris snake_case (hanya field yang dikenal).
 function toRow(patch) {
@@ -22,6 +22,7 @@ function toRow(patch) {
   if ("pricePerBase" in patch)
     row.price_per_base =
       patch.pricePerBase === "" || patch.pricePerBase == null ? null : Number(patch.pricePerBase);
+  if ("isStaple" in patch) row.is_staple = !!patch.isStaple;
   return row;
 }
 

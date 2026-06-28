@@ -13,7 +13,8 @@ export const RECIPE_SELECT = `
   baseServings:base_servings,
   ingredientsText:ingredients_text,
   ingredients:recipe_ingredients (
-    name, amount, unit, category, priceIdr:price_idr
+    name, amount, unit, category, priceIdr:price_idr,
+    master:ingredients ( isStaple:is_staple )
   )
 `;
 
