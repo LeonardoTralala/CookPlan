@@ -131,6 +131,12 @@ export function RecipeManager() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [saving, setSaving] = useState(false);
+  // Teks mentah yang sedang diketik untuk field bertipe array (tag, badge, langkah).
+  // Disimpan sebagai STRING agar Enter/koma/baris kosong tetap utuh saat mengetik —
+  // konversi ke array baru dilakukan saat Simpan (lihat handleSave), bukan tiap keystroke.
+  const [tagsRaw, setTagsRaw] = useState('');
+  const [badgesRaw, setBadgesRaw] = useState('');
+  const [instructionsRaw, setInstructionsRaw] = useState('');
   // Quick-fix dari chip status baris: { rowKey, ing, kind:'price'|'unit', unit, value }.
   const [quickFix, setQuickFix] = useState(null);
   const [quickSaving, setQuickSaving] = useState(false);
@@ -250,6 +256,9 @@ export function RecipeManager() {
     setOrigIds([]);
     setImageFile(null);
     setImagePreview('');
+    setTagsRaw('');
+    setBadgesRaw('');
+    setInstructionsRaw('');
   };
 
   const openEdit = async (r) => {
@@ -258,6 +267,10 @@ export function RecipeManager() {
     setImagePreview(r.imageUrl || '');
     setIngredients([]);
     setOrigIds([]);
+    // Isi teks mentah dari array DB: tag/badge dipisah ", ", langkah per baris.
+    setTagsRaw((r.tags ?? []).join(', '));
+    setBadgesRaw((r.badges ?? []).join(', '));
+    setInstructionsRaw((r.instructions ?? []).join('\n'));
     try {
       const rows = await recipeAdmin.listIngredients(r.id);
       setIngredients(rows.map((x) => ({ ...x, _key: `e${x.id}`, _id: x.id })));
@@ -408,9 +421,10 @@ export function RecipeManager() {
         readyInMinutes: numOrNull(editing.readyInMinutes),
         calories: numOrNull(editing.calories),
         baseServings: Number(editing.baseServings) || 2,
-        badges: editing.badges,
-        tags: editing.tags,
-        instructions: editing.instructions,
+        // Teks mentah → array bersih HANYA saat simpan (jaga bentuk data DB sama spt dulu).
+        badges: splitCsv(badgesRaw),
+        tags: splitCsv(tagsRaw),
+        instructions: splitLines(instructionsRaw),
         ingredientsText: editing.ingredientsText || null,
         isActive: editing.isActive,
       };
@@ -596,15 +610,16 @@ export function RecipeManager() {
               </div>
 
               <Field label="Tag (pisahkan dengan koma)">
-                <TextInput value={editing.tags.join(', ')} onChange={(v) => setField('tags', splitCsv(v))} placeholder="halal, tinggi-protein" />
+                <TextInput value={tagsRaw} onChange={setTagsRaw} placeholder="halal, tinggi-protein" />
               </Field>
               <Field label="Badge tampilan (pisahkan dengan koma)">
-                <TextInput value={editing.badges.join(', ')} onChange={(v) => setField('badges', splitCsv(v))} placeholder="Cepat, Hemat" />
+                <TextInput value={badgesRaw} onChange={setBadgesRaw} placeholder="Cepat, Hemat" />
               </Field>
               <Field label="Langkah memasak (satu langkah per baris)">
+                {/* Tampilkan teks mentah apa adanya supaya Enter/baris kosong tetap utuh saat mengetik. */}
                 <textarea
-                  value={editing.instructions.join('\n')}
-                  onChange={(e) => setField('instructions', e.target.value.split('\n').map((s) => s.trim()).filter(Boolean))}
+                  value={instructionsRaw}
+                  onChange={(e) => setInstructionsRaw(e.target.value)}
                   rows={4}
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
                 />
@@ -707,6 +722,11 @@ export function RecipeManager() {
 
 function splitCsv(v) {
   return v.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+// Teks langkah memasak (satu per baris) → array bersih; baris kosong dibuang saat simpan.
+function splitLines(v) {
+  return v.split('\n').map((s) => s.trim()).filter(Boolean);
 }
 
 function Field({ label, children }) {

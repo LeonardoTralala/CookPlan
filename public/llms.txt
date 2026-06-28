@@ -1,0 +1,25 @@
+# CookPlan
+
+> CookPlan adalah aplikasi web "dapur cerdas" (PWA) untuk merencanakan menu masak mingguan, menghasilkan daftar belanja otomatis, dan memasak lebih hemat dengan rekomendasi bertenaga AI. Fokus pada masakan rumahan Nusantara dan pengurangan food waste ("Plan It, Cook It, Waste Nothing").
+
+CookPlan dibuat oleh tim mahasiswa untuk PKM-K 2026. Pengguna menyusun rencana menu per hari (sarapan, makan siang, makan malam) untuk satu minggu, lalu aplikasi otomatis merangkum kebutuhan bahan dari semua resep menjadi satu daftar belanja lengkap dengan estimasi biaya. Tersedia pula generator rencana makan berbasis AI dan katalog resep Nusantara.
+
+## Layanan utama
+- Perencana menu mingguan (Senin–Minggu, 3 waktu makan per hari)
+- Daftar belanja otomatis dengan estimasi harga bahan
+- Generator rencana makan bertenaga AI
+- Katalog resep masakan rumahan Nusantara
+- Opsi belanja bahan langsung (add-on, opsional)
+
+## Halaman publik
+- [Beranda](https://cookplan.id/): pengenalan produk dan cara kerja
+- [Mulai / Generate](https://cookplan.id/generate): buat rencana makan (dapat dicoba tanpa akun)
+- [Tentang Tim](https://cookplan.id/about): profil tim CookPlan
+- [Pusat Bantuan](https://cookplan.id/help): panduan penggunaan dan FAQ
+- [Kebijakan Privasi](https://cookplan.id/privacy): bagaimana data pengguna ditangani
+- [Syarat & Ketentuan](https://cookplan.id/terms): ketentuan layanan
+
+## Catatan
+- Fitur perencana, katalog, daftar belanja, dan profil membutuhkan akun (login).
+- Bahasa utama aplikasi: Indonesia.
+- Teknologi: React (Vite), Tailwind CSS, Supabase; rencana makan AI lewat proxy server-side.

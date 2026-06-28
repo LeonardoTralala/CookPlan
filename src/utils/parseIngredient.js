@@ -94,8 +94,42 @@ function normalizeSpaces(s) {
   return s.replace(/\s+/g, " ").trim();
 }
 
-// Ubah "1/2" → 0.5, "1,5" → 1.5, ambil angka pertama dari rentang "16 atau 32".
+// Pecahan Unicode (vulgar fractions) → nilai desimal. Sering muncul di data
+// scraping ("½ sdt garam", "1¼ kg").
+const UNICODE_FRACTIONS = {
+  "¼": 0.25, "½": 0.5, "¾": 0.75,
+  "⅓": 1 / 3, "⅔": 2 / 3,
+  "⅕": 0.2, "⅖": 0.4, "⅗": 0.6, "⅘": 0.8,
+  "⅙": 1 / 6, "⅚": 5 / 6,
+  "⅛": 0.125, "⅜": 0.375, "⅝": 0.625, "⅞": 0.875,
+};
+const UNICODE_FRACTION_CLASS = "¼½¾⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞";
+
+// Ubah angka di depan → amount. Mendukung, berurutan:
+//   1) integer opsional + pecahan Unicode: "½"→0.5, "1½"→1.5, "1¼"→1.25
+//   2) mixed number "a b/c" (integer + spasi + pecahan): "1 1/2"→1.5, "2 1/4"→2.25
+//   3) pola lama: pecahan biasa "1/2"→0.5, desimal/koma "1,5"→1.5,
+//      ambil angka pertama dari rentang "16 atau 32"→16
 function parseLeadingNumber(s) {
+  // 1) integer opsional + pecahan Unicode (mis. "1½", "½")
+  const uni = s.match(new RegExp(`^(\\d+)?\\s*([${UNICODE_FRACTION_CLASS}])`, "u"));
+  if (uni) {
+    const whole = uni[1] ? Number(uni[1]) : 0;
+    const amount = whole + UNICODE_FRACTIONS[uni[2]];
+    return { amount, rest: s.slice(uni[0].length).trimStart() };
+  }
+
+  // 2) mixed number "a b/c" (mis. "1 1/2") — spasi WAJIB agar tak bentrok "1/2".
+  const mixed = s.match(/^(\d+)\s+(\d+)\/(\d+(?:[.,]\d+)?)/);
+  if (mixed) {
+    const whole = Number(mixed[1]);
+    const a = Number(mixed[2]);
+    const b = Number(mixed[3].replace(",", "."));
+    const amount = b ? whole + a / b : whole;
+    return { amount, rest: s.slice(mixed[0].length).trimStart() };
+  }
+
+  // 3) pola lama: pecahan biasa / desimal / koma / angka pertama rentang
   const m = s.match(/^(\d+(?:[.,]\d+)?(?:\/\d+(?:[.,]\d+)?)?)/);
   if (!m) return { amount: null, rest: s };
   const token = m[1];

@@ -1,0 +1,14 @@
+# robots.txt — CookPlan (https://cookplan.id)
+# Izinkan perayapan halaman publik; arahkan crawler ke sitemap.
+
+User-agent: *
+Allow: /
+
+# Area privat / butuh login — tidak perlu dirayapi atau diindeks.
+Disallow: /admin
+Disallow: /auth/callback
+Disallow: /onboarding
+Disallow: /order
+Disallow: /profile
+
+Sitemap: https://cookplan.id/sitemap.xml
