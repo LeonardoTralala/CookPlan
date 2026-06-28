@@ -37,6 +37,8 @@ export function IngredientManager() {
   const [overrides, setOverrides] = useState([]);
   const [aliasRows, setAliasRows] = useState([]); // { alias, _new }
   const [saving, setSaving] = useState(false);
+  const [merging, setMerging] = useState(false); // panel "Gabung ke bahan lain"
+  const [mergeQuery, setMergeQuery] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -87,7 +89,34 @@ export function IngredientManager() {
     }
   };
   const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '', isStaple: false, packSize: '', packLabel: '' }); setOverrides([]); setAliasRows([]); };
-  const close = () => { setEditing(null); setOverrides([]); setAliasRows([]); };
+  const close = () => { setEditing(null); setOverrides([]); setAliasRows([]); setMerging(false); setMergeQuery(''); };
+
+  // Kandidat target gabung: semua bahan lain (kecuali diri sendiri), terfilter cari.
+  const mergeCandidates = useMemo(() => {
+    if (!merging || !editing) return [];
+    const q = mergeQuery.trim().toLowerCase();
+    return items
+      .filter((i) => i.id !== editing.id && (!q || i.name.toLowerCase().includes(q)))
+      .slice(0, 40);
+  }, [merging, mergeQuery, items, editing]);
+
+  const handleMerge = async (targetId) => {
+    if (!editing?.id || saving) return;
+    const target = items.find((i) => i.id === targetId);
+    if (!target) return;
+    if (!window.confirm(`Gabung "${editing.name}" → "${target.name}"?\n\nSemua baris resep & alias "${editing.name}" pindah ke "${target.name}", lalu "${editing.name}" dihapus. Tindakan ini tak bisa dibatalkan.`)) return;
+    setSaving(true);
+    try {
+      await ingredientService.mergeIngredient(editing.id, targetId);
+      showToast(`Digabung ke "${target.name}".`);
+      close();
+      refresh();
+    } catch (e) {
+      showToast(e.message, { variant: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const setField = (k, v) => setEditing((p) => ({ ...p, [k]: v }));
 
@@ -353,11 +382,42 @@ export function IngredientManager() {
               </div>
             </div>
 
+            {/* Panel gabung — pembersih duplikat tanpa loss */}
+            {editing.id && merging && (
+              <div className="mt-4 rounded-xl border border-primary/40 bg-primary/5 p-3">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-sm font-semibold text-on-surface">Gabung “{editing.name}” ke…</span>
+                  <button onClick={() => { setMerging(false); setMergeQuery(''); }} className="text-on-surface-variant cursor-pointer inline-flex">
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                </div>
+                <p className="text-[11px] text-on-surface-variant mb-2">Pilih bahan kanonik. Semua baris resep & alias “{editing.name}” pindah ke sana, lalu bahan ini dihapus.</p>
+                <input value={mergeQuery} onChange={(e) => setMergeQuery(e.target.value)} placeholder="Cari bahan target…" autoFocus
+                  className="w-full px-3 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                <div className="mt-2 max-h-56 overflow-y-auto rounded-lg border border-outline-variant divide-y divide-outline-variant/40 bg-white">
+                  {mergeCandidates.length === 0 && <p className="p-3 text-xs text-on-surface-variant text-center">Tidak ada bahan cocok.</p>}
+                  {mergeCandidates.map((c) => (
+                    <button key={c.id} onClick={() => handleMerge(c.id)} disabled={saving}
+                      className="w-full text-left px-3 py-2.5 hover:bg-surface-container-low cursor-pointer flex items-center justify-between gap-2 disabled:opacity-50">
+                      <span className="text-sm text-on-surface truncate">{c.name}</span>
+                      <span className="text-[11px] shrink-0 text-on-surface-variant">{c.pricePerBase == null ? 'belum berharga' : `Rp${formatNum(c.pricePerBase)}/${c.baseUnit}`}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3 mt-5">
               {editing.id && (
                 <button onClick={handleDelete} disabled={saving} title="Hapus bahan"
                   className="py-3 px-4 border border-error/40 text-error rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50 inline-flex items-center justify-center">
                   <span className="material-symbols-outlined text-[20px]">delete</span>
+                </button>
+              )}
+              {editing.id && (
+                <button onClick={() => setMerging((m) => !m)} disabled={saving} title="Gabung ke bahan lain"
+                  className={`py-3 px-4 border rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50 inline-flex items-center justify-center ${merging ? 'border-primary bg-primary/10 text-primary' : 'border-primary/40 text-primary'}`}>
+                  <span className="material-symbols-outlined text-[20px]">merge</span>
                 </button>
               )}
               <button onClick={close} disabled={saving} className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50">Batal</button>

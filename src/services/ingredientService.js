@@ -95,6 +95,18 @@ export async function deleteIngredient(id) {
   if (error) throw error;
 }
 
+// Gabung master `sourceId` ke `targetId` (pembersih duplikat tanpa loss): nama &
+// alias sumber jadi alias target, override + semua baris resep dipindah, lalu
+// sumber dihapus. Atomik & admin-only via RPC merge_ingredient (security definer).
+export async function mergeIngredient(sourceId, targetId) {
+  await requireUser();
+  const { error } = await supabase.rpc("merge_ingredient", {
+    p_source: sourceId,
+    p_target: targetId,
+  });
+  if (error) throw error;
+}
+
 // --- Konversi satuan global (read-only di UI) --------------------------------
 export async function listConversions() {
   const { data, error } = await supabase
