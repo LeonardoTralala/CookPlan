@@ -86,7 +86,7 @@ export function IngredientManager() {
       showToast(e.message, { variant: 'error' });
     }
   };
-  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '', isStaple: false }); setOverrides([]); setAliasRows([]); };
+  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '', isStaple: false, packSize: '', packLabel: '' }); setOverrides([]); setAliasRows([]); };
   const close = () => { setEditing(null); setOverrides([]); setAliasRows([]); };
 
   const setField = (k, v) => setEditing((p) => ({ ...p, [k]: v }));
@@ -119,7 +119,7 @@ export function IngredientManager() {
     setSaving(true);
     try {
       let id = editing.id;
-      const patch = { name: editing.name, category: editing.category, baseUnit: editing.baseUnit, pricePerBase: editing.pricePerBase, isStaple: !!editing.isStaple };
+      const patch = { name: editing.name, category: editing.category, baseUnit: editing.baseUnit, pricePerBase: editing.pricePerBase, isStaple: !!editing.isStaple, packSize: editing.isStaple ? editing.packSize : '', packLabel: editing.isStaple ? editing.packLabel : '' };
       if (id) await ingredientService.updateIngredient(id, patch);
       else id = (await ingredientService.createIngredient(patch)).id;
 
@@ -275,6 +275,35 @@ export function IngredientManager() {
                   </span>
                 </span>
               </label>
+
+              {/* Kemasan jual add-on — hanya untuk bahan pokok. Diisi -> bumbu ini
+                  jadi pilihan CENTANG "kami belikan sekalian" di Belanja di Kami;
+                  dikosongkan -> cuma jadi info "disiapkan sendiri". */}
+              {editing.isStaple && (
+                <div className="rounded-xl border border-outline-variant p-3 space-y-2">
+                  <span className="block text-xs font-semibold text-on-surface">Tawarkan sebagai add-on "kami belikan" (opsional)</span>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label={`Ukuran kemasan (${editing.baseUnit})`}>
+                      <input type="number" step="any" value={editing.packSize ?? ''} onChange={(e) => setField('packSize', e.target.value)} placeholder="250"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                    </Field>
+                    <Field label="Label kemasan">
+                      <input value={editing.packLabel ?? ''} onChange={(e) => setField('packLabel', e.target.value)} placeholder="bungkus / botol / sachet"
+                        className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                    </Field>
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant">
+                    {(() => {
+                      const size = Number(editing.packSize);
+                      const price = Number(editing.pricePerBase);
+                      if (editing.packSize && editing.pricePerBase && size > 0 && price > 0) {
+                        return <>1 {editing.packLabel || 'kemasan'} = <b>Rp{formatNum(Math.round(size * price))}</b> (terhitung otomatis), muncul sebagai pilihan centang.</>;
+                      }
+                      return <>Isi ukuran kemasan jual <i>dan</i> harga/{editing.baseUnit} agar bahan ini bisa dicentang untuk dibelikan. Kosongkan = hanya jadi info "disiapkan sendiri".</>;
+                    })()}
+                  </p>
+                </div>
+              )}
 
               {/* Override satuan per-bahan (jembatan hitung↔berat) */}
               <div className="pt-1">
