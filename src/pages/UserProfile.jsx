@@ -13,6 +13,7 @@ import { PERSONA_OPTIONS, personaLabel } from '../utils/persona.js';
 import { setCachedPersona } from '../utils/personaCache.js';
 import { Modal } from '../components/Modal.jsx';
 import { SettingsDrawer } from '../components/SettingsDrawer.jsx';
+import { FeedbackButton } from '../components/FeedbackButton.jsx';
 
 // Item navigasi Pengaturan. Dipakai bersama oleh sidebar (desktop) & drawer (mobile).
 const SETTINGS_NAV = [
@@ -1185,6 +1186,9 @@ function UserProfile() {
           </div>
         </form>
       </Modal>
+
+      {/* Tombol masukan mengambang — hanya tampil di halaman Profil (evaluasi) */}
+      <FeedbackButton />
     </div>
   );
 }

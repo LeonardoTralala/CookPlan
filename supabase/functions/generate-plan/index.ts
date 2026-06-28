@@ -8,6 +8,7 @@ import { SYSTEM_PROMPT, PROMPT_VERSION, buildUserMessage } from "../_shared/prom
 import { callProvider, safeJsonExtract, estimateCost } from "../_shared/aiAdapter.ts";
 import type { AIProvider } from "../_shared/aiAdapter.ts";
 import { validateInput, validateOutput, subtractPantry, enforceVariety } from "../_shared/validate.ts";
+import { filterRecipesByDiet } from "../_shared/dietFilter.ts";
 
 const RATE_LIMIT_PER_DAY = 20; // generate per user per hari
 const GUEST_LIMIT = 2;         // total percobaan untuk tamu (anonymous), bukan per hari
@@ -129,16 +130,12 @@ Deno.serve(async (req) => {
     "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings";
   const RECIPE_CAP = 40;
 
-  let recipeQuery = admin.from("recipes").select(RECIPE_COLS).eq("is_active", true);
-  if (input.diet.length > 0) {
-    recipeQuery = recipeQuery.overlaps("tags", input.diet);
-  }
-  let { data: pool } = await recipeQuery;
-  // Fallback: kalau filter diet menyisakan terlalu sedikit, ambil semua aktif.
-  if (!pool || pool.length < 3) {
-    const { data: allActive } = await admin.from("recipes").select(RECIPE_COLS).eq("is_active", true);
-    pool = allActive ?? [];
-  }
+  //    Filter preferensi dilakukan di memori (pool aktif kecil, ~ratusan resep)
+  //    memakai filterRecipesByDiet — semantik UNION/OR antar chip, sama persis
+  //    dengan filter katalog. Ini menangani slug yang BUKAN tag literal
+  //    ('tinggi-protein', 'cepat', 'hemat') yang tidak bisa dijaring overlaps().
+  const { data: allActive } = await admin.from("recipes").select(RECIPE_COLS).eq("is_active", true);
+  const pool = filterRecipesByDiet(allActive ?? [], input.diet);
   if (pool.length === 0) {
     return json({ error: "Bank resep kosong. Tambahkan resep dulu." }, 422);
   }

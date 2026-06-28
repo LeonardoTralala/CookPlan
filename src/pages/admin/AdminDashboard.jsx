@@ -9,6 +9,7 @@ const TOOLS = [
   { to: '/admin/ingredients', icon: 'inventory_2', title: 'Master Bahan', desc: 'Harga & satuan dasar bahan — sumber harga resep.', statKey: 'ingredients', unit: 'bahan' },
   { to: '/admin/packages', icon: 'shopping_bag', title: 'Kelola Paket', desc: 'Paket "Belanja di Kami" beserta menu fiksnya.', statKey: 'packages', unit: 'paket' },
   { to: '/admin/orders', icon: 'receipt_long', title: 'Pesanan Masuk', desc: 'Lacak pesanan WhatsApp & ubah status pengiriman.', statKey: 'ordersActive', unit: 'perlu diproses' },
+  { to: '/admin/feedback', icon: 'feedback', title: 'Masukan Pengguna', desc: 'Baca umpan balik & rating pengguna untuk evaluasi.', statKey: 'feedback', unit: 'masukan' },
   { to: '/admin/ai', icon: 'settings_suggest', title: 'Provider AI', desc: 'Konfigurasi penyedia model AI untuk generate plan.', statKey: null },
 ];
 

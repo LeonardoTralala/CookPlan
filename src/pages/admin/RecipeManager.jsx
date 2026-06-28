@@ -25,6 +25,92 @@ let rowKey = 0;
 // priceIdr di baris = biaya terhitung (read-only, dari trigger); _id = id baris existing.
 const newRow = () => ({ _key: `r${++rowKey}`, _id: null, ingredientId: null, name: '', amount: '', unit: '', category: '', priceIdr: null, rawText: '' });
 
+// Dimensi base_unit (selaras unit_conversions.dimension).
+const BASE_DIM = { g: 'mass', ml: 'volume', pcs: 'count' };
+
+// Preview biaya baris di KLIEN — mirror persis fungsi DB resolve_ingredient_cost
+// (override per-bahan → unit==base → unit_conversions sedimensi). Dipakai supaya
+// admin lihat hasil sebelum simpan + tahu PERSIS kenapa belum terhitung.
+// status: 'ok' | 'new' | 'unpriced' | 'no-qty' | 'bad-unit'.
+function resolveRowCost(row, { masterById, convByUnit, ovByIng }) {
+  const ing = row.ingredientId ? masterById.get(row.ingredientId) : null;
+  if (!ing) return { status: 'new', price: null };
+  if (ing.pricePerBase == null) return { status: 'unpriced', price: null };
+  const amt = Number(row.amount);
+  const unit = String(row.unit ?? '').trim().toLowerCase();
+  if (!row.amount || Number.isNaN(amt) || !unit) return { status: 'no-qty', price: null };
+  let factor = ovByIng.get(ing.id)?.get(unit);
+  if (factor == null && unit === ing.baseUnit) factor = 1;
+  if (factor == null) {
+    const c = convByUnit.get(unit);
+    if (c && c.dimension === BASE_DIM[ing.baseUnit]) factor = c.toBaseFactor;
+  }
+  if (factor == null) return { status: 'bad-unit', price: null };
+  return { status: 'ok', price: Math.round(amt * factor * Number(ing.pricePerBase)) };
+}
+
+// Satuan yang VALID untuk sebuah bahan (base + override + konversi global sedimensi).
+function unitOptionsFor(ing, { convByUnit, ovByIng }) {
+  if (!ing) return [];
+  const set = new Set();
+  if (ing.baseUnit) set.add(ing.baseUnit);
+  ovByIng.get(ing.id)?.forEach((_, u) => set.add(u));
+  const dim = BASE_DIM[ing.baseUnit];
+  convByUnit.forEach((c, u) => { if (c.dimension === dim) set.add(u); });
+  return [...set];
+}
+
+// Tampilan status biaya per baris (warna + makna jelas → tim tahu apa yang difix).
+const STATUS_META = {
+  ok:         { cls: 'bg-primary/10 text-primary', icon: 'check_circle' },
+  new:        { cls: 'bg-blue-50 text-blue-700', icon: 'add_circle', label: 'bahan baru' },
+  unpriced:   { cls: 'bg-error/10 text-error', icon: 'price_change', label: 'belum berharga' },
+  'no-qty':   { cls: 'bg-surface-container-high text-on-surface-variant', icon: 'edit', label: 'isi jml/satuan' },
+  'bad-unit': { cls: 'bg-amber-50 text-amber-700', icon: 'help', label: 'satuan?' },
+};
+
+// Coverage harga sebuah resep dari bahan-bahannya (priceIdr per baris sudah ikut
+// RECIPE_SELECT). Dipakai badge daftar resep agar tim cepat lihat mana yang perlu digarap.
+function coverageOf(r) {
+  const ings = r.ingredients ?? [];
+  const total = ings.length;
+  const priced = ings.filter((x) => x.priceIdr != null).length;
+  return { priced, total };
+}
+
+function CoverageBadge({ priced, total }) {
+  if (!total) {
+    return <span className="text-[10px] font-bold uppercase bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded-full">tanpa bahan</span>;
+  }
+  const pct = Math.round((priced / total) * 100);
+  const cls = pct === 100 ? 'bg-primary/10 text-primary' : pct >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-error/10 text-error';
+  return (
+    <span title={`${priced} dari ${total} bahan sudah terhitung biayanya (${pct}%)`} className={`inline-flex items-center gap-0.5 text-[11px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${cls}`}>
+      <span className="material-symbols-outlined text-[13px] leading-none">{pct === 100 ? 'task_alt' : 'pending'}</span>{priced}/{total}
+    </span>
+  );
+}
+
+function RowStatusChip({ cost, unitOpts, onFix }) {
+  const meta = STATUS_META[cost.status] ?? STATUS_META.new;
+  const baseTitle =
+    cost.status === 'bad-unit' ? `Satuan tak dikenali untuk bahan ini. Pakai: ${unitOpts.slice(0, 10).join(', ')}` :
+    cost.status === 'unpriced' ? 'Bahan ada di Master tapi belum diisi harga.' :
+    cost.status === 'new' ? 'Bahan belum ada di Master — akan dibuat otomatis saat simpan.' :
+    cost.status === 'no-qty' ? 'Isi jumlah & satuan supaya biaya terhitung.' : 'Terhitung dari Master Bahan.';
+  const cls = `inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-semibold max-w-full ${meta.cls}`;
+  const inner = (
+    <>
+      <span className="material-symbols-outlined text-[14px] leading-none">{onFix ? 'build' : meta.icon}</span>
+      <span className="truncate">{cost.status === 'ok' ? formatRupiah(cost.price) : meta.label}</span>
+    </>
+  );
+  if (onFix) {
+    return <button type="button" onClick={onFix} title={`${baseTitle} Klik untuk perbaiki di sini.`} className={`${cls} cursor-pointer hover:brightness-95`}>{inner}</button>;
+  }
+  return <span title={baseTitle} className={cls}>{inner}</span>;
+}
+
 // Admin UI: kelola bank resep (harga, foto, deskripsi, bahan, langkah).
 // Tulis langsung lewat RLS admin (adminRecipeService) — tanpa Edge Function.
 export function RecipeManager() {
@@ -35,6 +121,9 @@ export function RecipeManager() {
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
+  const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+  const [status, setStatus] = useState('all'); // all | active | hidden
+  const [sort, setSort] = useState('default'); // default | coverage | name
 
   const [editing, setEditing] = useState(null); // recipe camelCase | null
   const [ingredients, setIngredients] = useState([]);
@@ -42,15 +131,54 @@ export function RecipeManager() {
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
   const [saving, setSaving] = useState(false);
+  // Quick-fix dari chip status baris: { rowKey, ing, kind:'price'|'unit', unit, value }.
+  const [quickFix, setQuickFix] = useState(null);
+  const [quickSaving, setQuickSaving] = useState(false);
 
   // Master bahan (untuk picker + resolusi ingredient_id by nama). Dimuat sekali.
   const [master, setMaster] = useState([]);
   const [aliases, setAliases] = useState([]); // {alias, ingredientId}
+  const [conversions, setConversions] = useState([]); // {unit, dimension, toBaseFactor}
+  const [overrides, setOverrides] = useState([]); // {ingredientId, unit, factorToBase}
   const masterByName = useMemo(() => {
     const m = new Map();
     for (const ing of master) m.set(ing.name.trim().toLowerCase(), ing);
     return m;
   }, [master]);
+  const masterById = useMemo(() => {
+    const m = new Map();
+    for (const ing of master) m.set(ing.id, ing);
+    return m;
+  }, [master]);
+  const convByUnit = useMemo(() => {
+    const m = new Map();
+    for (const c of conversions) m.set(c.unit, c);
+    return m;
+  }, [conversions]);
+  const ovByIng = useMemo(() => {
+    const m = new Map();
+    for (const o of overrides) {
+      if (!m.has(o.ingredientId)) m.set(o.ingredientId, new Map());
+      m.get(o.ingredientId).set(o.unit, Number(o.factorToBase));
+    }
+    return m;
+  }, [overrides]);
+  const costCtx = useMemo(() => ({ masterById, convByUnit, ovByIng }), [masterById, convByUnit, ovByIng]);
+  // Biaya tiap baris dihitung live (klien) untuk feedback instan saat mengedit.
+  const rowCosts = useMemo(() => {
+    const m = new Map();
+    for (const r of ingredients) m.set(r._key, resolveRowCost(r, costCtx));
+    return m;
+  }, [ingredients, costCtx]);
+  const liveSummary = useMemo(() => {
+    const named = ingredients.filter((r) => r.name?.trim());
+    let total = 0, priced = 0;
+    for (const r of named) {
+      const c = rowCosts.get(r._key);
+      if (c?.status === 'ok') { total += c.price; priced += 1; }
+    }
+    return { total, priced, count: named.length };
+  }, [ingredients, rowCosts]);
   const aliasToId = useMemo(() => {
     const m = new Map();
     for (const a of aliases) m.set(a.alias, a.ingredientId);
@@ -84,6 +212,8 @@ export function RecipeManager() {
         refresh();
         ingredientService.listIngredients().then((d) => { if (active) setMaster(d); }).catch(() => {});
         ingredientService.listAllAliases().then((d) => { if (active) setAliases(d); }).catch(() => {});
+        ingredientService.listConversions().then((d) => { if (active) setConversions(d); }).catch(() => {});
+        ingredientService.listAllOverrides().then((d) => { if (active) setOverrides(d); }).catch(() => {});
       }
     });
     return () => { active = false; };
@@ -91,9 +221,28 @@ export function RecipeManager() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return recipes;
-    return recipes.filter((r) => r.title?.toLowerCase().includes(q));
-  }, [recipes, query]);
+    const list = recipes.filter((r) => {
+      if (q && !r.title?.toLowerCase().includes(q)) return false;
+      if (status === 'active' && !r.isActive) return false;
+      if (status === 'hidden' && r.isActive) return false;
+      if (onlyIncomplete) {
+        const { priced, total } = coverageOf(r);
+        if (total > 0 && priced >= total) return false; // sudah lengkap → sembunyikan
+      }
+      return true;
+    });
+    if (sort === 'coverage') {
+      // coverage terendah dulu (yang paling perlu digarap di atas); tanpa bahan = paling atas.
+      const ratio = (r) => { const { priced, total } = coverageOf(r); return total ? priced / total : -1; };
+      return [...list].sort((a, b) => ratio(a) - ratio(b));
+    }
+    if (sort === 'name') return [...list].sort((a, b) => (a.title ?? '').localeCompare(b.title ?? ''));
+    return list;
+  }, [recipes, query, onlyIncomplete, status, sort]);
+  const incompleteCount = useMemo(
+    () => recipes.filter((r) => { const { priced, total } = coverageOf(r); return total === 0 || priced < total; }).length,
+    [recipes],
+  );
 
   const openCreate = () => {
     setEditing({ ...EMPTY_RECIPE });
@@ -146,6 +295,42 @@ export function RecipeManager() {
     }));
   const addRow = () => setIngredients((rows) => [...rows, newRow()]);
   const removeRow = (key) => setIngredients((rows) => rows.filter((r) => r._key !== key));
+
+  // Perbaiki bahan dari chip status tanpa pindah halaman: isi harga master (status
+  // 'unpriced') atau tambah konversi satuan (status 'bad-unit'). Setelah simpan,
+  // master/override lokal diperbarui → preview biaya baris langsung ikut terhitung.
+  const openQuickFix = (row, cost) => {
+    const ing = masterById.get(row.ingredientId);
+    if (!ing) return;
+    if (cost.status === 'unpriced') setQuickFix({ rowKey: row._key, ing, kind: 'price', value: '' });
+    else if (cost.status === 'bad-unit') setQuickFix({ rowKey: row._key, ing, kind: 'unit', unit: String(row.unit ?? '').trim().toLowerCase(), value: '' });
+  };
+  const saveQuickFix = async () => {
+    if (!quickFix) return;
+    const val = Number(quickFix.value);
+    if (quickFix.value === '' || Number.isNaN(val) || val < 0) { showToast('Angka tidak valid.', { variant: 'error' }); return; }
+    setQuickSaving(true);
+    try {
+      if (quickFix.kind === 'price') {
+        await ingredientService.updateIngredient(quickFix.ing.id, { pricePerBase: val });
+        setMaster((m) => m.map((x) => (x.id === quickFix.ing.id ? { ...x, pricePerBase: val } : x)));
+        showToast('Harga bahan disimpan.');
+      } else {
+        if (!quickFix.unit) { showToast('Satuan kosong.', { variant: 'error' }); setQuickSaving(false); return; }
+        await ingredientService.upsertOverride(quickFix.ing.id, quickFix.unit, val);
+        setOverrides((o) => [
+          ...o.filter((x) => !(x.ingredientId === quickFix.ing.id && x.unit === quickFix.unit)),
+          { ingredientId: quickFix.ing.id, unit: quickFix.unit, factorToBase: val },
+        ]);
+        showToast('Konversi satuan disimpan.');
+      }
+      setQuickFix(null);
+    } catch (e) {
+      showToast(e.message, { variant: 'error' });
+    } finally {
+      setQuickSaving(false);
+    }
+  };
 
   // Saat selesai mengetik/menempel nama (blur): pisahkan kuantitas & bersihkan nama
   // via parser kanonik supaya "100 ml air" → nama "air" + jml 100 + satuan ml, bukan
@@ -288,19 +473,43 @@ export function RecipeManager() {
         </button>
       </div>
 
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Cari resep…"
-        className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
-      />
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Cari resep…"
+          className="flex-1 min-w-[10rem] px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+        />
+        <select value={status} onChange={(e) => setStatus(e.target.value)} title="Filter status"
+          className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
+          <option value="all">Semua status</option>
+          <option value="active">Aktif</option>
+          <option value="hidden">Disembunyikan</option>
+        </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value)} title="Urutkan"
+          className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
+          <option value="default">Urutan default</option>
+          <option value="coverage">Coverage terendah</option>
+          <option value="name">Nama A–Z</option>
+        </select>
+        <button
+          onClick={() => setOnlyIncomplete((v) => !v)}
+          className={`px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-1.5 cursor-pointer shrink-0 border ${onlyIncomplete ? 'bg-primary text-on-primary border-primary' : 'bg-white text-on-surface-variant border-outline-variant'}`}
+          title="Tampilkan hanya resep yang biayanya belum lengkap"
+        >
+          <span className="material-symbols-outlined text-[20px]">{onlyIncomplete ? 'filter_alt' : 'filter_alt_off'}</span>
+          Belum lengkap ({incompleteCount})
+        </button>
+      </div>
 
       {loading ? (
         <div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span></div>
       ) : (
         <div className="space-y-3">
           {filtered.length === 0 && <p className="text-center text-sm text-on-surface-variant py-8">Tidak ada resep.</p>}
-          {filtered.map((r) => (
+          {filtered.map((r) => {
+            const cov = coverageOf(r);
+            return (
             <div key={r.id} className={`rounded-2xl border p-3 flex items-center gap-3 ${r.isActive ? 'border-outline-variant' : 'border-error/30 bg-error/5'}`}>
               <div className="w-14 h-14 rounded-xl bg-surface-container-high overflow-hidden shrink-0">
                 {r.imageUrl && <img src={r.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
@@ -310,16 +519,18 @@ export function RecipeManager() {
                   <span className="font-semibold text-on-surface truncate">{r.title}</span>
                   {!r.isActive && <span className="text-[10px] font-bold uppercase bg-error text-white px-2 py-0.5 rounded-full">Disembunyikan</span>}
                 </div>
-                <p className="text-xs text-on-surface-variant mt-0.5">
-                  {formatRupiah(r.priceIdr)} · {r.ingredients?.length ?? 0} bahan
-                </p>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <p className="text-xs text-on-surface-variant">{formatRupiah(r.priceIdr)} · {cov.total} bahan</p>
+                  <CoverageBadge priced={cov.priced} total={cov.total} />
+                </div>
               </div>
               <div className="flex gap-2 shrink-0">
                 <button onClick={() => openEdit(r)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container-low cursor-pointer">Edit</button>
                 <button onClick={() => handleDelete(r)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-error/40 text-error hover:bg-error/10 cursor-pointer">Hapus</button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -371,9 +582,17 @@ export function RecipeManager() {
                 <Field label="Porsi dasar"><TextInput type="number" value={editing.baseServings ?? 2} onChange={(v) => setField('baseServings', v)} /></Field>
               </div>
 
-              <div className="flex items-center justify-between rounded-xl bg-surface-container-low border border-outline-variant px-4 py-2.5">
-                <span className="text-xs font-semibold text-on-surface">Harga total (otomatis dari Master Bahan)</span>
-                <span className="font-bold text-primary">{editing.id ? formatRupiah(editing.priceIdr) : '— simpan dulu'}</span>
+              <div className="rounded-xl bg-surface-container-low border border-outline-variant px-4 py-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-on-surface">Estimasi biaya (live, dari Master Bahan)</span>
+                  <span className="font-bold text-primary">{formatRupiah(liveSummary.total)}</span>
+                </div>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <div className="h-1.5 flex-1 rounded-full bg-surface-container-high overflow-hidden">
+                    <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${liveSummary.count ? Math.round((liveSummary.priced / liveSummary.count) * 100) : 0}%` }} />
+                  </div>
+                  <span className="text-[11px] font-semibold text-on-surface-variant shrink-0">{liveSummary.priced}/{liveSummary.count} bahan terhitung</span>
+                </div>
               </div>
 
               <Field label="Tag (pisahkan dengan koma)">
@@ -399,24 +618,30 @@ export function RecipeManager() {
                     <span className="material-symbols-outlined text-[18px]">add</span> Baris
                   </button>
                 </div>
-                <p className="text-[11px] text-on-surface-variant mb-2">Pilih bahan dari daftar; harga & total dihitung otomatis dari Master Bahan setelah disimpan.</p>
+                <p className="text-[11px] text-on-surface-variant mb-2">Biaya & status muncul <span className="font-semibold">live</span>: <span className="text-primary font-semibold">Rp = terhitung</span> · <span className="text-blue-700 font-semibold">bahan baru</span> · <span className="text-error font-semibold">belum berharga</span> · <span className="text-amber-700 font-semibold">satuan tak dikenali</span>. <span className="font-semibold">Klik status 🔴/🟠</span> untuk perbaiki harga/satuan di tempat.</p>
                 <datalist id="master-ingredients">
                   {master.map((m) => <option key={m.id} value={m.name} />)}
                 </datalist>
                 <div className="space-y-2">
-                  {ingredients.map((row) => (
-                    <div key={row._key} className="grid grid-cols-12 gap-1.5 items-center">
-                      <input list="master-ingredients" value={row.name} onChange={(e) => setIngredientName(row._key, e.target.value)} onBlur={() => applyParseToRow(row._key)} placeholder="Nama bahan / tempel “100 ml air”" className="col-span-4 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
-                      <input value={row.amount} onChange={(e) => setIngredient(row._key, 'amount', e.target.value)} placeholder="Jml" type="number" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
-                      <input value={row.unit} onChange={(e) => setIngredient(row._key, 'unit', e.target.value)} placeholder="gr" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
-                      <span className="col-span-3 text-right text-xs font-semibold text-on-surface-variant pr-1" title={row.ingredientId ? '' : 'Bahan baru — akan ditambahkan ke Master Bahan'}>
-                        {row.priceIdr != null ? formatRupiah(row.priceIdr) : (row.ingredientId ? 'perlu harga' : 'baru')}
-                      </span>
-                      <button onClick={() => removeRow(row._key)} className="col-span-1 flex justify-center text-error cursor-pointer" title="Hapus bahan">
-                        <span className="material-symbols-outlined text-[20px]">close</span>
-                      </button>
-                    </div>
-                  ))}
+                  {ingredients.map((row) => {
+                    const cost = rowCosts.get(row._key) ?? { status: 'new', price: null };
+                    const ing = row.ingredientId ? masterById.get(row.ingredientId) : null;
+                    const unitOpts = unitOptionsFor(ing, costCtx);
+                    return (
+                      <div key={row._key} className="grid grid-cols-12 gap-1.5 items-center">
+                        <input list="master-ingredients" value={row.name} onChange={(e) => setIngredientName(row._key, e.target.value)} onBlur={() => applyParseToRow(row._key)} placeholder="Nama bahan / tempel “100 ml air”" className="col-span-4 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                        <input value={row.amount} onChange={(e) => setIngredient(row._key, 'amount', e.target.value)} placeholder="Jml" type="number" className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                        <input value={row.unit} list={unitOpts.length ? `units-${row._key}` : undefined} onChange={(e) => setIngredient(row._key, 'unit', e.target.value)} placeholder={ing?.baseUnit || 'gr'} className="col-span-2 px-2.5 py-2 rounded-lg bg-white border border-outline-variant text-sm focus:outline-none focus:ring-1 focus:ring-primary" />
+                        {unitOpts.length > 0 && <datalist id={`units-${row._key}`}>{unitOpts.map((u) => <option key={u} value={u} />)}</datalist>}
+                        <div className="col-span-3 flex justify-end min-w-0">
+                          <RowStatusChip cost={cost} unitOpts={unitOpts} onFix={(cost.status === 'unpriced' || cost.status === 'bad-unit') ? () => openQuickFix(row, cost) : undefined} />
+                        </div>
+                        <button onClick={() => removeRow(row._key)} className="col-span-1 flex justify-center text-error cursor-pointer" title="Hapus bahan">
+                          <span className="material-symbols-outlined text-[20px]">close</span>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -430,6 +655,46 @@ export function RecipeManager() {
               <button onClick={closeForm} disabled={saving} className="flex-1 py-3 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50">Batal</button>
               <button onClick={handleSave} disabled={saving} className="flex-1 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2">
                 {saving && <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>}
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quick-fix dari chip status: set harga master / tambah konversi satuan */}
+      {quickFix && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-on-surface/60 backdrop-blur-sm" onClick={() => !quickSaving && setQuickFix(null)}>
+          <div className="bg-white w-full max-w-xs rounded-2xl p-5" onClick={(e) => e.stopPropagation()}>
+            {quickFix.kind === 'price' ? (
+              <>
+                <h3 className="font-semibold text-on-surface mb-1">Set harga: {quickFix.ing.name}</h3>
+                <p className="text-[11px] text-on-surface-variant mb-3">Harga per <b>{quickFix.ing.baseUnit}</b> (satuan dasar). Mis. Rp40.000/kg → isi <b>40</b> (per gram).</p>
+                <input type="number" step="any" autoFocus value={quickFix.value}
+                  onChange={(e) => setQuickFix((q) => ({ ...q, value: e.target.value }))}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveQuickFix(); }}
+                  placeholder={`Rp per ${quickFix.ing.baseUnit}`}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+              </>
+            ) : (
+              <>
+                <h3 className="font-semibold text-on-surface mb-1">Konversi satuan: {quickFix.ing.name}</h3>
+                <p className="text-[11px] text-on-surface-variant mb-3">1 <b>{quickFix.unit}</b> = berapa <b>{quickFix.ing.baseUnit}</b>? Mis. 1 siung = <b>5</b> (gram).</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-on-surface-variant shrink-0">1 {quickFix.unit} =</span>
+                  <input type="number" step="any" autoFocus value={quickFix.value}
+                    onChange={(e) => setQuickFix((q) => ({ ...q, value: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveQuickFix(); }}
+                    placeholder={quickFix.ing.baseUnit}
+                    className="flex-1 min-w-0 px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                  <span className="text-sm text-on-surface-variant shrink-0">{quickFix.ing.baseUnit}</span>
+                </div>
+              </>
+            )}
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setQuickFix(null)} disabled={quickSaving} className="flex-1 py-2.5 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm cursor-pointer disabled:opacity-50">Batal</button>
+              <button onClick={saveQuickFix} disabled={quickSaving} className="flex-1 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2">
+                {quickSaving && <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>}
                 Simpan
               </button>
             </div>

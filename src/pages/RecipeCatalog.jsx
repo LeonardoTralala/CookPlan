@@ -20,14 +20,23 @@ const DEFAULT_DIET_OPTIONS = [
 // "Muat Lebih Banyak" menambah sebanyak ini; menjaga DOM awal tetap ringan.
 const RECIPES_PER_PAGE = 12;
 
+// Tag sumber protein. 'tinggi-protein' tidak pernah ditulis eksplisit ke
+// recipes.tags, jadi chip-nya diturunkan dari kehadiran salah satu tag ini agar
+// berfungsi tanpa perlu menandai tiap resep secara manual.
+const PROTEIN_SOURCE_TAGS = new Set([
+  'ayam', 'ikan', 'sapi', 'kambing', 'telur', 'udang', 'daging', 'seafood', 'tahu', 'tempe',
+]);
+
 // Cocokkan satu resep dengan satu preferensi diet (slug diet_tags.value).
 // Kunci utama: recipe.tags (berisi slug). Fallback: badge label (case-insensitive),
-// plus heuristik waktu/harga untuk slug 'cepat'/'hemat' (selaras perilaku lama).
+// plus heuristik waktu/harga untuk slug 'cepat'/'hemat' dan derivasi sumber protein
+// untuk 'tinggi-protein' (selaras perilaku lama + tag yang tidak ditulis eksplisit).
 function recipeMatchesDiet(recipe, slug, label) {
   if ((recipe.tags ?? []).includes(slug)) return true;
   if (label && (recipe.badges ?? []).some((b) => b.toLowerCase() === label.toLowerCase())) return true;
   if (slug === 'cepat' && recipe.readyInMinutes <= 30) return true;
   if (slug === 'hemat' && recipe.priceIdr <= 30000) return true;
+  if (slug === 'tinggi-protein' && (recipe.tags ?? []).some((t) => PROTEIN_SOURCE_TAGS.has(t))) return true;
   return false;
 }
 

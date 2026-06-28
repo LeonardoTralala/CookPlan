@@ -44,8 +44,8 @@ export function OrderSuccess() {
   const total = subtotal + deliveryFee;
 
   const waUrl = useMemo(
-    () => (order ? buildWhatsappUrl(order, itemList) : null),
-    [order, itemList]
+    () => (order ? buildWhatsappUrl(order) : null),
+    [order]
   );
 
   const handleOpenWhatsapp = async () => {
@@ -66,7 +66,7 @@ export function OrderSuccess() {
   const handleCopy = async () => {
     if (!order) return;
     try {
-      await navigator.clipboard.writeText(buildWhatsappText(order, itemList));
+      await navigator.clipboard.writeText(buildWhatsappText(order));
       showToast('Teks pesanan disalin. 📋');
     } catch {
       showToast('Gagal menyalin teks.', { variant: 'error' });

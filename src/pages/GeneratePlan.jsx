@@ -36,7 +36,6 @@ const MEAL_OPTIONS = [
 // wizard tidak pernah kosong. Selaras dengan seed migrasi diet_tags.
 const DEFAULT_DIET_OPTIONS = [
   { value: 'vegetarian', label: 'Vegetarian' },
-  { value: 'vegan', label: 'Vegan' },
   { value: 'halal', label: 'Halal' },
   { value: 'tinggi-protein', label: 'Tinggi Protein' },
   { value: 'hemat', label: 'Hemat Budget' },

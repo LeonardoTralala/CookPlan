@@ -20,6 +20,9 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
   // dihapus user karena tidak diperlukan (keluar dari daftar & estimasi biaya).
   const [checkedItems, setCheckedItems] = useState(() => new Set());
   const [removedItems, setRemovedItems] = useState(() => new Set());
+  // Centang stok bahan dapur (garam/minyak/dll). Murni penanda di layar — TIDAK
+  // ikut disimpan, tidak masuk order, tidak memengaruhi biaya.
+  const [checkedPantry, setCheckedPantry] = useState(() => new Set());
   const [recipes, setRecipes] = useState([]);
   const [recipesLoading, setRecipesLoading] = useState(true);
   const [view, setView] = useState('bahan'); // 'bahan' | 'menu'
@@ -53,7 +56,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     () => slotsFromWeeklyPlan(weeklyPlan, recipeIndex),
     [weeklyPlan, recipeIndex]
   );
-  const { sections, totalItems } = useMemo(
+  const { sections, totalItems, pantryItems } = useMemo(
     () => buildShoppingListFromSlots(slots),
     [slots]
   );
@@ -64,6 +67,15 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     setCheckedItems((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // Centang/uncentang bahan dapur (penanda stok di rumah; tak memengaruhi apa pun).
+  const togglePantry = (name) => {
+    setCheckedPantry((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name); else next.add(name);
       return next;
     });
   };
@@ -261,6 +273,40 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
             </div>
           </section>
         ))}
+
+        {/* ---- BAHAN DAPUR (cek stok di rumah) ---- */}
+        {/* Bahan pokok (garam, minyak, dll) dikecualikan dari belanja & biaya karena
+            biasanya sudah ada di dapur. Ditampilkan sebagai reminder ringan — centang
+            yang stoknya habis. Tidak masuk daftar tersimpan, order, atau estimasi biaya. */}
+        {view === 'bahan' && pantryItems.length > 0 && (
+          <section>
+            <div className="flex items-center gap-3 mb-4">
+              <span className="material-symbols-outlined text-on-surface-variant text-2xl">kitchen</span>
+              <h3 className="font-headline-md text-headline-md text-on-surface">Bahan Dapur</h3>
+              <span className="ml-auto text-sm font-semibold text-outline">{pantryItems.length} bahan</span>
+            </div>
+            <div className="flex items-start gap-2.5 rounded-2xl bg-surface-container-low border border-outline-variant px-4 py-3 text-sm text-on-surface-variant mb-3">
+              <span className="material-symbols-outlined text-on-surface-variant text-[20px] shrink-0">info</span>
+              <p>Bahan ini biasanya <span className="font-semibold text-on-surface">sudah ada di dapur</span>, jadi tidak dihitung ke biaya belanja. Centang yang <span className="font-semibold text-on-surface">stoknya habis</span> biar tidak lupa beli.</p>
+            </div>
+            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
+              {pantryItems.map((name) => {
+                const checked = checkedPantry.has(name); // stok habis → perlu dibeli
+                return (
+                  <button key={name} onClick={() => togglePantry(name)} aria-pressed={checked}
+                    className="w-full text-left flex items-center gap-4 p-4 md:p-5 border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors group cursor-pointer">
+                    <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
+                      checked ? 'bg-success-green border-success-green' : 'border-outline-variant group-hover:border-primary'}`}>
+                      <span className={`material-symbols-outlined text-sm transition-opacity ${
+                        checked ? 'text-white opacity-100' : 'text-primary opacity-0 group-hover:opacity-60'}`}>check</span>
+                    </div>
+                    <span className={`font-semibold text-on-surface ${checked ? '' : 'opacity-90'}`}>{name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* Disclaimer harga: estimasi, bukan harga final di pasar/toko. */}
         <p className="flex items-start gap-2 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-xs text-on-surface-variant">

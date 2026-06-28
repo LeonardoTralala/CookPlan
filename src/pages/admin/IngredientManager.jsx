@@ -30,6 +30,7 @@ export function IngredientManager() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [onlyUnpriced, setOnlyUnpriced] = useState(false);
+  const [category, setCategory] = useState(''); // '' = semua, '__none' = tanpa kategori
 
   const [editing, setEditing] = useState(null); // ingredient camelCase | null
   const [overrides, setOverrides] = useState([]);
@@ -61,9 +62,10 @@ export function IngredientManager() {
     const q = query.trim().toLowerCase();
     return items.filter((i) =>
       (!onlyUnpriced || i.pricePerBase == null) &&
+      (category === '' || (category === '__none' ? i.category == null : i.category === category)) &&
       (!q || i.name.toLowerCase().includes(q))
     );
-  }, [items, query, onlyUnpriced]);
+  }, [items, query, onlyUnpriced, category]);
 
   const pricedCount = useMemo(() => items.filter((i) => i.pricePerBase != null).length, [items]);
 
@@ -183,13 +185,22 @@ export function IngredientManager() {
         {pricedCount}/{items.length} bahan sudah berharga. Ubah harga di sini → biaya bahan & total resep ikut otomatis di semua resep.
       </p>
 
-      <div className="flex gap-2 items-center">
+      <div className="flex flex-wrap gap-2 items-center">
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari bahan…"
-          className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+          className="flex-1 min-w-[10rem] px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+        <select value={category} onChange={(e) => setCategory(e.target.value)} title="Filter kategori"
+          className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
+          <option value="">Semua kategori</option>
+          {CATEGORIES.filter((c) => c.value).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+          <option value="__none">Tanpa kategori</option>
+        </select>
         <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
           <input type="checkbox" checked={onlyUnpriced} onChange={(e) => setOnlyUnpriced(e.target.checked)} /> Belum berharga
         </label>
       </div>
+      {(query || category || onlyUnpriced) && (
+        <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setOnlyUnpriced(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span></div>
