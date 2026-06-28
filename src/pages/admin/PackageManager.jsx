@@ -51,6 +51,9 @@ export function PackageManager() {
   const [editing, setEditing] = useState(null); // package camelCase | null
   const [menu, setMenu] = useState({}); // key `${day}-${mealType}` -> recipeId (string)
   const [saving, setSaving] = useState(false);
+  // Teks mentah badge yang sedang diketik (STRING) — biar koma/spasi tetap utuh saat
+  // mengetik; konversi ke array baru saat Simpan (lihat handleSave), bukan tiap keystroke.
+  const [badgesRaw, setBadgesRaw] = useState('');
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -87,10 +90,12 @@ export function PackageManager() {
   const openCreate = () => {
     setEditing({ ...EMPTY_PACKAGE });
     setMenu({});
+    setBadgesRaw('');
   };
 
   const openEdit = (p) => {
     setEditing({ ...EMPTY_PACKAGE, ...p });
+    setBadgesRaw((p.badges ?? []).join(', '));
     const next = {};
     for (const m of p.meals ?? []) {
       if (m.recipe?.id) next[`${m.dayIndex}-${m.mealType}`] = String(m.recipe.id);
@@ -164,7 +169,8 @@ export function PackageManager() {
         baseServings: clamp(editing.baseServings, 1, 20),
         priceIdr: Math.round(numOrZero(editing.priceIdr)),
         imageUrl: editing.imageUrl?.trim() || null,
-        badges: editing.badges,
+        // Teks mentah → array bersih HANYA saat simpan (jaga bentuk data DB sama spt dulu).
+        badges: splitCsv(badgesRaw),
         sortOrder: Math.round(numOrZero(editing.sortOrder)),
         isActive: editing.isActive,
       };
@@ -303,7 +309,7 @@ export function PackageManager() {
               </div>
 
               <Field label="Badge tampilan (pisahkan dengan koma)">
-                <TextInput value={(editing.badges ?? []).join(', ')} onChange={(v) => setField('badges', splitCsv(v))} placeholder="Hemat, Populer" />
+                <TextInput value={badgesRaw} onChange={setBadgesRaw} placeholder="Hemat, Populer" />
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
