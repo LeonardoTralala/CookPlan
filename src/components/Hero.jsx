@@ -1,4 +1,3 @@
-import { useEffect, useRef } from "react";
 import { scrollToSection } from "../utils/scroll.js";
 
 export function Hero({ onNavigate }) {
@@ -6,46 +5,21 @@ export function Hero({ onNavigate }) {
   const goRegister = () => (onNavigate ? onNavigate("generate") : scrollToSection("how-it-works"));
   const goLearn = () => scrollToSection("how-it-works");
 
-  const videoRef = useRef(null);
-  useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    // Hormati prefers-reduced-motion: hentikan loop, biarkan poster diam.
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      v.removeAttribute("autoplay");
-      v.pause();
-      return;
-    }
-    // Hemat kuota di HP: pakai versi 720p yang jauh lebih ringan.
-    if (window.matchMedia("(max-width: 767px)").matches) {
-      const source = v.querySelector("source");
-      if (source && !source.src.includes("720")) {
-        source.src = "/hero-cook-720.mp4";
-        v.load();
-        v.play().catch(() => {});
-      }
-    }
-  }, []);
-
   return (
     <section className="relative isolate overflow-hidden hero-gradient pt-12 pb-16 md:pt-20 md:pb-32 md:min-h-[600px] flex items-center">
-      {/* ---- Latar: video looping (poster sbagai fallback awal & reduced-motion) ---- */}
+      {/* ---- Latar: foto hero statis. Dulu video looping, tapi dihapus karena
+           berat di mobile (mp4) & nyaris tak terlihat di balik scrim. Gambar ini
+           kemungkinan elemen LCP, jadi width/height eksplisit (cegah CLS). ---- */}
       <div className="absolute inset-0 -z-10">
-        <video
-          ref={videoRef}
-          className="h-full w-full object-cover object-right"
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="metadata"
-          poster="/hero-poster.jpg"
+        <img
+          src="/hero-poster.jpg"
+          alt=""
           aria-hidden="true"
-          tabIndex={-1}
-        >
-          <source src="/hero-cook.mp4" type="video/mp4" />
-        </video>
-        {/* Scrim agar teks di kiri tetap terbaca di atas video bergerak */}
+          width="1920"
+          height="1080"
+          className="h-full w-full object-cover object-right"
+        />
+        {/* Scrim agar teks di kiri tetap terbaca di atas foto */}
         <div className="absolute inset-0 bg-gradient-to-r from-canvas-white via-canvas-white/85 to-transparent md:via-canvas-white/75"></div>
         <div className="absolute inset-0 bg-canvas-white/35 md:bg-transparent"></div>
       </div>

@@ -23,7 +23,13 @@
     <meta property="og:url" content="https://cookplan.id/" />
     <meta property="og:title" content="CookPlan — Dapur Cerdas: Atur Menu & Belanja Mingguan Otomatis" />
     <meta property="og:description" content="CookPlan adalah aplikasi cerdas untuk merencanakan menu masak mingguan. Dapatkan rekomendasi resep nusantara, atur jadwal makan, dan hasilkan daftar belanja otomatis secara praktis." />
-    <meta property="og:image" content="https://lh3.googleusercontent.com/aida-public/AB6AXuAEvZ-TlNqcDpzxdxHecdSRfyLC6mKa15k9Qz7s190PVi2hPH1zT0--8qCZNakpIOefczKIiJ0JBDymTyLs2ahOBuJVZeVFNuHlhIqNBUSC9FN9tEw2mCsLlwjVe_U4cE0ILGNnAPHcOecA7TNZYUaBBWO8oNyLXq7kE13GjGjyrBNdVRmXl_Q0bhHp-cuL_kmT6yWkjQzuAglWAdq49H-NAhC1ULlC4dF5Hl8I9qZiBOAK6UipL-m8CP6CmRw8zz_WVX0Gbgv5EGHJ" />
+    <!-- og:image self-hosted (landscape 16:9) → kartu share tampil besar &
+         tak bergantung CDN eksternal yang bisa kedaluwarsa. -->
+    <meta property="og:image" content="https://cookplan.id/hero-poster.jpg" />
+    <meta property="og:image:type" content="image/jpeg" />
+    <meta property="og:image:width" content="1920" />
+    <meta property="og:image:height" content="1080" />
+    <meta property="og:image:alt" content="CookPlan — rencana menu masak mingguan & daftar belanja otomatis" />
     <meta property="og:site_name" content="CookPlan" />
 
     <!-- Twitter Card (twitter:image otomatis fallback ke og:image) -->
@@ -31,12 +37,28 @@
     <meta name="twitter:title" content="CookPlan — Dapur Cerdas: Atur Menu & Belanja Mingguan Otomatis" />
     <meta name="twitter:description" content="Susun menu masak mingguan, dapatkan daftar belanja otomatis, dan masak hemat anti food waste — dengan rekomendasi bertenaga AI." />
 
-    <!-- Google Fonts -->
+    <!-- Google Fonts dimuat ASINKRON (non-render-blocking) supaya tidak menunda
+         first paint di mobile. Pola: preload as=style → onload jadikan stylesheet;
+         <noscript> sebagai fallback bila JS mati. Material Symbols tetap
+         display=block agar ikon tak sempat tampil sebagai teks ligatur mentah. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
-    <!-- Material Symbols -->
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block" rel="stylesheet" />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <link
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block"
+      onload="this.onload=null;this.rel='stylesheet'"
+    />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+      <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block" rel="stylesheet" />
+    </noscript>
 
     <!-- Canonical self-referensi per-rute. SPA tanpa SSR: tag dibuat saat load
          sesuai URL yang dirayapi, sehingga tiap halaman (dirayapi terpisah oleh
