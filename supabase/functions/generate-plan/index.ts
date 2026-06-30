@@ -7,8 +7,10 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { SYSTEM_PROMPT, PROMPT_VERSION, buildUserMessage } from "../_shared/prompt.ts";
 import { callProvider, safeJsonExtract, estimateCost } from "../_shared/aiAdapter.ts";
 import type { AIProvider } from "../_shared/aiAdapter.ts";
-import { validateInput, validateOutput, subtractPantry, enforceVariety } from "../_shared/validate.ts";
+import { validateInput, validateOutput, enforceVariety } from "../_shared/validate.ts";
 import { filterRecipesByDiet } from "../_shared/dietFilter.ts";
+import { buildShoppingList } from "../_shared/shoppingList.ts";
+import type { RecipeWithIngredients } from "../_shared/shoppingList.ts";
 
 const RATE_LIMIT_PER_DAY = 20; // generate per user per hari
 const GUEST_LIMIT = 2;         // total percobaan untuk tamu (anonymous), bukan per hari
@@ -255,9 +257,35 @@ Deno.serve(async (req) => {
   }
 
   // 10. Post-process di server (bukan delegasi ke AI):
-  //     a. tegakkan variasi/hari + isi 3 slot (foodprep), b. kurangi pantry.
+  //     a. tegakkan variasi/hari + isi 3 slot (foodprep)
   const variedOutput = enforceVariety(parsed as Record<string, unknown>, input.variasiPerHari, input.porsi, input.meals);
-  const finalOutput = subtractPantry(variedOutput, input.pantry);
+  
+  //     b. Bangun shopping_list deterministik dari database & kurangi pantry
+  const variedOutputObj = variedOutput as Record<string, any>;
+  const allRecipeIds = new Set<number>();
+  for (const d of (variedOutputObj.days ?? [])) {
+    for (const m of (d.meals ?? [])) {
+      if (m.recipe_id != null) allRecipeIds.add(Number(m.recipe_id));
+    }
+  }
+
+  let shoppingPatch = { shopping_list: [] as any[], total_estimated_cost: 0 };
+  if (allRecipeIds.size > 0) {
+    const { data: recRows } = await admin
+      .from("recipes")
+      .select("id, base_servings, ingredients:recipe_ingredients(name, amount, unit, category, price_idr)")
+      .in("id", [...allRecipeIds]);
+    const recipesById = new Map<number, RecipeWithIngredients>(
+      (recRows ?? []).map((r) => [r.id as number, r as unknown as RecipeWithIngredients]),
+    );
+    shoppingPatch = buildShoppingList(variedOutputObj.days, recipesById, input.pantry);
+  }
+
+  const finalOutput = {
+    ...variedOutputObj,
+    shopping_list: shoppingPatch.shopping_list,
+    total_estimated_cost: shoppingPatch.total_estimated_cost,
+  };
 
   // 11. Persist
   const cost = estimateCost(aiResult.tokensInput, aiResult.tokensOutput);

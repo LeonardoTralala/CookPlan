@@ -99,20 +99,26 @@ export function buildShoppingList(days, recipeIndex, pantry = []) {
         const key = aggKey(name, unit, category);
         const existing = agg.get(key);
         if (existing) {
-          existing.total_amount = round2(existing.total_amount + amount);
-          existing.estimated_price_idr = Math.round(existing.estimated_price_idr + price);
+          existing.total_amount = existing.total_amount + amount;
+          existing.estimated_price_idr = existing.estimated_price_idr + price;
         } else {
           agg.set(key, {
             ingredient: name,
-            total_amount: round2(amount),
+            total_amount: amount,
             unit,
             category,
-            estimated_price_idr: Math.round(price),
+            estimated_price_idr: price,
           });
         }
       }
     }
   }
 
-  return subtractPantry([...agg.values()], pantry);
+  const shopping_list = [...agg.values()].map((item) => ({
+    ...item,
+    total_amount: round2(item.total_amount),
+    estimated_price_idr: Math.round(item.estimated_price_idr),
+  }));
+
+  return subtractPantry(shopping_list, pantry);
 }
