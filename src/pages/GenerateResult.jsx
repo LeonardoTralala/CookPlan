@@ -97,6 +97,27 @@ export function GenerateResult() {
           if (!active) return;
           const index = new Map(recipes.map((r) => [r.id, r]));
           setRecipeIndex(index);
+
+          // Recompute shopping list upon initial mount to ensure consistency
+          if (Array.isArray(data.plan?.shopping_list)) {
+            const { shopping_list, total_estimated_cost } = buildShoppingList(
+              data.plan.days,
+              index,
+              Array.isArray(data.input?.pantry) ? data.input.pantry : []
+            );
+            data = {
+              ...data,
+              plan: {
+                ...data.plan,
+                shopping_list,
+                total_estimated_cost
+              }
+            };
+            setResult(data);
+            try {
+              sessionStorage.setItem(`plan_${planId}`, JSON.stringify(data));
+            } catch { /* sessionStorage opsional */ }
+          }
         }
       } catch (e) {
         if (active) setError(e.message || 'Gagal memuat hasil.');

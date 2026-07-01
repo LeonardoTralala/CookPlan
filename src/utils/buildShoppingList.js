@@ -79,7 +79,10 @@ export function buildShoppingListFromSlots(slots) {
   }
 
   let estimatedCost = 0;
-  itemMap.forEach((item) => { estimatedCost += item.priceIdr; });
+  itemMap.forEach((item) => {
+    item.priceIdr = Math.round(item.priceIdr);
+    estimatedCost += item.priceIdr;
+  });
 
   const order = Object.keys(CATEGORY_META);
   const grouped = {};

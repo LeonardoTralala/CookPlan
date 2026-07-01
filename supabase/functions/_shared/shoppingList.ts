@@ -87,22 +87,26 @@ export function buildShoppingList(
         const key = aggKey(name, unit, category);
         const existing = agg.get(key);
         if (existing) {
-          existing.total_amount = round2(existing.total_amount + amount);
-          existing.estimated_price_idr = Math.round(existing.estimated_price_idr + price);
+          existing.total_amount = existing.total_amount + amount;
+          existing.estimated_price_idr = existing.estimated_price_idr + price;
         } else {
           agg.set(key, {
             ingredient: name,
-            total_amount: round2(amount),
+            total_amount: amount,
             unit,
             category,
-            estimated_price_idr: Math.round(price),
+            estimated_price_idr: price,
           });
         }
       }
     }
   }
 
-  const shopping_list = [...agg.values()];
+  const shopping_list = [...agg.values()].map((item) => ({
+    ...item,
+    total_amount: round2(item.total_amount),
+    estimated_price_idr: Math.round(item.estimated_price_idr),
+  }));
   const total_estimated_cost = shopping_list.reduce((sum, it) => sum + (it.estimated_price_idr || 0), 0);
 
   // subtractPantry mengembalikan objek dengan shopping_list & total yang sudah
