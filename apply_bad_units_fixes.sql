@@ -1,0 +1,25 @@
+-- SQL Perbaikan Satuan Tidak Valid (Production Grade - Paginated)
+BEGIN;
+UPDATE public.recipe_ingredients SET amount = 30.0, unit = 'g' WHERE id = 347;
+UPDATE public.recipe_ingredients SET amount = 0.5, unit = 'pcs' WHERE id = 1065;
+UPDATE public.recipe_ingredients SET amount = 0.2, unit = 'pcs' WHERE id = 1267;
+UPDATE public.recipe_ingredients SET amount = 200.0, unit = 'g' WHERE id = 1415;
+UPDATE public.recipe_ingredients SET amount = 30.0, unit = 'g' WHERE id = 1991;
+UPDATE public.recipe_ingredients SET amount = 1.0, unit = 'g' WHERE id = 1979;
+UPDATE public.recipe_ingredients SET amount = 2.0, unit = 'g' WHERE id = 1976;
+UPDATE public.recipe_ingredients SET amount = 0.02, unit = 'g' WHERE id = 1983;
+UPDATE public.recipe_ingredients SET amount = 2.0, unit = 'g' WHERE id = 2170;
+UPDATE public.recipe_ingredients SET amount = 4.0, unit = 'g' WHERE id = 2128;
+UPDATE public.recipe_ingredients SET amount = 400.0, unit = 'g' WHERE id = 2157;
+UPDATE public.recipe_ingredients SET amount = 100.0, unit = 'g' WHERE id = 2180;
+UPDATE public.recipe_ingredients SET amount = 8.0, unit = 'g' WHERE id = 2215;
+UPDATE public.recipe_ingredients SET amount = 2.0, unit = 'g' WHERE id = 121;
+UPDATE public.recipe_ingredients SET amount = 30.0, unit = 'g' WHERE id = 168;
+UPDATE public.recipe_ingredients SET amount = 150.0, unit = 'g' WHERE id = 372;
+UPDATE public.recipe_ingredients SET amount = 200.0, unit = 'g' WHERE id = 448;
+UPDATE public.recipe_ingredients SET amount = 150.0, unit = 'g' WHERE id = 447;
+UPDATE public.recipe_ingredients SET amount = 30.0, unit = 'pcs' WHERE id = 443;
+UPDATE public.recipe_ingredients SET amount = 1.0, unit = 'pcs' WHERE id = 1097;
+UPDATE public.recipe_ingredients SET amount = 2.5, unit = 'g' WHERE id = 1466;
+UPDATE public.recipe_ingredients SET amount = 30.0, unit = 'g' WHERE id = 2116;
+COMMIT;
