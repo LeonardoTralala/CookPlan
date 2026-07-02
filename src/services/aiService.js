@@ -42,7 +42,9 @@ export async function generatePlan(input) {
       // ignore
     }
     reportIfAuthError(error); // sesi berakhir → redirect terpusat ke /auth
-    throw new Error(detail);
+    const err = new Error(detail);
+    if (error.status) err.status = error.status;
+    throw err;
   }
   return data;
 }
@@ -68,7 +70,9 @@ export async function regenerateDay(planId, dayIndex, { note = "", mealType = nu
       // ignore
     }
     reportIfAuthError(error); // sesi berakhir → redirect terpusat ke /auth
-    throw new Error(detail);
+    const err = new Error(detail);
+    if (error.status) err.status = error.status;
+    throw err;
   }
   return data;
 }
