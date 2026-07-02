@@ -390,6 +390,65 @@ Deno.serve(async (req) => {
     newOutput.total_estimated_cost = shoppingPatch.total_estimated_cost;
   }
 
+  // Update total biaya di plan_summary & warnings, dan bersihkan klaim budget yang salah
+  let finalSummary = (newOutput.plan_summary || "") as string;
+  if (typeof finalSummary === "string" && output.total_estimated_cost) {
+    const oldCostStr = `Rp ${Number(output.total_estimated_cost).toLocaleString('id-ID')}`;
+    const newCostStr = `Rp ${Number(newOutput.total_estimated_cost).toLocaleString('id-ID')}`;
+    finalSummary = finalSummary.replaceAll(oldCostStr, newCostStr);
+
+    const budgetVal = Number(input.budget);
+    const finalCost = Number(newOutput.total_estimated_cost);
+    if (budgetVal > 0 && finalCost > budgetVal) {
+      // Hapus klaim "di bawah budget"
+      finalSummary = finalSummary.replace(/,?\s*masih\s+di\s+bawah\s+budget\s+(Rp\s*)?[\d\.\,]+/gi, "");
+      finalSummary = finalSummary.replace(/,?\s*di\s+bawah\s+budget\s+(Rp\s*)?[\d\.\,]+/gi, "");
+      // Hapus kalimat sisa budget
+      finalSummary = finalSummary.replace(/\.?\s*sisa\s+budget\s+[^.]*\.?/gi, ".");
+      finalSummary = finalSummary.replace(/\s+/g, " ").replace(/\s+\./g, ".").replace(/\.\./g, ".").trim();
+    }
+    newOutput.plan_summary = finalSummary;
+  }
+
+  let finalWarnings = (newOutput.warnings || []) as unknown[];
+  if (Array.isArray(finalWarnings)) {
+    // Saring warning dari AI yang memuat budget/biaya/harga agar tidak double atau halusinasi
+    finalWarnings = finalWarnings.filter((w) => 
+      typeof w === "string" && 
+      !w.toLowerCase().includes("budget") && 
+      !w.toLowerCase().includes("biaya") && 
+      !w.toLowerCase().includes("harga")
+    );
+
+    finalWarnings = finalWarnings.map((w: unknown) => {
+      if (typeof w === "string" && output.total_estimated_cost) {
+        const oldCostStr = `Rp ${Number(output.total_estimated_cost).toLocaleString('id-ID')}`;
+        const newCostStr = `Rp ${Number(newOutput.total_estimated_cost).toLocaleString('id-ID')}`;
+        return w.replaceAll(oldCostStr, newCostStr);
+      }
+      return w;
+    });
+    
+    // Sinkronisasi warning budget otomatis
+    const budgetVal = Number(input.budget);
+    const finalCost = Number(newOutput.total_estimated_cost);
+    
+    if (budgetVal > 0) {
+      let budgetMsg = "";
+      if (finalCost > budgetVal) {
+        const diff = finalCost - budgetVal;
+        budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) sedikit melebihi budget Rp ${budgetVal.toLocaleString('id-ID')} (selisih Rp ${diff.toLocaleString('id-ID')} lebih mahal).`;
+      } else if (finalCost < budgetVal) {
+        const diff = budgetVal - finalCost;
+        budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) di bawah budget Rp ${budgetVal.toLocaleString('id-ID')} (sisa budget Rp ${diff.toLocaleString('id-ID')}).`;
+      } else {
+        budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) tepat sesuai dengan budget Rp ${budgetVal.toLocaleString('id-ID')}.`;
+      }
+      finalWarnings.push(budgetMsg);
+    }
+    newOutput.warnings = finalWarnings;
+  }
+
   const { error: updErr } = await admin
     .from("generated_plans")
     .update({ output_json: newOutput })

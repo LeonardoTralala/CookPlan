@@ -4,7 +4,7 @@
 
 // Naikkan setiap kali prompt berubah secara perilaku — ikut di-hash sebagai
 // cache key di generate-plan supaya hasil cache prompt lama tidak terpakai.
-export const PROMPT_VERSION = "12";
+export const PROMPT_VERSION = "13";
 
 // Label Indonesia untuk tiap meal_type — dipakai saat menyusun instruksi waktu makan.
 const MEAL_LABEL_ID: Record<string, string> = {
@@ -63,7 +63,7 @@ ATURAN WAJIB:
 2. Hormati preferensi diet & alergi user sebagai HARD CONSTRAINT. Jangan pilih resep yang melanggar.
 3. Variasikan menu antar hari (jangan menu yang sama berturut-turut bila memungkinkan).
 4. Setiap waktu makan WAJIB punya "servings" = "Porsi per jam makan" dari user. Pastikan shopping_list & total_estimated_cost mencakup TOTAL semua porsi (jumlah waktu makan terpilih/hari × porsi × jumlah hari).
-5. Jika user memasang budget, MAKSIMALKAN pemakaian budget! Rancang menu yang total harganya sedekat mungkin dengan batas budget. Jangan ragu untuk memilih resep-resep mewah/premium jika budget yang diminta cukup besar (jangan memilih menu terlalu murah jika sisa budget masih banyak). Untuk menghitung total biaya, cukup jumlahkan field "harga_total_untuk_waktu_makan_ini_idr" dari tiap resep yang kamu pilih (nilai ini sudah otomatis dikalikan dengan jumlah porsi). Jika perlu memberi peringatan budget di "warnings", WAJIB gunakan kata '[TOTAL_BIAYA]' (mis. 'Biaya plan ini adalah [TOTAL_BIAYA]'). JANGAN PERNAH menebak nominal harga sendiri.
+5. Jika user memasang budget, MAKSIMALKAN pemakaian budget! Rancang menu yang total harganya sedekat mungkin dengan batas budget. Jangan ragu untuk memilih resep-resep mewah/premium jika budget yang diminta cukup besar (jangan memilih menu terlalu murah jika sisa budget masih banyak). Untuk menghitung total biaya, cukup jumlahkan field "harga_total_untuk_waktu_makan_ini_idr" dari tiap resep yang kamu pilih (nilai ini sudah otomatis dikalikan dengan jumlah porsi). Jika perlu memberi peringatan budget di "warnings", WAJIB gunakan kata '[TOTAL_BIAYA]' (mis. 'Biaya plan ini adalah [TOTAL_BIAYA]'). JANGAN PERNAH menebak nominal harga sendiri dan JANGAN PERNAH menyimpulkan sendiri di dalam plan_summary atau warnings apakah total biaya tersebut di bawah, di atas, atau sesuai dengan budget user (seperti menulis 'masih di bawah budget Rp X' atau 'sisa budget Rp Y bisa digunakan untuk...'). Evaluasi budget ini akan dilakukan secara otomatis oleh sistem. Cukup laporkan rencana menu dan gunakan '[TOTAL_BIAYA]' saja untuk merujuk pada total harga.
 6. Setiap hari WAJIB mengisi PERSIS waktu makan yang diminta user (lihat daftar "Waktu makan per hari" di permintaan) — jangan ada yang bolong, dan JANGAN menambah waktu makan yang tidak diminta. Gunakan hanya sebanyak "Variasi menu per hari" resep BERBEDA per hari — bila variasi < jumlah waktu makan, PAKAI ULANG recipe_id yang sama untuk mengisi sisanya (konsep foodprep: masak sekali, makan beberapa kali). Contoh: variasi=1 → satu recipe_id sama di semua waktu makan terpilih.
 7. Bahasa Indonesia santai & ramah untuk field teks (plan_summary, notes, prep_instructions).
 
@@ -72,7 +72,7 @@ OUTPUT: WAJIB berupa JSON valid SAJA, TANPA penjelasan tambahan, TANPA markdown 
 // Schema output dalam bentuk teks, ditempel ke prompt.
 export const OUTPUT_SCHEMA_TEXT = `SCHEMA OUTPUT (JSON):
 {
-  "plan_summary": "string - ringkasan singkat plan. WAJIB gunakan kata '[TOTAL_BIAYA]' di mana kamu ingin menyebutkan total harga (mis. 'Menu bergizi ini memakan biaya sekitar [TOTAL_BIAYA]'). JANGAN menebak angka harga sendiri. Saat menyebut variasi menu, tulis '<jumlah> resep per hari' TANPA kata 'berbeda' (mis. '1 resep per hari', bukan '1 resep berbeda per hari')",
+  "plan_summary": "string - ringkasan singkat plan. WAJIB gunakan kata '[TOTAL_BIAYA]' di mana kamu ingin menyebutkan total harga (mis. 'Menu bergizi ini memakan biaya sekitar [TOTAL_BIAYA]'). JANGAN menebak angka harga sendiri dan JANGAN berasumsi/menyebutkan apakah biaya ini di bawah atau di atas budget (mis. 'di bawah budget', 'sisa budget', dll). Saat menyebut variasi menu, tulis '<jumlah> resep per hari' TANPA kata 'berbeda' (mis. '1 resep per hari', bukan '1 resep berbeda per hari')",
   "days": [
     {
       "day": "string - nama hari (Hari 1, Hari 2, ... atau Senin, Selasa, ...)",

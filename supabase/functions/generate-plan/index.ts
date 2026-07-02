@@ -370,15 +370,51 @@ Deno.serve(async (req) => {
       /\[TOTAL_BIAYA\]/g,
       `Rp ${shoppingPatch.total_estimated_cost.toLocaleString('id-ID')}`
     );
+    // Bersihkan pernyataan budget jika ternyata melebihi budget
+    if (input.budget > 0 && shoppingPatch.total_estimated_cost > input.budget) {
+      // Hapus "masih di bawah budget Rp X" atau "di bawah budget Rp X"
+      finalSummary = finalSummary.replace(/,?\s*masih\s+di\s+bawah\s+budget\s+(Rp\s*)?[\d\.\,]+/gi, "");
+      finalSummary = finalSummary.replace(/,?\s*di\s+bawah\s+budget\s+(Rp\s*)?[\d\.\,]+/gi, "");
+      // Hapus kalimat tentang sisa budget (mis. "Sisa budget bisa digunakan...")
+      finalSummary = finalSummary.replace(/\.?\s*sisa\s+budget\s+[^.]*\.?/gi, ".");
+      // Pastikan spasi dan titik rapi
+      finalSummary = finalSummary.replace(/\s+/g, " ").replace(/\s+\./g, ".").replace(/\.\./g, ".").trim();
+    }
   }
 
   let finalWarnings = variedOutputObj.warnings || [];
   if (Array.isArray(finalWarnings)) {
+    // Saring warning dari AI yang memuat budget/biaya/harga agar tidak double atau halusinasi
+    finalWarnings = finalWarnings.filter((w: unknown) =>
+      typeof w === "string" &&
+      !w.toLowerCase().includes("budget") &&
+      !w.toLowerCase().includes("biaya") &&
+      !w.toLowerCase().includes("harga")
+    );
+
     finalWarnings = finalWarnings.map((w: unknown) =>
       typeof w === "string"
         ? w.replace(/\[TOTAL_BIAYA\]/g, `Rp ${shoppingPatch.total_estimated_cost.toLocaleString('id-ID')}`)
         : w
     );
+  }
+
+  // Tambahkan warning otomatis jika budget ditentukan
+  if (input.budget > 0) {
+    const budgetVal = input.budget;
+    const finalCost = shoppingPatch.total_estimated_cost;
+    let budgetMsg = "";
+    if (finalCost > budgetVal) {
+      const diff = finalCost - budgetVal;
+      budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) sedikit melebihi budget Rp ${budgetVal.toLocaleString('id-ID')} (selisih Rp ${diff.toLocaleString('id-ID')} lebih mahal).`;
+    } else if (finalCost < budgetVal) {
+      const diff = budgetVal - finalCost;
+      budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) di bawah budget Rp ${budgetVal.toLocaleString('id-ID')} (sisa budget Rp ${diff.toLocaleString('id-ID')}).`;
+    } else {
+      budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) tepat sesuai dengan budget Rp ${budgetVal.toLocaleString('id-ID')}.`;
+    }
+    
+    finalWarnings.push(budgetMsg);
   }
 
   const finalOutput = {
