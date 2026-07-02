@@ -56,3 +56,6 @@ AGENTS.md
 # Excel price-list sources & temp lock files (data, not source)
 *.xlsx
 ~$*
+
+# MCP payloads / temporary dumps
+mcp_payload.json
