@@ -81,8 +81,10 @@ export function buildShoppingList(
         if (!name) continue;
         const unit = String(ing.unit ?? "").trim();
         const category = String(ing.category ?? "dry_goods").trim();
-        const amount = (Number(ing.amount) || 0) * factor;
-        const price = (Number(ing.price_idr) || 0) * factor;
+        // Guard: clamp ke 0 agar data corrupt (amount/price negatif di DB)
+        // tidak bisa bocor ke shopping list user.
+        const amount = Math.max(0, (Number(ing.amount) || 0)) * factor;
+        const price = Math.max(0, (Number(ing.price_idr) || 0)) * factor;
 
         const key = aggKey(name, unit, category);
         const existing = agg.get(key);
