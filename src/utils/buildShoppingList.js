@@ -61,14 +61,16 @@ export function buildShoppingListFromSlots(slots) {
         if (!pantryMap.has(pk)) pantryMap.set(pk, String(ing.name ?? '').trim());
         continue;
       }
-      const key = `${ing.name}__${ing.unit}`;
+      const nameNorm = String(ing.name ?? '').trim().toLowerCase();
+      const unitNorm = String(ing.unit ?? '').trim().toLowerCase();
+      const key = `${nameNorm}__${unitNorm}`;
       const existing = itemMap.get(key);
       if (existing) {
         existing.amount += (Number(ing.amount) || 0) * factor;
         existing.priceIdr += (Number(ing.priceIdr) || 0) * factor;
       } else {
         itemMap.set(key, {
-          name: ing.name,
+          name: String(ing.name ?? '').trim(),
           unit: ing.unit,
           amount: (Number(ing.amount) || 0) * factor,
           priceIdr: (Number(ing.priceIdr) || 0) * factor,
