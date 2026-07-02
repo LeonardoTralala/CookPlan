@@ -143,10 +143,96 @@ Deno.serve(async (req) => {
   // non-tag ('tinggi-protein', 'cepat', 'hemat') ikut tersaring, bukan diabaikan.
   const { data: allActive } = await admin
     .from("recipes").select(RECIPE_COLS).eq("is_active", true);
-  const candidates = filterRecipesByDiet(allActive ?? [], diet).slice(0, 40);
-  if (candidates.length === 0) {
+  let pool = filterRecipesByDiet(allActive ?? [], diet);
+  if (pool.length === 0) {
     return json({ error: "Bank resep kosong. Tambahkan resep dulu." }, 422);
   }
+
+  // Terapkan budget-based sampling jika original plan memiliki budget
+  const budget = Number(input.budget);
+  if (budget && budget > 0) {
+    const porsi = Number(input.porsi) || 1;
+    const slotList = planMeals;
+    const mealCount = slotList.length;
+    const totalServingsNeeded = (Number(input.periode) || 1) * mealCount * porsi;
+    const avgBudgetPerServing = budget / totalServingsNeeded;
+
+    // Toleransi: resep maksimal 1.5x dari rata-rata budget per porsi
+    const maxPricePerServing = avgBudgetPerServing * 1.5;
+
+    const affordablePool = pool.filter((r) => {
+      const price = r.price_idr || 0;
+      const base = (r.base_servings && r.base_servings > 0) ? r.base_servings : 2;
+      const pricePerServing = price / base;
+      return pricePerServing <= maxPricePerServing;
+    });
+
+    // Pisahkan ke dalam 3 bucket berdasarkan kedekatan harga dengan avgBudgetPerServing
+    const cheap: typeof pool = [];
+    const medium: typeof pool = [];
+    const premium: typeof pool = [];
+
+    for (const r of affordablePool) {
+      const price = r.price_idr || 0;
+      const base = (r.base_servings && r.base_servings > 0) ? r.base_servings : 2;
+      const pricePerServing = price / base;
+      
+      if (pricePerServing <= avgBudgetPerServing * 0.3) {
+        cheap.push(r);
+      } else if (pricePerServing <= avgBudgetPerServing * 0.7) {
+        medium.push(r);
+      } else {
+        premium.push(r);
+      }
+    }
+
+    // Fungsi shuffle lokal
+    const shuffle = (arr: any[]) => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    };
+    shuffle(cheap);
+    shuffle(medium);
+    shuffle(premium);
+
+    // Kuota: Target Total = 40
+    // Distribusi: 10 Premium, 15 Medium, 15 Cheap
+    let targetPremium = 10;
+    let targetMedium = 15;
+    let targetCheap = 15;
+    
+    const picked = [];
+    
+    // Ambil Premium
+    const pickedPremium = premium.slice(0, targetPremium);
+    picked.push(...pickedPremium);
+    let deficit = targetPremium - pickedPremium.length;
+    
+    // Oper defisit ke Medium
+    targetMedium += deficit;
+    const pickedMedium = medium.slice(0, targetMedium);
+    picked.push(...pickedMedium);
+    deficit = targetMedium - pickedMedium.length;
+    
+    // Oper defisit ke Cheap
+    targetCheap += deficit;
+    const pickedCheap = cheap.slice(0, targetCheap);
+    picked.push(...pickedCheap);
+    deficit = targetCheap - pickedCheap.length; // Sisa defisit final jika total database terlalu sedikit
+
+    pool = picked;
+  } else {
+    // Jika tidak ada budget, cukup acak urutannya
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+  }
+
+  // Batasi ke 40 kandidat terdekat/terpilih
+  const candidates = pool.slice(0, 40);
   const validIds = new Set(candidates.map((r) => r.id as number));
 
   // recipe_id yang dipakai di hari LAIN (dorong variasi) + menu hari ini sekarang

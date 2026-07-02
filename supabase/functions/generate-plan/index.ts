@@ -130,23 +130,106 @@ Deno.serve(async (req) => {
   //    dengan chip katalog & diet_tags.value). Kolom `diet` lama deprecated.
   const RECIPE_COLS =
     "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings";
-  const RECIPE_CAP = 40;
+  const RECIPE_CAP = 42;
 
   //    Filter preferensi dilakukan di memori (pool aktif kecil, ~ratusan resep)
   //    memakai filterRecipesByDiet — semantik UNION/OR antar chip, sama persis
   //    dengan filter katalog. Ini menangani slug yang BUKAN tag literal
   //    ('tinggi-protein', 'cepat', 'hemat') yang tidak bisa dijaring overlaps().
   const { data: allActive } = await admin.from("recipes").select(RECIPE_COLS).eq("is_active", true);
-  const pool = filterRecipesByDiet(allActive ?? [], input.diet);
+  let pool = filterRecipesByDiet(allActive ?? [], input.diet);
   if (pool.length === 0) {
     return json({ error: "Bank resep kosong. Tambahkan resep dulu." }, 422);
   }
-  // Fisher-Yates shuffle lalu ambil maksimal RECIPE_CAP resep.
+
+  // Jika user memasang budget, terapkan Stratified Sampling dengan Quota Rollover
+  if (input.budget && input.budget > 0) {
+    const mealCount = Array.isArray(input.meals) && input.meals.length > 0 ? input.meals.length : 3;
+    const totalServingsNeeded = (input.periode || 1) * mealCount * (input.porsi || 1);
+    const avgBudgetPerServing = input.budget / totalServingsNeeded;
+    
+    // Toleransi: resep maksimal 1.5x dari rata-rata budget per porsi
+    const maxPricePerServing = avgBudgetPerServing * 1.5;
+
+    const affordablePool = pool.filter((r) => {
+      const price = r.price_idr || 0;
+      const base = (r.base_servings && r.base_servings > 0) ? r.base_servings : 2;
+      const pricePerServing = price / base;
+      return pricePerServing <= maxPricePerServing;
+    });
+
+    // Pisahkan ke dalam 3 bucket berdasarkan kedekatan harga dengan avgBudgetPerServing
+    const cheap: typeof pool = [];
+    const medium: typeof pool = [];
+    const premium: typeof pool = [];
+
+    for (const r of affordablePool) {
+      const price = r.price_idr || 0;
+      const base = (r.base_servings && r.base_servings > 0) ? r.base_servings : 2;
+      const pricePerServing = price / base;
+      
+      if (pricePerServing <= avgBudgetPerServing * 0.3) {
+        cheap.push(r);
+      } else if (pricePerServing <= avgBudgetPerServing * 0.7) {
+        medium.push(r);
+      } else {
+        premium.push(r);
+      }
+    }
+
+    // Fungsi shuffle lokal
+    const shuffle = (arr: any[]) => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+    };
+    shuffle(cheap);
+    shuffle(medium);
+    shuffle(premium);
+
+    // Kuota: Target Total = RECIPE_CAP (42)
+    // Distribusi: 10 Premium, 16 Medium, 16 Cheap (memberi variasi gizi dan kebebasan budget)
+    let targetPremium = 10;
+    let targetMedium = 16;
+    let targetCheap = 16;
+    
+    const picked = [];
+    
+    // Ambil Premium
+    const pickedPremium = premium.slice(0, targetPremium);
+    picked.push(...pickedPremium);
+    let deficit = targetPremium - pickedPremium.length;
+    
+    // Oper defisit ke Medium
+    targetMedium += deficit;
+    const pickedMedium = medium.slice(0, targetMedium);
+    picked.push(...pickedMedium);
+    deficit = targetMedium - pickedMedium.length;
+    
+    // Oper defisit ke Cheap
+    targetCheap += deficit;
+    const pickedCheap = cheap.slice(0, targetCheap);
+    picked.push(...pickedCheap);
+    deficit = targetCheap - pickedCheap.length; // Sisa defisit final jika total database terlalu sedikit
+
+    pool = picked;
+  } else {
+    // Jika tidak ada budget, cukup shuffle semua yang ada
+    for (let i = pool.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+    pool = pool.slice(0, RECIPE_CAP);
+  }
+
+  // Acak ulang gabungan hasil sampling agar AI tidak bias membaca berurutan dari yang paling premium ke murah
   for (let i = pool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [pool[i], pool[j]] = [pool[j], pool[i]];
   }
-  const candidates = pool.slice(0, RECIPE_CAP);
+
+  const candidates = pool;
   const validIds = new Set(candidates.map((r) => r.id));
 
   // 6. Ambil provider untuk chain failover (service_role bypass RLS lockdown).
@@ -259,7 +342,7 @@ Deno.serve(async (req) => {
   // 10. Post-process di server (bukan delegasi ke AI):
   //     a. tegakkan variasi/hari + isi 3 slot (foodprep)
   const variedOutput = enforceVariety(parsed as Record<string, unknown>, input.variasiPerHari, input.porsi, input.meals);
-  
+
   //     b. Bangun shopping_list deterministik dari database & kurangi pantry
   const variedOutputObj = variedOutput as Record<string, any>;
   const allRecipeIds = new Set<number>();
@@ -281,11 +364,48 @@ Deno.serve(async (req) => {
     shoppingPatch = buildShoppingList(variedOutputObj.days, recipesById, input.pantry);
   }
 
+  let finalSummary = variedOutputObj.plan_summary || "";
+  if (typeof finalSummary === "string") {
+    finalSummary = finalSummary.replace(
+      /\[TOTAL_BIAYA\]/g,
+      `Rp ${shoppingPatch.total_estimated_cost.toLocaleString('id-ID')}`
+    );
+  }
+
+  let finalWarnings = variedOutputObj.warnings || [];
+  if (Array.isArray(finalWarnings)) {
+    finalWarnings = finalWarnings.map((w: unknown) =>
+      typeof w === "string"
+        ? w.replace(/\[TOTAL_BIAYA\]/g, `Rp ${shoppingPatch.total_estimated_cost.toLocaleString('id-ID')}`)
+        : w
+    );
+  }
+
   const finalOutput = {
     ...variedOutputObj,
+    plan_summary: finalSummary,
+    warnings: finalWarnings,
     shopping_list: shoppingPatch.shopping_list,
     total_estimated_cost: shoppingPatch.total_estimated_cost,
   };
+
+  // 10.c. Validasi budget akhir (toleransi 10%)
+  if (input.budget > 0 && finalOutput.total_estimated_cost > input.budget * 1.1) {
+    const cost = estimateCost(aiResult.tokensInput, aiResult.tokensOutput);
+    await admin.from("ai_usage_log").insert({
+      user_id: userId, endpoint: "generate-plan", cache_hit: false,
+      provider_id: usedProvider.id, model: usedProvider.model,
+      tokens_input: aiResult.tokensInput, tokens_output: aiResult.tokensOutput,
+      cost_usd: cost,
+    });
+    await admin.from("generated_plans").insert({
+      user_id: userId, input_hash: inputHash, input_json: input,
+      output_json: finalOutput, output_type: input.outputType, status: "failed",
+      error_message: `Budget validation failed: ${finalOutput.total_estimated_cost} > ${input.budget}`,
+      provider_id: usedProvider.id, model: usedProvider.model,
+    });
+    return json({ error: `Maaf, menu yang dihasilkan AI kali ini masih melebihi budget (Total asli: Rp ${finalOutput.total_estimated_cost.toLocaleString('id-ID')}). Silakan coba generate lagi.` }, 502);
+  }
 
   // 11. Persist
   const cost = estimateCost(aiResult.tokensInput, aiResult.tokensOutput);

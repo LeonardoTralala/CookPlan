@@ -233,7 +233,7 @@ export function GeneratePlan() {
       }
       // Server menolak karena rate limit harian → samakan tampilannya & tandai habis.
       const lower = msg.toLowerCase();
-      if (e.status === 429 || lower.includes('kuota') || lower.includes('limit') || lower.includes('rate')) {
+      if (e.status === 429 || lower.includes('kuota') || lower.includes('limit') || /\brate\b/.test(lower)) {
         setUsageCount(DAILY_LIMIT);
         setError(quotaMessage);
       } else {
