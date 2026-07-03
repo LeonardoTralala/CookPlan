@@ -160,3 +160,24 @@ export async function getGuestUsageCount() {
   if (error) throw error;
   return count ?? 0;
 }
+
+// Memanggil Edge Function `generate-prep` untuk menghasilkan saran food prep pintar berbasis AI.
+//   recipes: [{ id, title, ingredients: [...], instructions: [...] }]
+// Return: { prep_tasks: string[] }
+export async function generatePrepPlan(recipes) {
+  const { data, error } = await supabase.functions.invoke("generate-prep", {
+    body: { recipes },
+  });
+  if (error) {
+    let detail = error.message || "Gagal menghasilkan saran food prep AI.";
+    try {
+      const ctx = await error.context?.json?.();
+      if (ctx?.error) detail = ctx.error;
+    } catch {
+      // ignore
+    }
+    reportIfAuthError(error);
+    throw new Error(detail);
+  }
+  return data;
+}

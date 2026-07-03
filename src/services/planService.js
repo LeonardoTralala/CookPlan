@@ -35,6 +35,7 @@ function entriesToPlanShape(entries) {
       priceIdr: e.price_idr,
       readyInMinutes: e.ready_in_minutes,
       calories: e.calories,
+      isCooked: e.is_cooked,
     };
   }
   return plan;
@@ -73,7 +74,7 @@ export async function getCurrentPlan(weekStart = getCurrentWeekStart()) {
   // ambil slot
   const { data: entries, error: entErr } = await supabase
     .from("meal_entries")
-    .select("recipe_id, day_of_week, meal_type, servings, title, image_url, price_idr, ready_in_minutes, calories")
+    .select("recipe_id, day_of_week, meal_type, servings, title, image_url, price_idr, ready_in_minutes, calories, is_cooked")
     .eq("plan_id", planRow.id);
   if (entErr) throw entErr;
 
@@ -96,6 +97,7 @@ export async function setSlot(planId, recipe, day, mealType, servings) {
     price_idr: recipe.priceIdr,
     ready_in_minutes: recipe.readyInMinutes,
     calories: recipe.calories,
+    is_cooked: false, // Reset status masak jika di-set ulang/baru
   };
   const { error } = await supabase
     .from("meal_entries")
@@ -128,6 +130,7 @@ export async function setSlots(planId, slots) {
     price_idr: recipe.priceIdr,
     ready_in_minutes: recipe.readyInMinutes,
     calories: recipe.calories,
+    is_cooked: false,
   }));
   const { error } = await supabase
     .from("meal_entries")
@@ -152,6 +155,68 @@ export async function clearAllSlots(planId) {
     .from("meal_entries")
     .delete()
     .eq("plan_id", planId);
+  if (error) throw error;
+}
+
+// Mengubah status masak (is_cooked)
+export async function toggleCookedStatus(planId, day, mealType, isCooked) {
+  if (!DAYS.includes(day) || !MEAL_TYPES.includes(mealType)) {
+    throw new Error("Hari atau jenis makan tidak valid.");
+  }
+  const { error } = await supabase
+    .from("meal_entries")
+    .update({ is_cooked: isCooked })
+    .eq("plan_id", planId)
+    .eq("day_of_week", day)
+    .eq("meal_type", mealType);
+  if (error) throw error;
+}
+
+// Mendapatkan semua tugas persiapan bahan (food prep)
+export async function getPrepTasks(planId) {
+  const { data, error } = await supabase
+    .from("food_prep_tasks")
+    .select("id, task_text, is_completed")
+    .eq("plan_id", planId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((t) => ({
+    id: t.id,
+    taskText: t.task_text,
+    isCompleted: t.is_completed,
+  }));
+}
+
+// Menambahkan tugas persiapan bahan baru
+export async function addPrepTask(planId, taskText) {
+  const { data, error } = await supabase
+    .from("food_prep_tasks")
+    .insert({ plan_id: planId, task_text: taskText })
+    .select("id, task_text, is_completed")
+    .single();
+  if (error) throw error;
+  return {
+    id: data.id,
+    taskText: data.task_text,
+    isCompleted: data.is_completed,
+  };
+}
+
+// Mengubah status penyelesaian tugas persiapan bahan
+export async function togglePrepTask(taskId, isCompleted) {
+  const { error } = await supabase
+    .from("food_prep_tasks")
+    .update({ is_completed: isCompleted })
+    .eq("id", taskId);
+  if (error) throw error;
+}
+
+// Menghapus tugas persiapan bahan
+export async function deletePrepTask(taskId) {
+  const { error } = await supabase
+    .from("food_prep_tasks")
+    .delete()
+    .eq("id", taskId);
   if (error) throw error;
 }
 
