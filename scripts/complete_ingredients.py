@@ -69,7 +69,7 @@ def main():
         f.flush()
         
     # DeepSeek API Configuration
-    api_key = "sk-7cf886d503e64ad090a5ca18bea1a973"
+    api_key = env.get("DEEPSEEK_API_KEY", "")
     api_url = "https://api.deepseek.com/chat/completions"
     model = "deepseek-v4-pro"
     

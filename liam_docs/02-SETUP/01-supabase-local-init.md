@@ -57,7 +57,7 @@ Output yang kepakai buat `.env.local`:
 | API | http://127.0.0.1:54321 |
 | DB | postgresql://postgres:postgres@127.0.0.1:54322/postgres |
 | Edge Functions | http://127.0.0.1:54321/functions/v1 |
-| anon (publishable) key | `sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH` |
+| anon (publishable) key | `sb_publishable_YOUR_LOCAL_ANON_KEY` |
 
 > anon key di atas adalah **default lokal** Supabase — bukan rahasia, aman dipakai di local dev.
 
