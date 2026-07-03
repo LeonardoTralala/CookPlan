@@ -4,6 +4,7 @@ import {
   getOrderById, confirmOrderSent, buildWhatsappText, buildWhatsappUrl, formatRupiah,
 } from '../services/orderService.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { FeedbackCard } from '../components/FeedbackCard.jsx';
 
 // Layar konfirmasi pasca-checkout. Order sudah tersimpan sebagai 'draft'; di sini
 // user meninjau ringkasan + ID pesanan, lalu menekan "Buka WhatsApp" untuk
@@ -37,6 +38,7 @@ export function OrderSuccess() {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [order, orderId]);
+
 
   const itemList = useMemo(() => items ?? [], [items]);
   const subtotal = order?.total_price ?? 0;
@@ -144,6 +146,11 @@ export function OrderSuccess() {
           ))}
         </div>
       )}
+
+      {/* Feedback Card */}
+      <div className="animate-fade-in">
+        <FeedbackCard question="Bagaimana pengalamanmu belanja di CookPlan hari ini?" category="pujian" />
+      </div>
 
       {/* Aksi */}
       <div className="flex flex-col gap-3">

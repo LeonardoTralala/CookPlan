@@ -7,6 +7,7 @@ import {
 import { usePlan } from '../hooks/usePlan.js';
 import { ShoppingListSkeleton } from './Skeleton.jsx';
 import { DAYS } from '../utils/week.js';
+import { FeedbackCard } from './FeedbackCard.jsx';
 
 const DELIVERY_FEE = 15000;
 
@@ -156,6 +157,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     return { visibleCount: total, checkedCount: checked, estCost: Math.round(cost) };
   }, [sections, removedItems, checkedItems]);
 
+
   const total = estCost + (visibleCount > 0 ? DELIVERY_FEE : 0);
   const removedCount = totalItems - visibleCount;
 
@@ -301,6 +303,12 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
           </div>
         ) : (
           <>
+            {visibleCount > 0 && checkedCount === visibleCount && (
+              <div className="mb-4 animate-fade-in">
+                <FeedbackCard question="Apakah CookPlan mempermudah belanjamu hari ini?" category="saran" />
+              </div>
+            )}
+
             {view === 'bahan' && (
               <div className="flex items-start gap-2.5 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-sm text-on-surface-variant">
                 <span className="material-symbols-outlined text-primary text-[20px] shrink-0">info</span>
