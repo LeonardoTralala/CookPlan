@@ -17,7 +17,7 @@ const SOURCE_LABEL = {
 };
 
 function ShoppingList({ weeklyPlan, onGoToPlanner }) {
-  const { showToast } = usePlan();
+  const { showToast, weekStart } = usePlan();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState(() => searchParams.get('tab') === 'kami' ? 'us' : 'self');
   const [savedLists, setSavedLists] = useState([]);
@@ -88,7 +88,7 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
         </div>
 
         {tab === 'self'
-          ? <ShopSelfTab weeklyPlan={weeklyPlan} onGoToPlanner={onGoToPlanner} onSave={handleSave} />
+          ? <ShopSelfTab key={weekStart} weeklyPlan={weeklyPlan} onGoToPlanner={onGoToPlanner} onSave={handleSave} />
           : <ShopWithUsTab onSave={handleSave} />}
 
         {/* Daftar tersimpan di bawah konten — tetap ada untuk desktop/scroll */}
