@@ -61,7 +61,7 @@ async function main() {
   // Ambil konfigurasi DeepSeek V4 Pro dari database atau env/hardcoded fallback
   let aiProvider = {
     base_url: env.DEEPSEEK_BASE_URL || process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com",
-    api_key: env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || "sk-7cf886d503e64ad090a5ca18bea1a973",
+    api_key: env.DEEPSEEK_API_KEY || process.env.DEEPSEEK_API_KEY || "",
     model: env.DEEPSEEK_MODEL || process.env.DEEPSEEK_MODEL || "deepseek-v4-pro"
   };
 

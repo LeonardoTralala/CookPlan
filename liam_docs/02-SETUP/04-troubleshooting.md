@@ -42,7 +42,7 @@ supabase start
 ```bash
 # .env.local
 VITE_SUPABASE_URL=http://127.0.0.1:54321
-VITE_SUPABASE_ANON_KEY=sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH
+VITE_SUPABASE_ANON_KEY=sb_publishable_YOUR_LOCAL_ANON_KEY
 ```
 
 Ambil nilai aslinya dari `supabase status`. Habis ubah `.env.local`, **restart** `npm run dev`.

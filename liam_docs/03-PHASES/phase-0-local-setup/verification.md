@@ -21,7 +21,7 @@ Studio       http://127.0.0.1:54323
 API          http://127.0.0.1:54321
 DB           postgresql://postgres:postgres@127.0.0.1:54322/postgres
 Edge Func    http://127.0.0.1:54321/functions/v1
-Publishable  sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH (LOCAL only)
+Publishable  sb_publishable_YOUR_LOCAL_ANON_KEY (LOCAL only)
 ```
 
 ## Tabel Terverifikasi
