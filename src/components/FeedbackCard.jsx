@@ -39,14 +39,18 @@ const playClingChime = () => {
   }
 };
 
-export function FeedbackCard({ question = "Bagaimana pengalamanmu menggunakan AI Planner hari ini?", category = "saran" }) {
-  const [visible, setVisible] = useState(() => {
-    const cooldownUntil = localStorage.getItem('feedback_cooldown_until');
-    return !cooldownUntil || parseInt(cooldownUntil, 10) <= Date.now();
+export function FeedbackCard({ question = "Bagaimana pengalamanmu menggunakan AI Planner hari ini?", category = "saran", cooldownKey = "default" }) {
+  const getStorageKey = (key) => key === 'default' ? 'feedback_cooldown_until' : `feedback_cooldown_until_${key}`;
+
+  const [dismissed, setDismissed] = useState(() => {
+    const cooldownUntil = localStorage.getItem(getStorageKey(cooldownKey));
+    return cooldownUntil ? parseInt(cooldownUntil, 10) > Date.now() : false;
   });
   const [hoverRating, setHoverRating] = useState(0);
   const [clickedStar, setClickedStar] = useState(null);
   const [burstParticles, setBurstParticles] = useState([]);
+
+  const visible = !dismissed;
 
   // Putar lonceng cling saat kartu pertama kali dimuat ke layar
   useEffect(() => {
@@ -61,8 +65,8 @@ export function FeedbackCard({ question = "Bagaimana pengalamanmu menggunakan AI
   const handleDismiss = () => {
     // Pengguna memilih untuk menutup atau batal -> Cooldown 7 hari
     const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-    localStorage.setItem('feedback_cooldown_until', (Date.now() + oneWeekMs).toString());
-    setVisible(false);
+    localStorage.setItem(getStorageKey(cooldownKey), (Date.now() + oneWeekMs).toString());
+    setDismissed(true);
   };
 
   const handleRate = (rating) => {
@@ -107,9 +111,9 @@ export function FeedbackCard({ question = "Bagaimana pengalamanmu menggunakan AI
     // Beri waktu 550ms agar animasi kembang api selesai sebelum pemicu modal formulir detail
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('trigger-feedback-modal', {
-        detail: { rating, category }
+        detail: { rating, category, cooldownKey }
       }));
-      setVisible(false);
+      setDismissed(true);
     }, 550);
   };
 

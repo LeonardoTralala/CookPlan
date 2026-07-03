@@ -305,7 +305,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
           <>
             {visibleCount > 0 && checkedCount === visibleCount && (
               <div className="mb-4 animate-fade-in">
-                <FeedbackCard question="Apakah CookPlan mempermudah belanjamu hari ini?" category="saran" />
+                <FeedbackCard question="Apakah CookPlan mempermudah belanjamu hari ini?" category="saran" cooldownKey="shop_self" />
               </div>
             )}
 

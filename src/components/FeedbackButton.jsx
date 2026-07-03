@@ -28,12 +28,16 @@ export function FeedbackButton() {
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [isAutoOpened, setIsAutoOpened] = useState(false);
+  const [cooldownKey, setCooldownKey] = useState('default');
+
+  const getStorageKey = (key) => key === 'default' ? 'feedback_cooldown_until' : `feedback_cooldown_until_${key}`;
 
   const resetForm = () => {
     setRating(0);
     setHoverRating(0);
     setCategory('saran');
     setMessage('');
+    setCooldownKey('default');
   };
 
   useEffect(() => {
@@ -44,6 +48,9 @@ export function FeedbackButton() {
       }
       if (e.detail?.rating) {
         setRating(e.detail.rating);
+      }
+      if (e.detail?.cooldownKey) {
+        setCooldownKey(e.detail.cooldownKey);
       }
       setIsAutoOpened(true);
       setOpen(true);
@@ -67,7 +74,7 @@ export function FeedbackButton() {
     if (isAutoOpened) {
       // Pengguna menutup prompt otomatis -> Cooldown 1 minggu (7 hari)
       const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
-      localStorage.setItem('feedback_cooldown_until', (Date.now() + oneWeekMs).toString());
+      localStorage.setItem(getStorageKey(cooldownKey), (Date.now() + oneWeekMs).toString());
     }
   };
 
@@ -88,7 +95,7 @@ export function FeedbackButton() {
       showToast('Terima kasih! Masukanmu sangat membantu kami. 🙏');
       // Berhasil kirim -> Cooldown 30 hari agar tidak mengganggu lagi dalam waktu dekat
       const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
-      localStorage.setItem('feedback_cooldown_until', (Date.now() + thirtyDaysMs).toString());
+      localStorage.setItem(getStorageKey(cooldownKey), (Date.now() + thirtyDaysMs).toString());
     } catch (err) {
       showToast(err.message || 'Gagal mengirim feedback. Coba lagi.', { variant: 'error' });
     } finally {

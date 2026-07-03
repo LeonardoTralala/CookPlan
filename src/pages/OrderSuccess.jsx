@@ -149,7 +149,7 @@ export function OrderSuccess() {
 
       {/* Feedback Card */}
       <div className="animate-fade-in">
-        <FeedbackCard question="Bagaimana pengalamanmu belanja di CookPlan hari ini?" category="pujian" />
+        <FeedbackCard question="Bagaimana pengalamanmu belanja di CookPlan hari ini?" category="pujian" cooldownKey="checkout" />
       </div>
 
       {/* Aksi */}

@@ -14,6 +14,7 @@ import { setCachedPersona } from '../utils/personaCache.js';
 import { Modal } from '../components/Modal.jsx';
 import { SettingsDrawer } from '../components/SettingsDrawer.jsx';
 import { RecipeDetailModal } from '../components/RecipeDetailModal.jsx';
+import { FeedbackCard } from '../components/FeedbackCard.jsx';
 
 // Item navigasi Pengaturan. Dipakai bersama oleh sidebar (desktop) & drawer (mobile).
 const SETTINGS_NAV = [
@@ -690,6 +691,8 @@ function UserProfile() {
                 </button>
               </div>
             </div>
+
+            <FeedbackCard question="Apakah fitur Resep Tersimpan membantu mengelola masakan favoritmu?" category="saran" cooldownKey="saved" />
 
             {loadingSaved ? (
               <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
