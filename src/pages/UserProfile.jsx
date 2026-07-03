@@ -13,7 +13,6 @@ import { PERSONA_OPTIONS, personaLabel } from '../utils/persona.js';
 import { setCachedPersona } from '../utils/personaCache.js';
 import { Modal } from '../components/Modal.jsx';
 import { SettingsDrawer } from '../components/SettingsDrawer.jsx';
-import { FeedbackButton } from '../components/FeedbackButton.jsx';
 import { RecipeDetailModal } from '../components/RecipeDetailModal.jsx';
 
 // Item navigasi Pengaturan. Dipakai bersama oleh sidebar (desktop) & drawer (mobile).
@@ -1325,9 +1324,6 @@ function UserProfile() {
           onClose={() => setSelectedRecipeForDetail(null)}
         />
       )}
-
-      {/* Tombol masukan mengambang — hanya tampil di halaman Profil (evaluasi) */}
-      <FeedbackButton />
     </div>
   );
 }

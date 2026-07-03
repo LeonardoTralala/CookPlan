@@ -7,6 +7,7 @@ import { useAuth } from '../hooks/useAuth.js';
 import { mapGeneratedPlanToWeek } from '../utils/planMapper.js';
 import { buildShoppingList } from '../utils/shoppingList.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
+import { FeedbackCard } from '../components/FeedbackCard.jsx';
 
 const MEAL_LABEL = { breakfast: 'Sarapan', lunch: 'Makan Siang', dinner: 'Makan Malam' };
 
@@ -516,6 +517,12 @@ export function GenerateResult() {
           </button>
         )}
       </div>
+
+      {applied && (
+        <div className="pt-4 animate-fade-in">
+          <FeedbackCard question="Bagaimana pengalamanmu menggunakan AI Planner hari ini?" category="saran" />
+        </div>
+      )}
 
       {/* Konfirmasi terapkan ke planner */}
       {confirmApply && (

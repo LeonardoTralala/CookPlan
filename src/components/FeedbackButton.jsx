@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Modal } from './Modal.jsx';
 import { usePlan } from '../hooks/usePlan.js';
@@ -27,6 +27,7 @@ export function FeedbackButton() {
   const [category, setCategory] = useState('saran');
   const [message, setMessage] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isAutoOpened, setIsAutoOpened] = useState(false);
 
   const resetForm = () => {
     setRating(0);
@@ -35,14 +36,39 @@ export function FeedbackButton() {
     setMessage('');
   };
 
+  useEffect(() => {
+    const handleTriggerFeedback = (e) => {
+      resetForm();
+      if (e.detail?.category) {
+        setCategory(e.detail.category);
+      }
+      if (e.detail?.rating) {
+        setRating(e.detail.rating);
+      }
+      setIsAutoOpened(true);
+      setOpen(true);
+    };
+
+    window.addEventListener('trigger-feedback-modal', handleTriggerFeedback);
+    return () => {
+      window.removeEventListener('trigger-feedback-modal', handleTriggerFeedback);
+    };
+  }, []);
+
   const openModal = () => {
     resetForm();
+    setIsAutoOpened(false);
     setOpen(true);
   };
 
   const closeModal = () => {
     if (submitting) return;
     setOpen(false);
+    if (isAutoOpened) {
+      // Pengguna menutup prompt otomatis -> Cooldown 1 minggu (7 hari)
+      const oneWeekMs = 7 * 24 * 60 * 60 * 1000;
+      localStorage.setItem('feedback_cooldown_until', (Date.now() + oneWeekMs).toString());
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -60,6 +86,9 @@ export function FeedbackButton() {
       await submitFeedback({ rating, category, message, page: pathname });
       setOpen(false);
       showToast('Terima kasih! Masukanmu sangat membantu kami. 🙏');
+      // Berhasil kirim -> Cooldown 30 hari agar tidak mengganggu lagi dalam waktu dekat
+      const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+      localStorage.setItem('feedback_cooldown_until', (Date.now() + thirtyDaysMs).toString());
     } catch (err) {
       showToast(err.message || 'Gagal mengirim feedback. Coba lagi.', { variant: 'error' });
     } finally {
@@ -69,17 +98,21 @@ export function FeedbackButton() {
 
   const activeStars = hoverRating || rating;
 
+  const showFAB = pathname === '/profile';
+
   return (
     <>
       {/* FAB: di atas bottom-nav pada mobile (bottom-24), pojok kanan di desktop. */}
-      <button
-        onClick={openModal}
-        aria-label="Beri masukan"
-        className="fixed right-4 bottom-24 md:right-6 md:bottom-6 z-40 inline-flex items-center gap-2 rounded-full bg-primary text-on-primary shadow-lg hover:shadow-xl active:scale-95 transition-all px-4 py-3 cursor-pointer"
-      >
-        <span className="material-symbols-outlined text-[22px]" aria-hidden="true">feedback</span>
-        <span className="hidden md:inline text-sm font-semibold">Masukan</span>
-      </button>
+      {showFAB && (
+        <button
+          onClick={openModal}
+          aria-label="Beri masukan"
+          className="fixed right-4 bottom-24 md:right-6 md:bottom-6 z-40 inline-flex items-center gap-2 rounded-full bg-primary text-on-primary shadow-lg hover:shadow-xl active:scale-95 transition-all px-4 py-3 cursor-pointer"
+        >
+          <span className="material-symbols-outlined text-[22px]" aria-hidden="true">feedback</span>
+          <span className="hidden md:inline text-sm font-semibold">Masukan</span>
+        </button>
+      )}
 
       <Modal isOpen={open} onClose={closeModal}>
         <form

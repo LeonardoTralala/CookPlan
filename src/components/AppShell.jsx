@@ -6,6 +6,7 @@ import { RouteFallback } from './RouteFallback.jsx';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { checkIsAdmin } from '../services/adminService.js';
+import { FeedbackButton } from './FeedbackButton.jsx';
 
 // Navigasi aplikasi (setelah login). Desktop: top-nav. Mobile: bottom-nav.
 // Item dibatasi maks 5 (rule bottom-nav-limit di UI/UX review).
@@ -213,6 +214,9 @@ export function AppShell({ children }) {
           </div>
         </div>
       </Modal>
+
+      {/* FAB masukan (global) */}
+      {!isAnonymous && <FeedbackButton />}
     </div>
   );
 }
