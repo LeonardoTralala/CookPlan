@@ -621,10 +621,7 @@ function WeeklyPlanner({
                                   {slot.title}
                                 </span>
                                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                                  <div className="flex items-center gap-1 bg-on-surface/50 backdrop-blur-md px-2 py-0.5 rounded-full text-white/95 shadow-sm border border-white/10">
-                                    <span className="material-symbols-outlined text-[12px]">schedule</span>
-                                    <span className="text-[9px] font-bold tracking-wide">{slot.readyInMinutes}m</span>
-                                  </div>
+                                  {/* Waktu masak disembunyikan sementara */}
                                   <div className="flex items-center gap-1 bg-primary/90 backdrop-blur-md px-2 py-0.5 rounded-full text-white shadow-sm border border-primary-container/30">
                                     <span className="material-symbols-outlined text-[12px]">group</span>
                                     <span className="text-[9px] font-bold tracking-wide">{slot.servings || 2} porsi</span>
@@ -1011,9 +1008,7 @@ function WeeklyPlanner({
                       <h4 className="font-bold text-sm text-on-surface leading-tight line-clamp-1">
                         {recipe.title}
                       </h4>
-                      <span className="text-xs text-on-surface-variant">
-                        {recipe.readyInMinutes} mnt · {recipe.calories} kkal
-                      </span>
+                      {/* Info waktu masak & kalori disembunyikan sementara */}
                     </div>
                   </div>
                 ))}

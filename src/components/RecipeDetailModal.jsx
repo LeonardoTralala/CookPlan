@@ -116,29 +116,8 @@ export function RecipeDetailModal({
           </div>
 
           {/* Quick Info Grid */}
-          <div className="grid grid-cols-3 gap-4 p-4 bg-secondary-container/20 rounded-2xl border border-outline-variant/60 text-center">
-            <div>
-              <span className="material-symbols-outlined text-primary text-2xl mb-1 block">
-                schedule
-              </span>
-              <span className="text-[10px] uppercase font-bold text-on-surface tracking-wider block">
-                Waktu Masak
-              </span>
-              <span className="text-sm font-bold text-primary">
-                {recipe.readyInMinutes} mnt
-              </span>
-            </div>
-            <div>
-              <span className="material-symbols-outlined text-primary text-2xl mb-1 block">
-                whatshot
-              </span>
-              <span className="text-[10px] uppercase font-bold text-on-surface tracking-wider block">
-                Kalori
-              </span>
-              <span className="text-sm font-bold text-primary">
-                {recipe.calories} kcal
-              </span>
-            </div>
+          <div className="grid grid-cols-1 gap-4 p-4 bg-secondary-container/20 rounded-2xl border border-outline-variant/60 text-center">
+            {/* Waktu Masak & Kalori disembunyikan sementara */}
             <div>
               <span className="material-symbols-outlined text-primary text-2xl mb-1 block">
                 group

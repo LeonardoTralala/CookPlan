@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { getSavedRecipes, unsaveRecipe } from '../services/recipeService.js';
+import { getSavedRecipes, unsaveRecipe, saveRecipe, getRecipes } from '../services/recipeService.js';
 import { getMyOrders, formatRupiah } from '../services/orderService.js';
 import { ORDER_STATUS_META, PAYMENT_STATUS_META, STATUS_TONE_CLS } from '../utils/orderStatus.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
@@ -14,6 +14,7 @@ import { setCachedPersona } from '../utils/personaCache.js';
 import { Modal } from '../components/Modal.jsx';
 import { SettingsDrawer } from '../components/SettingsDrawer.jsx';
 import { FeedbackButton } from '../components/FeedbackButton.jsx';
+import { RecipeDetailModal } from '../components/RecipeDetailModal.jsx';
 
 // Item navigasi Pengaturan. Dipakai bersama oleh sidebar (desktop) & drawer (mobile).
 const SETTINGS_NAV = [
@@ -521,6 +522,59 @@ function UserProfile() {
     return savedRecipes.filter((r) => r.title.toLowerCase().includes(q));
   }, [savedRecipes, savedSearch]);
 
+  // State untuk modal "Tambah Koleksi Resep" (Simpan Resep)
+  const [isAddCollectionOpen, setIsAddCollectionOpen] = useState(false);
+  const [allRecipes, setAllRecipes] = useState([]);
+  const [loadingAll, setLoadingAll] = useState(false);
+  const [addSearch, setAddSearch] = useState('');
+  const [selectedRecipeForDetail, setSelectedRecipeForDetail] = useState(null);
+
+  const handleOpenAddCollection = async () => {
+    setIsAddCollectionOpen(true);
+    if (allRecipes.length === 0) {
+      setLoadingAll(true);
+      try {
+        const data = await getRecipes();
+        setAllRecipes(data);
+      } catch (err) {
+        console.error("Gagal memuat resep:", err);
+      } finally {
+        setLoadingAll(false);
+      }
+    }
+  };
+
+  const handleToggleSave = async (recipe) => {
+    const isSaved = savedRecipes.some((r) => r.id === recipe.id);
+    if (isSaved) {
+      const prev = savedRecipes;
+      setSavedRecipes((list) => list.filter((r) => r.id !== recipe.id));
+      try {
+        await unsaveRecipe(recipe.id);
+        showToast('Resep dihapus dari tersimpan.');
+      } catch (err) {
+        setSavedRecipes(prev);
+        showToast(err.message || 'Gagal menghapus resep.');
+      }
+    } else {
+      const prev = savedRecipes;
+      setSavedRecipes((list) => [recipe, ...list]);
+      try {
+        await saveRecipe(recipe.id);
+        showToast('Resep berhasil disimpan.');
+      } catch (err) {
+        setSavedRecipes(prev);
+        showToast(err.message || 'Gagal menyimpan resep.');
+      }
+    }
+  };
+
+  const filteredAddRecipes = useMemo(() => {
+    if (addSearch.trim() === '') return allRecipes;
+    const q = addSearch.toLowerCase();
+    return allRecipes.filter((r) => r.title.toLowerCase().includes(q));
+  }, [allRecipes, addSearch]);
+
   // Preferensi diet: pool referensi publik (diet_tags) + pilihan tersimpan
   // pengguna (profiles.diet_prefs). Toggle persist optimistic; dipakai untuk
   // prefill wizard generate-plan.
@@ -629,7 +683,7 @@ function UserProfile() {
                   />
                 </div>
                 <button
-                  onClick={() => soon('Tambah Koleksi Resep')}
+                  onClick={handleOpenAddCollection}
                   className="flex items-center justify-center p-2 bg-surface-cream text-primary rounded-full hover:bg-surface-variant transition-colors cursor-pointer"
                   aria-label="Tambah koleksi resep"
                 >
@@ -666,11 +720,11 @@ function UserProfile() {
                     className="group cursor-pointer focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary rounded-2xl"
                     role="button"
                     tabIndex={0}
-                    onClick={() => soon('Detail Resep')}
+                    onClick={() => setSelectedRecipeForDetail(recipe)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
-                        soon('Detail Resep');
+                        setSelectedRecipeForDetail(recipe);
                       }
                     }}
                   >
@@ -691,7 +745,7 @@ function UserProfile() {
                       </button>
                     </div>
                     <p className="text-sm font-medium text-on-surface line-clamp-1">{recipe.title}</p>
-                    <p className="text-xs text-on-surface-variant">{recipe.readyInMinutes} mnt</p>
+                    {/* Waktu masak disembunyikan sementara */}
                   </div>
                 ))}
               </div>
@@ -1186,6 +1240,91 @@ function UserProfile() {
           </div>
         </form>
       </Modal>
+
+      {/* Modal Tambah Koleksi Resep */}
+      <Modal isOpen={isAddCollectionOpen} onClose={() => setIsAddCollectionOpen(false)}>
+        <div className="bg-surface-container rounded-3xl w-full max-w-lg p-6 flex flex-col max-h-[85vh] animate-scale-up relative">
+          <button
+            onClick={() => setIsAddCollectionOpen(false)}
+            className="absolute right-4 top-4 w-10 h-10 rounded-full bg-surface-container-low text-on-surface flex items-center justify-center hover:bg-surface-container-high transition-colors cursor-pointer"
+            aria-label="Tutup"
+          >
+            <span className="material-symbols-outlined text-xl">close</span>
+          </button>
+          
+          <h3 className="font-headline-md text-headline-md text-primary mb-1 flex items-center gap-2">
+            <span className="material-symbols-outlined text-2xl">bookmark</span>
+            Tambah ke Tersimpan
+          </h3>
+          <p className="text-xs text-on-surface-variant mb-4">
+            Pilih resep dari katalog untuk disimpan ke koleksi favoritmu.
+          </p>
+
+          <div className="relative mb-4">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant text-[20px]">
+              search
+            </span>
+            <input
+              type="text"
+              value={addSearch}
+              onChange={(e) => setAddSearch(e.target.value)}
+              placeholder="Cari resep..."
+              className="w-full pl-10 pr-4 py-2 bg-surface-container-lowest border border-outline-variant/60 rounded-full text-base focus:outline-none focus:ring-2 focus:ring-primary/20"
+            />
+          </div>
+
+          <div className="overflow-y-auto flex-grow space-y-3 pr-1">
+            {loadingAll ? (
+              <div className="flex flex-col items-center justify-center py-12 text-on-surface-variant">
+                <span className="material-symbols-outlined animate-spin text-3xl text-primary mb-2">progress_activity</span>
+                <p className="text-xs">Memuat daftar resep...</p>
+              </div>
+            ) : filteredAddRecipes.length === 0 ? (
+              <div className="text-center py-12 text-on-surface-variant">
+                <p className="text-sm">Tidak ada resep ditemukan.</p>
+              </div>
+            ) : (
+              filteredAddRecipes.map((recipe) => {
+                const isSaved = savedRecipes.some((r) => r.id === recipe.id);
+                return (
+                  <div key={recipe.id} className="flex items-center justify-between gap-3 p-3 bg-surface-container-lowest rounded-2xl border border-outline-variant/40">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <img
+                        src={recipe.imageUrl}
+                        alt=""
+                        onError={(e) => { e.currentTarget.src = '/img/recipe-placeholder.svg'; }}
+                        className="w-12 h-12 rounded-xl object-cover shrink-0"
+                      />
+                      <span className="font-semibold text-sm text-on-surface line-clamp-2">{recipe.title}</span>
+                    </div>
+                    <button
+                      onClick={() => handleToggleSave(recipe)}
+                      className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shrink-0 ${
+                        isSaved
+                          ? 'bg-success-green/10 text-success-green border border-success-green/30 hover:bg-success-green/20'
+                          : 'bg-primary text-on-primary hover:shadow-md'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[16px]">{isSaved ? 'check' : 'add'}</span>
+                      {isSaved ? 'Tersimpan' : 'Simpan'}
+                    </button>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal Detail Resep */}
+      {selectedRecipeForDetail && (
+        <RecipeDetailModal
+          recipe={selectedRecipeForDetail}
+          isSaved={savedRecipes.some((r) => r.id === selectedRecipeForDetail.id)}
+          onToggleSave={handleToggleSave}
+          onClose={() => setSelectedRecipeForDetail(null)}
+        />
+      )}
 
       {/* Tombol masukan mengambang — hanya tampil di halaman Profil (evaluasi) */}
       <FeedbackButton />

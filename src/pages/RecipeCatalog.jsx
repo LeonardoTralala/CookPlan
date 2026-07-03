@@ -532,16 +532,7 @@ function RecipeCatalog({ onAddToPlan }) {
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-2 text-on-surface-variant text-[11px] font-semibold">
-                    <div className="flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-[14px]">schedule</span>
-                      <span>{recipe.readyInMinutes}m</span>
-                    </div>
-                    <div className="flex items-center gap-0.5">
-                      <span className="material-symbols-outlined text-[14px]">whatshot</span>
-                      <span>{recipe.calories} kcal</span>
-                    </div>
-                  </div>
+                  {/* Waktu masak & kalori disembunyikan sementara */}
                 </div>
               </div>
             ))}
