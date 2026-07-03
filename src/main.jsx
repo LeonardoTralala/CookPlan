@@ -7,6 +7,7 @@ import { AuthProvider } from './context/AuthContext.jsx'
 import { BrowserRouter } from 'react-router-dom'
 import { ScrollToTop } from './components/ScrollToTop.jsx'
 import { ErrorBoundary } from './components/ErrorBoundary.jsx'
+import { Analytics } from '@vercel/analytics/react'
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
@@ -16,6 +17,7 @@ createRoot(document.getElementById('root')).render(
           <PlanProvider>
             <ScrollToTop />
             <App />
+            <Analytics />
           </PlanProvider>
         </AuthProvider>
       </BrowserRouter>
