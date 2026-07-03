@@ -109,11 +109,18 @@ export function buildShoppingListFromSlots(slots) {
 
 // Bentuk slot dari weeklyPlan (shape PlanContext: { Senin:{breakfast,lunch,dinner}, ... }).
 // recipeIndex: Map<recipeId, recipe>. Slot tanpa resep di-skip.
-export function slotsFromWeeklyPlan(weeklyPlan, recipeIndex) {
+// selectedDays: Set/Array nama hari opsional untuk menyaring slot hari tertentu saja.
+export function slotsFromWeeklyPlan(weeklyPlan, recipeIndex, selectedDays = null) {
   const slots = [];
   if (weeklyPlan && typeof weeklyPlan === 'object') {
-    for (const daySlots of Object.values(weeklyPlan)) {
+    for (const [day, daySlots] of Object.entries(weeklyPlan)) {
       if (!daySlots) continue;
+      if (selectedDays) {
+        const hasDay = typeof selectedDays.has === 'function'
+          ? selectedDays.has(day)
+          : selectedDays.includes(day);
+        if (!hasDay) continue;
+      }
       for (const slot of Object.values(daySlots)) {
         if (!slot) continue;
         const recipe = recipeIndex.get(slot.recipeId);

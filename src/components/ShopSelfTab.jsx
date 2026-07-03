@@ -6,6 +6,7 @@ import {
 } from '../utils/buildShoppingList.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ShoppingListSkeleton } from './Skeleton.jsx';
+import { DAYS } from '../utils/week.js';
 
 const DELIVERY_FEE = 15000;
 
@@ -14,7 +15,7 @@ const DELIVERY_FEE = 15000;
 // tanpa order ke kami. Bisa disimpan sebagai daftar.
 // Dua mode tampilan: per-bahan (gabung & checklist) atau per-menu (kelompok resep).
 export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
-  const { showToast, loading: planLoading } = usePlan();
+  const { showToast, loading: planLoading, isCurrentWeek } = usePlan();
   // Checklist belanja: MULAI KOSONG (tidak auto-centang). User mencentang sendiri
   // tiap bahan yang sudah diambil/dibeli saat belanja. removedItems = bahan yang
   // dihapus user karena tidak diperlukan (keluar dari daftar & estimasi biaya).
@@ -26,6 +27,18 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
   const [recipes, setRecipes] = useState([]);
   const [recipesLoading, setRecipesLoading] = useState(true);
   const [view, setView] = useState('bahan'); // 'bahan' | 'menu'
+
+  // State penyaring hari belanja
+  const [selectedDays, setSelectedDays] = useState(() => {
+    if (isCurrentWeek) {
+      const dow = new Date().getDay();
+      const indonesianDow = dow === 0 ? 6 : dow - 1;
+      return new Set(DAYS.slice(indonesianDow));
+    }
+    return new Set(DAYS);
+  });
+
+
 
   useEffect(() => {
     let active = true;
@@ -46,6 +59,19 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     [weeklyPlan]
   );
 
+  // Set nama hari yang memiliki menu terjadwal di planner
+  const DAYS_WITH_MEALS = useMemo(() => {
+    const s = new Set();
+    if (weeklyPlan && typeof weeklyPlan === 'object') {
+      for (const [day, daySlots] of Object.entries(weeklyPlan)) {
+        if (daySlots && Object.values(daySlots).some(Boolean)) {
+          s.add(day);
+        }
+      }
+    }
+    return s;
+  }, [weeklyPlan]);
+
   const recipeIndex = useMemo(() => {
     const m = new Map();
     for (const r of recipes) m.set(r.id, r);
@@ -53,14 +79,36 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
   }, [recipes]);
 
   const slots = useMemo(
-    () => slotsFromWeeklyPlan(weeklyPlan, recipeIndex),
-    [weeklyPlan, recipeIndex]
+    () => slotsFromWeeklyPlan(weeklyPlan, recipeIndex, selectedDays),
+    [weeklyPlan, recipeIndex, selectedDays]
   );
   const { sections, totalItems, pantryItems } = useMemo(
     () => buildShoppingListFromSlots(slots),
     [slots]
   );
   const menus = useMemo(() => buildMenuListFromSlots(slots), [slots]);
+
+  const handleToggleDay = (day) => {
+    setSelectedDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(day)) next.delete(day); else next.add(day);
+      return next;
+    });
+  };
+
+  const handleSelectAllDays = () => {
+    setSelectedDays(new Set(DAYS));
+  };
+
+  const handleSelectRemainingDays = () => {
+    const dow = new Date().getDay();
+    const indonesianDow = dow === 0 ? 6 : dow - 1;
+    setSelectedDays(new Set(DAYS.slice(indonesianDow)));
+  };
+
+  const handleClearAllDays = () => {
+    setSelectedDays(new Set());
+  };
 
   // Centang/uncentang bahan (penanda sudah diambil saat belanja).
   const toggleItem = (id) => {
@@ -138,7 +186,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     return <ShoppingListSkeleton />;
   }
 
-  if (totalItems === 0) {
+  if (!hasPlannedSlots) {
     return (
       <div className="flex flex-col items-center text-center py-16 animate-fade-in">
         <div className="w-20 h-20 rounded-full bg-surface-cream flex items-center justify-center mb-5">
@@ -161,158 +209,232 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     <>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 pb-24 lg:pb-0">
       <div className="lg:col-span-8 space-y-6">
-        {/* Toggle tampilan: per bahan (checklist) vs per menu (kelompok resep) */}
-        <div className="inline-flex p-1 bg-surface-container-low rounded-full">
-          <button onClick={() => setView('bahan')}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
-              view === 'bahan' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
-            <span className="material-symbols-outlined text-[18px]">checklist</span>
-            Per Bahan
-          </button>
-          <button onClick={() => setView('menu')}
-            className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
-              view === 'menu' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
-            <span className="material-symbols-outlined text-[18px]">restaurant_menu</span>
-            Per Menu
-          </button>
+        {/* Toggle tampilan dan Filter Hari */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          {/* Toggle tampilan: per bahan (checklist) vs per menu (kelompok resep) */}
+          <div className="inline-flex p-1 bg-surface-container-low rounded-full self-start">
+            <button onClick={() => setView('bahan')}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+                view === 'bahan' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
+              <span className="material-symbols-outlined text-[18px]">checklist</span>
+              Per Bahan
+            </button>
+            <button onClick={() => setView('menu')}
+              className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 ${
+                view === 'menu' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
+              <span className="material-symbols-outlined text-[18px]">restaurant_menu</span>
+              Per Menu
+            </button>
+          </div>
         </div>
 
-        {/* Petunjuk: checklist belanja — centang sendiri yang sudah diambil, hapus yang tak perlu. */}
-        {view === 'bahan' && (
-          <div className="flex items-start gap-2.5 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-sm text-on-surface-variant">
-            <span className="material-symbols-outlined text-primary text-[20px] shrink-0">info</span>
-            <p>Centang bahan yang <span className="font-semibold text-on-surface">sudah kamu ambil/beli</span> saat belanja. Bahan yang tidak diperlukan bisa <span className="font-semibold text-on-surface">dihapus</span> lewat ikon tempat sampah.</p>
+        {/* Filter Hari Belanja */}
+        <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant p-5 recipe-card-shadow space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-primary">
+              <span className="material-symbols-outlined text-[22px]">calendar_view_week</span>
+              <h4 className="font-bold text-on-surface text-sm sm:text-base">Tampilkan Bahan untuk Hari Memasak:</h4>
+            </div>
+            <p className="text-xs text-on-surface-variant leading-relaxed">
+              Bahan belanjaan di bawah akan disaring otomatis berdasarkan hari memasak yang Anda centang.
+            </p>
           </div>
-        )}
 
-        {/* ---- VIEW PER BAHAN (checklist, group kategori) ---- */}
-        {view === 'bahan' && sections.map((section) => {
-          const visibleItems = section.items.filter((it) => !removedItems.has(it.id));
-          if (visibleItems.length === 0) return null; // semua bahan di seksi ini dihapus
-          return (
-            <section key={section.key}>
-              <div className="flex items-center gap-3 mb-4">
-                <span className="material-symbols-outlined text-primary text-2xl">{section.meta.icon}</span>
-                <h3 className="font-headline-md text-headline-md text-on-surface">{section.meta.label}</h3>
-                <span className="ml-auto text-sm font-semibold text-outline">{visibleItems.length} bahan</span>
-              </div>
-              <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
-                {visibleItems.map((item) => {
-                  const checked = checkedItems.has(item.id); // sudah diambil saat belanja
-                  return (
-                    <div key={item.id}
-                      className="flex items-stretch border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors group">
-                      <button onClick={() => toggleItem(item.id)} aria-pressed={checked}
-                        className="flex-1 min-w-0 text-left flex items-center justify-between p-4 md:p-5 cursor-pointer">
-                        <div className="flex items-center gap-4 min-w-0">
-                          <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
-                            checked ? 'bg-success-green border-success-green' : 'border-outline-variant group-hover:border-primary'}`}>
-                            <span className={`material-symbols-outlined text-sm transition-opacity ${
-                              checked ? 'text-white opacity-100' : 'text-primary opacity-0 group-hover:opacity-60'}`}>check</span>
-                          </div>
-                          <div className="min-w-0">
-                            <p className={`font-semibold text-on-surface truncate ${checked ? 'opacity-60' : ''}`}>{item.name}</p>
-                            {checked ? (
-                              <p className="text-xs text-on-surface-variant italic">Sudah diambil</p>
-                            ) : (
-                              <p className="text-xs text-on-surface-variant">Beli di: <span className="text-primary font-bold">{section.meta.store}</span></p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right shrink-0 pl-3 flex flex-col items-end gap-1">
-                          <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
-                            checked ? 'bg-surface-container-low text-on-surface-variant' : 'bg-surface-cream text-on-surface'}`}>
-                            {formatAmount(item.amount)} {item.unit}
-                          </span>
-                          {item.priceIdr > 0 && (
-                            <span className={`text-xs font-bold ${checked ? 'text-on-surface-variant/50' : 'text-primary'}`}>{formatRupiah(Math.round(item.priceIdr))}</span>
-                          )}
-                        </div>
-                      </button>
-                      <button onClick={() => removeItem(item.id)} aria-label={`Hapus ${item.name}`} title="Hapus bahan"
-                        className="shrink-0 px-4 flex items-center text-on-surface-variant hover:text-error hover:bg-error/5 transition-colors cursor-pointer">
-                        <span className="material-symbols-outlined text-[20px]">delete</span>
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </section>
-          );
-        })}
-
-        {/* ---- VIEW PER MENU (kelompok resep) ---- */}
-        {view === 'menu' && menus.map((menu) => (
-          <section key={menu.recipeId}>
-            <div className="flex items-center gap-3 mb-3">
-              {menu.imageUrl && (
-                <img src={menu.imageUrl} alt="" loading="lazy"
-                  onError={(e) => { e.currentTarget.src = '/img/recipe-placeholder.svg'; }}
-                  className="w-11 h-11 rounded-xl object-cover shrink-0" />
-              )}
-              <div className="min-w-0">
-                <h3 className="font-bold text-on-surface truncate">{menu.title}</h3>
-                <p className="text-xs text-on-surface-variant">
-                  {menu.count}× di plan · {menu.totalServings} porsi total · {menu.items.length} bahan
-                </p>
-              </div>
-              <span className="ml-auto text-sm font-bold text-primary whitespace-nowrap">{formatRupiah(menu.subtotal)}</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-2.5 border-t border-outline-variant/40">
+            <span className="text-[11px] font-bold text-on-surface-variant uppercase tracking-wider">Pilihan Cepat:</span>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleSelectAllDays}
+                className="text-xs font-bold text-primary hover:underline cursor-pointer bg-transparent border-0 p-0"
+              >
+                Semua Hari
+              </button>
+              <span className="text-outline-variant text-[10px]">|</span>
+              <button
+                onClick={handleSelectRemainingDays}
+                className="text-xs font-bold text-primary hover:underline cursor-pointer bg-transparent border-0 p-0"
+              >
+                Hari Ini & Nanti
+              </button>
+              <span className="text-outline-variant text-[10px]">|</span>
+              <button
+                onClick={handleClearAllDays}
+                className="text-xs font-bold text-on-surface-variant hover:underline cursor-pointer bg-transparent border-0 p-0"
+              >
+                Kosongkan Pilihan
+              </button>
             </div>
-            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden">
-              {menu.items.map((item, i) => (
-                <div key={i} className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-outline-variant/60 last:border-0">
-                  <span className="text-sm text-on-surface">{item.name}</span>
-                  <div className="text-right shrink-0 pl-3">
-                    <span className="text-sm font-semibold text-on-surface">{formatAmount(item.amount)} {item.unit}</span>
-                    {item.priceIdr > 0 && (
-                      <span className="block text-xs text-primary font-bold">{formatRupiah(Math.round(item.priceIdr))}</span>
-                    )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {DAYS.map((day) => {
+              const active = selectedDays.has(day);
+              const hasMeals = DAYS_WITH_MEALS.has(day);
+              return (
+                <button
+                  key={day}
+                  onClick={() => handleToggleDay(day)}
+                  className={`px-3.5 py-2 rounded-full text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 border ${
+                    active
+                      ? 'bg-primary border-primary text-on-primary shadow-sm shadow-primary/20'
+                      : 'bg-white border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary'
+                  } ${!hasMeals ? 'opacity-55' : ''}`}
+                >
+                  {day}
+                  {hasMeals && (
+                    <span className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-white' : 'bg-primary'}`} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {totalItems === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center py-16 px-6 border border-dashed border-outline-variant rounded-3xl bg-surface-container-lowest animate-fade-in space-y-3">
+            <span className="material-symbols-outlined text-outline text-4xl">calendar_today</span>
+            <div>
+              <p className="text-on-surface font-bold text-base">Tidak ada bahan belanjaan</p>
+              <p className="text-xs text-on-surface-variant mt-1 max-w-sm">
+                Tidak ada menu yang terjadwal pada hari-hari yang Anda pilih. Centang hari lain yang memiliki tanda titik di atas, atau klik <span className="font-bold text-primary cursor-pointer hover:underline" onClick={handleSelectAllDays}>Semua Hari</span>.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <>
+            {view === 'bahan' && (
+              <div className="flex items-start gap-2.5 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-sm text-on-surface-variant">
+                <span className="material-symbols-outlined text-primary text-[20px] shrink-0">info</span>
+                <p>Centang bahan yang <span className="font-semibold text-on-surface">sudah kamu ambil/beli</span> saat belanja. Bahan yang tidak diperlukan bisa <span className="font-semibold text-on-surface">dihapus</span> lewat ikon tempat sampah.</p>
+              </div>
+            )}
+
+            {/* ---- VIEW PER BAHAN (checklist, group kategori) ---- */}
+            {view === 'bahan' && sections.map((section) => {
+              const visibleItems = section.items.filter((it) => !removedItems.has(it.id));
+              if (visibleItems.length === 0) return null; // semua bahan di seksi ini dihapus
+              return (
+                <section key={section.key}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="material-symbols-outlined text-primary text-2xl">{section.meta.icon}</span>
+                    <h3 className="font-headline-md text-headline-md text-on-surface">{section.meta.label}</h3>
+                    <span className="ml-auto text-sm font-semibold text-outline">{visibleItems.length} bahan</span>
                   </div>
+                  <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
+                    {visibleItems.map((item) => {
+                      const checked = checkedItems.has(item.id); // sudah diambil saat belanja
+                      return (
+                        <div key={item.id}
+                          className="flex items-stretch border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors group">
+                          <button onClick={() => toggleItem(item.id)} aria-pressed={checked}
+                            className="flex-1 min-w-0 text-left flex items-center justify-between p-4 md:p-5 cursor-pointer">
+                            <div className="flex items-center gap-4 min-w-0">
+                              <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
+                                checked ? 'bg-success-green border-success-green' : 'border-outline-variant group-hover:border-primary'}`}>
+                                <span className={`material-symbols-outlined text-sm transition-opacity ${
+                                  checked ? 'text-white opacity-100' : 'text-primary opacity-0 group-hover:opacity-60'}`}>check</span>
+                              </div>
+                              <div className="min-w-0">
+                                <p className={`font-semibold text-on-surface truncate ${checked ? 'opacity-60' : ''}`}>{item.name}</p>
+                                {checked ? (
+                                  <p className="text-xs text-on-surface-variant italic">Sudah diambil</p>
+                                ) : (
+                                  <p className="text-xs text-on-surface-variant">Beli di: <span className="text-primary font-bold">{section.meta.store}</span></p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0 pl-3 flex flex-col items-end gap-1">
+                              <span className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                                checked ? 'bg-surface-container-low text-on-surface-variant' : 'bg-surface-cream text-on-surface'}`}>
+                                {formatAmount(item.amount)} {item.unit}
+                              </span>
+                              {item.priceIdr > 0 && (
+                                <span className={`text-xs font-bold ${checked ? 'text-on-surface-variant/50' : 'text-primary'}`}>{formatRupiah(Math.round(item.priceIdr))}</span>
+                              )}
+                            </div>
+                          </button>
+                          <button onClick={() => removeItem(item.id)} aria-label={`Hapus ${item.name}`} title="Hapus bahan"
+                            className="shrink-0 px-4 flex items-center text-on-surface-variant hover:text-error hover:bg-error/5 transition-colors cursor-pointer">
+                            <span className="material-symbols-outlined text-[20px]">delete</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
+
+            {/* ---- VIEW PER MENU (kelompok resep) ---- */}
+            {view === 'menu' && menus.map((menu) => (
+              <section key={menu.recipeId}>
+                <div className="flex items-center gap-3 mb-3">
+                  {menu.imageUrl && (
+                    <img src={menu.imageUrl} alt="" loading="lazy"
+                      onError={(e) => { e.currentTarget.src = '/img/recipe-placeholder.svg'; }}
+                      className="w-11 h-11 rounded-xl object-cover shrink-0" />
+                  )}
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-on-surface truncate">{menu.title}</h3>
+                    <p className="text-xs text-on-surface-variant">
+                      {menu.count}× di plan · {menu.totalServings} porsi total · {menu.items.length} bahan
+                    </p>
+                  </div>
+                  <span className="ml-auto text-sm font-bold text-primary whitespace-nowrap">{formatRupiah(menu.subtotal)}</span>
                 </div>
-              ))}
-            </div>
-          </section>
-        ))}
-
-        {/* ---- BAHAN DAPUR (cek stok di rumah) ---- */}
-        {/* Bahan pokok (garam, minyak, dll) dikecualikan dari belanja & biaya karena
-            biasanya sudah ada di dapur. Ditampilkan sebagai reminder ringan — centang
-            yang stoknya habis. Tidak masuk daftar tersimpan, order, atau estimasi biaya. */}
-        {view === 'bahan' && pantryItems.length > 0 && (
-          <section>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="material-symbols-outlined text-on-surface-variant text-2xl">kitchen</span>
-              <h3 className="font-headline-md text-headline-md text-on-surface">Bahan Dapur</h3>
-              <span className="ml-auto text-sm font-semibold text-outline">{pantryItems.length} bahan</span>
-            </div>
-            <div className="flex items-start gap-2.5 rounded-2xl bg-surface-container-low border border-outline-variant px-4 py-3 text-sm text-on-surface-variant mb-3">
-              <span className="material-symbols-outlined text-on-surface-variant text-[20px] shrink-0">info</span>
-              <p>Bahan ini biasanya <span className="font-semibold text-on-surface">sudah ada di dapur</span>, jadi tidak dihitung ke biaya belanja. Centang yang <span className="font-semibold text-on-surface">stoknya habis</span> biar tidak lupa beli.</p>
-            </div>
-            <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
-              {pantryItems.map((name) => {
-                const checked = checkedPantry.has(name); // stok habis → perlu dibeli
-                return (
-                  <button key={name} onClick={() => togglePantry(name)} aria-pressed={checked}
-                    className="w-full text-left flex items-center gap-4 p-4 md:p-5 border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors group cursor-pointer">
-                    <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
-                      checked ? 'bg-success-green border-success-green' : 'border-outline-variant group-hover:border-primary'}`}>
-                      <span className={`material-symbols-outlined text-sm transition-opacity ${
-                        checked ? 'text-white opacity-100' : 'text-primary opacity-0 group-hover:opacity-60'}`}>check</span>
+                <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden">
+                  {menu.items.map((item, i) => (
+                    <div key={i} className="flex items-center justify-between px-4 md:px-5 py-3 border-b border-outline-variant/60 last:border-0">
+                      <span className="text-sm text-on-surface">{item.name}</span>
+                      <div className="text-right shrink-0 pl-3">
+                        <span className="text-sm font-semibold text-on-surface">{formatAmount(item.amount)} {item.unit}</span>
+                        {item.priceIdr > 0 && (
+                          <span className="block text-xs text-primary font-bold">{formatRupiah(Math.round(item.priceIdr))}</span>
+                        )}
+                      </div>
                     </div>
-                    <span className={`font-semibold text-on-surface ${checked ? '' : 'opacity-90'}`}>{name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        )}
+                  ))}
+                </div>
+              </section>
+            ))}
 
-        {/* Disclaimer harga: estimasi, bukan harga final di pasar/toko. */}
-        <p className="flex items-start gap-2 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-xs text-on-surface-variant">
-          <span className="material-symbols-outlined text-[18px] shrink-0">info</span>
-          <span>Harga yang tertera adalah harga estimasi, bisa berbeda dari harga sebenarnya di pasar/toko tergantung lokasi, musim, dan ketersediaan bahan.</span>
-        </p>
+            {/* ---- BAHAN DAPUR (cek stok di rumah) ---- */}
+            {view === 'bahan' && pantryItems.length > 0 && (
+              <section>
+                <div className="flex items-center gap-3 mb-4">
+                  <span className="material-symbols-outlined text-on-surface-variant text-2xl">kitchen</span>
+                  <h3 className="font-headline-md text-headline-md text-on-surface">Bahan Dapur</h3>
+                  <span className="ml-auto text-sm font-semibold text-outline">{pantryItems.length} bahan</span>
+                </div>
+                <div className="flex items-start gap-2.5 rounded-2xl bg-surface-container-low border border-outline-variant px-4 py-3 text-sm text-on-surface-variant mb-3">
+                  <span className="material-symbols-outlined text-on-surface-variant text-[20px] shrink-0">info</span>
+                  <p>Bahan ini biasanya <span className="font-semibold text-on-surface">sudah ada di dapur</span>, jadi tidak dihitung ke biaya belanja. Centang yang <span className="font-semibold text-on-surface">stoknya habis</span> biar tidak lupa beli.</p>
+                </div>
+                <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
+                  {pantryItems.map((name) => {
+                    const checked = checkedPantry.has(name); // stok habis → perlu dibeli
+                    return (
+                      <button key={name} onClick={() => togglePantry(name)} aria-pressed={checked}
+                        className="w-full text-left flex items-center gap-4 p-4 md:p-5 border-b border-outline-variant last:border-0 hover:bg-surface-container-low transition-colors group cursor-pointer">
+                        <div className={`w-6 h-6 shrink-0 rounded-full border-2 flex items-center justify-center transition-colors ${
+                          checked ? 'bg-success-green border-success-green' : 'border-outline-variant group-hover:border-primary'}`}>
+                          <span className={`material-symbols-outlined text-sm transition-opacity ${
+                            checked ? 'text-white opacity-100' : 'text-primary opacity-0 group-hover:opacity-60'}`}>check</span>
+                        </div>
+                        <span className={`font-semibold text-on-surface ${checked ? '' : 'opacity-90'}`}>{name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Disclaimer harga: estimasi, bukan harga final di pasar/toko. */}
+            <p className="flex items-start gap-2 rounded-2xl bg-surface-cream/70 border border-outline-variant px-4 py-3 text-xs text-on-surface-variant">
+              <span className="material-symbols-outlined text-[18px] shrink-0">info</span>
+              <span>Harga yang tertera adalah harga estimasi, bisa berbeda dari harga sebenarnya di pasar/toko tergantung lokasi, musim, dan ketersediaan bahan.</span>
+            </p>
+          </>
+        )}
       </div>
 
       <div className="hidden lg:block lg:col-span-4">
