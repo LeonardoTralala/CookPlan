@@ -67,6 +67,7 @@ export function PlanProvider({ children }) {
   // berjalan. Mengubahnya memicu reload plan dari DB/localStorage (lihat effect).
   const [weekStart, setWeekStart] = useState(() => toWeekKey(getWeekStart()));
   const [weeklyPlan, setWeeklyPlan] = useState(() => loadLocalPlan(toWeekKey(getWeekStart())));
+  const [prepTasks, setPrepTasks] = useState([]);
   // Mirror SINKRON dari weeklyPlan terbaru. Sumber kebenaran untuk menghitung
   // nextPlan di mutator (setSlot/removeSlot/applySlots/restoreSlot) tanpa
   // bergantung pada eager-evaluation updater React (yang hanya jalan saat queue
@@ -152,6 +153,10 @@ export function PlanProvider({ children }) {
         const next = loadLocalPlan(weekStart);
         planRef.current = next;
         setWeeklyPlan(next);
+        
+        // Guest mode: load prep tasks
+        const savedTasks = localStorage.getItem(`prepTasks:${weekStart}`);
+        setPrepTasks(savedTasks ? JSON.parse(savedTasks) : []);
       });
       return () => { active = false; };
     }
@@ -168,12 +173,17 @@ export function PlanProvider({ children }) {
         if (!active) return;
         planIdRef.current = planId;
 
+        // Muat prep tasks dari Supabase
+        const tasks = await planService.getPrepTasks(planId);
+        if (active) setPrepTasks(tasks);
+
         // Flush mutasi yang sempat tertunda sebelum planId siap.
         const pending = pendingRef.current;
         pendingRef.current = [];
         for (const m of pending) {
           try {
             if (m.type === "set") await planService.setSlot(planId, m.recipe, m.day, m.mealType, m.servings);
+            else if (m.type === "toggleCooked") await planService.toggleCookedStatus(planId, m.day, m.mealType, m.isCooked);
             else await planService.removeSlot(planId, m.day, m.mealType);
           } catch (e) { console.error("flush pending gagal:", e.message); }
         }
@@ -312,6 +322,87 @@ export function PlanProvider({ children }) {
     persistRemove(day, mealType, nextPlan);
   }, [commitPlan, persistRemove]);
 
+  const toggleCookedStatus = useCallback(async (day, mealType, isCooked) => {
+    const prev = planRef.current;
+    const currentSlot = prev[day]?.[mealType];
+    if (!currentSlot) return;
+
+    const updatedSlot = { ...currentSlot, isCooked };
+    const nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: updatedSlot } };
+    commitPlan(nextPlan);
+
+    if (isAuthenticated) {
+      if (planIdRef.current) {
+        try {
+          await planService.toggleCookedStatus(planIdRef.current, day, mealType, isCooked);
+        } catch (e) {
+          console.error("toggleCookedStatus gagal:", e.message);
+          commitPlan(prev);
+          showToast("Gagal memperbarui status masak", { variant: "error" });
+        }
+      } else {
+        pendingRef.current.push({ type: "toggleCooked", day, mealType, isCooked });
+      }
+    } else {
+      localStorage.setItem(localKey(weekStart), JSON.stringify(nextPlan));
+    }
+  }, [commitPlan, isAuthenticated, weekStart, showToast]);
+
+  const addPrepTask = useCallback(async (taskText) => {
+    if (!taskText.trim()) return;
+    if (isAuthenticated) {
+      if (planIdRef.current) {
+        try {
+          const newTask = await planService.addPrepTask(planIdRef.current, taskText);
+          setPrepTasks(prev => [...prev, newTask]);
+        } catch (e) {
+          console.error("addPrepTask gagal:", e.message);
+          showToast("Gagal menambah catatan persiapan", { variant: "error" });
+        }
+      }
+    } else {
+      const newTask = { id: Date.now(), taskText, isCompleted: false };
+      const nextTasks = [...prepTasks, newTask];
+      setPrepTasks(nextTasks);
+      localStorage.setItem(`prepTasks:${weekStart}`, JSON.stringify(nextTasks));
+    }
+  }, [isAuthenticated, prepTasks, weekStart, showToast]);
+
+  const togglePrepTask = useCallback(async (taskId, isCompleted) => {
+    setPrepTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted } : t));
+    
+    if (isAuthenticated) {
+      try {
+        await planService.togglePrepTask(taskId, isCompleted);
+      } catch (e) {
+        console.error("togglePrepTask gagal:", e.message);
+        setPrepTasks(prev => prev.map(t => t.id === taskId ? { ...t, isCompleted: !isCompleted } : t));
+        showToast("Gagal memperbarui catatan persiapan", { variant: "error" });
+      }
+    } else {
+      const nextTasks = prepTasks.map(t => t.id === taskId ? { ...t, isCompleted } : t);
+      localStorage.setItem(`prepTasks:${weekStart}`, JSON.stringify(nextTasks));
+    }
+  }, [isAuthenticated, prepTasks, weekStart, showToast]);
+
+  const deletePrepTask = useCallback(async (taskId) => {
+    const prevTasks = prepTasks;
+    setPrepTasks(prev => prev.filter(t => t.id !== taskId));
+    
+    if (isAuthenticated) {
+      try {
+        await planService.deletePrepTask(taskId);
+      } catch (e) {
+        console.error("deletePrepTask gagal:", e.message);
+        setPrepTasks(prevTasks);
+        showToast("Gagal menghapus catatan persiapan", { variant: "error" });
+      }
+    } else {
+      const nextTasks = prepTasks.filter(t => t.id !== taskId);
+      localStorage.setItem(`prepTasks:${weekStart}`, JSON.stringify(nextTasks));
+    }
+  }, [isAuthenticated, prepTasks, weekStart, showToast]);
+
   const clearAllSlots = useCallback(() => {
     const emptyPlan = createEmptyPlan();
     commitPlan(emptyPlan);
@@ -364,10 +455,15 @@ export function PlanProvider({ children }) {
     showToast,
     isInPlan,
     weeklyPlan,
+    prepTasks,
     loading,
     setSlot,
     applySlots,
     removeSlot,
+    toggleCookedStatus,
+    addPrepTask,
+    togglePrepTask,
+    deletePrepTask,
     restoreSlot,
     clearAllSlots,
     plannedCount,
@@ -375,7 +471,7 @@ export function PlanProvider({ children }) {
     isCurrentWeek,
     goToWeek,
     goToCurrentWeek,
-  }), [toast, showToast, isInPlan, weeklyPlan, loading, setSlot, applySlots, removeSlot, restoreSlot, clearAllSlots, plannedCount, weekStart, isCurrentWeek, goToWeek, goToCurrentWeek]);
+  }), [toast, showToast, isInPlan, weeklyPlan, prepTasks, loading, setSlot, applySlots, removeSlot, toggleCookedStatus, addPrepTask, togglePrepTask, deletePrepTask, restoreSlot, clearAllSlots, plannedCount, weekStart, isCurrentWeek, goToWeek, goToCurrentWeek]);
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
 }
