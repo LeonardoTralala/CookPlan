@@ -520,7 +520,7 @@ export function GenerateResult() {
 
       {applied && (
         <div className="pt-4 animate-fade-in">
-          <FeedbackCard question="Bagaimana pengalamanmu menggunakan AI Planner hari ini?" category="saran" />
+          <FeedbackCard question="Bagaimana pengalamanmu menggunakan AI Planner hari ini?" category="saran" cooldownKey="planner" />
         </div>
       )}
 
