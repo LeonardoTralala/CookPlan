@@ -335,10 +335,8 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
                               </div>
                               <div className="min-w-0">
                                 <p className={`font-semibold text-on-surface truncate ${checked ? 'opacity-60' : ''}`}>{item.name}</p>
-                                {checked ? (
+                                {checked && (
                                   <p className="text-xs text-on-surface-variant italic">Sudah diambil</p>
-                                ) : (
-                                  <p className="text-xs text-on-surface-variant">Beli di: <span className="text-primary font-bold">{section.meta.store}</span></p>
                                 )}
                               </div>
                             </div>
