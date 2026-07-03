@@ -6,6 +6,7 @@ import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { Modal } from '../components/Modal.jsx';
 import { useAuth } from '../hooks/useAuth.js';
+import { GenerateLoading } from '../components/GenerateLoading.jsx';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
 // Step 1: periode + porsi + waktu makan
@@ -685,6 +686,9 @@ export function GeneratePlan() {
           </div>
         </div>
       </Modal>
+
+      {/* Layar loading interaktif saat memproses generate plan */}
+      {loading && <GenerateLoading />}
     </div>
   );
 }
