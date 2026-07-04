@@ -23,6 +23,7 @@ export function PlannerPage() {
       onGoToCatalog={() => navigate('/catalog')}
       onGoToGenerate={() => navigate('/generate')}
       onGenerateShoppingList={() => navigate('/shopping')}
+      onGoToPackages={() => navigate('/shopping?tab=kami')}
     />
   );
 }
