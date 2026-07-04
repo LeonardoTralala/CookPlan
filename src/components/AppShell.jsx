@@ -7,6 +7,79 @@ import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { checkIsAdmin } from '../services/adminService.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
+import { PageOnboarding } from './PageOnboarding.jsx';
+
+// Onboarding Steps per Page
+const ONBOARDING_STEPS = {
+  '/generate': [
+    {
+      title: 'Atur Durasi Menu',
+      description: 'Gunakan tombol tambah/kurang di sini untuk mengatur berapa hari rencana masak yang ingin disusun oleh AI (1-7 hari).',
+      targetSelector: '#generate-periode-field'
+    },
+    {
+      title: 'Bahan di Kulkas (Opsional)',
+      description: 'Ketik dan masukkan bahan makanan yang tersisa di rumahmu agar AI memprioritaskan resep dengan bahan-bahan ini!',
+      targetSelector: '#generate-pantry-field'
+    },
+    {
+      title: 'Mulai Susun Menu AI',
+      description: 'Klik tombol ini jika semua opsi sudah sesuai. AI CookPlan akan segera merancang rencana makan mingguanmu.',
+      targetSelector: '#generate-submit-btn'
+    }
+  ],
+  '/catalog': [
+    {
+      title: 'Cari Resep Sehat',
+      description: 'Ketik bahan atau nama masakan di kolom pencarian ini untuk menemukan menu favoritmu secara instan.',
+      targetSelector: '#catalog-search-input'
+    },
+    {
+      title: 'Filter Kategori Diet',
+      description: 'Pilih kategori diet (seperti Tinggi Protein, Rendah Kalori, Vegetarian) untuk menyaring resep sesuai preferensimu.',
+      targetSelector: '#catalog-filter-chips'
+    },
+    {
+      title: 'Jelajahi Resep',
+      description: 'Klik kartu resep mana saja untuk melihat info gizi detail, bahan-bahan, dan langkah memasak yang praktis.',
+      targetSelector: '#catalog-recipe-grid'
+    }
+  ],
+  '/planner': [
+    {
+      title: 'Rencana Masak Mingguan',
+      description: 'Di sini kamu bisa melihat jadwal makan sarapan, makan siang, dan makan malam yang sudah kamu jadwalkan.',
+      targetSelector: '#planner-grid-container'
+    },
+    {
+      title: 'Bantuan AI CookPlan',
+      description: 'Jika rencanamu masih kosong, klik tombol ini untuk membiarkan AI merancang menu mingguanmu dalam sekejap.',
+      targetSelector: '#planner-ai-btn'
+    },
+    {
+      title: 'Buat Daftar Belanjaan',
+      description: 'Setelah merancang menu, klik tombol ini untuk secara otomatis merangkum semua kebutuhan bahan masakanmu.',
+      targetSelector: '#planner-shopping-btn'
+    }
+  ],
+  '/shopping': [
+    {
+      title: 'Pilihan Metode Belanja',
+      description: 'Pilih "Belanja Sendiri" untuk checklist mandiri di pasar, atau pesan "Belanja di Kami" untuk memesan paket bahan segar langsung.',
+      targetSelector: '#shopping-tab-switcher'
+    },
+    {
+      title: 'Checklist Kebutuhan Bahan',
+      description: 'Centang bahan belanjaan yang sudah kamu ambil/beli di toko, atau hapus bahan yang tidak kamu butuhkan.',
+      targetSelector: '#shopping-ingredient-list'
+    },
+    {
+      title: 'Simpan Daftar Belanja',
+      description: 'Klik tombol ini untuk menyimpan daftar belanjaanmu agar bisa diakses kembali kapan saja dengan mudah.',
+      targetSelector: '#shopping-save-btn'
+    }
+  ]
+};
 
 // Navigasi aplikasi (setelah login). Desktop: top-nav. Mobile: bottom-nav.
 // Item dibatasi maks 5 (rule bottom-nav-limit di UI/UX review).
@@ -27,6 +100,9 @@ export function AppShell({ children }) {
   // Konfirmasi sebelum keluar: tombol Keluar ada di zona jempol (mobile),
   // cegah logout tak sengaja (audit UX destructive-nav).
   const [confirmOpen, setConfirmOpen] = useState(false);
+
+  const [triggerTour, setTriggerTour] = useState(false);
+  const steps = ONBOARDING_STEPS[pathname];
 
   // Tamu (anonymous): hanya tab Generate yang relevan; tab lain butuh akun penuh.
   const navItems = isAnonymous ? NAV_ITEMS.filter((i) => i.to === '/generate') : NAV_ITEMS;
@@ -91,59 +167,72 @@ export function AppShell({ children }) {
             ))}
           </div>
 
-          {isAnonymous ? (
-            // Tamu: arahkan untuk daftar / masuk alih-alih keluar.
-            <Link
-              to="/auth"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-semibold hover:shadow-md active:scale-95 transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[20px]" aria-hidden="true">person_add</span>
-              Daftar / Masuk
-            </Link>
-          ) : (
-            <div className="flex items-center gap-1">
-              {/* Admin: pintu masuk panel (desktop pill, mobile ikon) */}
-              {isAdmin && (
-                <>
-                  <Link
-                    to="/admin"
-                    className={`hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                      onAdmin ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[20px]" aria-hidden="true">admin_panel_settings</span>
-                    Admin
-                  </Link>
-                  <Link
-                    to="/admin"
-                    aria-label="Panel Admin"
-                    className={`md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full transition-colors ${
-                      onAdmin ? 'text-primary' : 'text-on-surface-variant hover:text-primary'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>
-                  </Link>
-                </>
-              )}
-
+          <div className="flex items-center gap-1.5">
+            {/* Tombol Panduan (Help Tour) */}
+            {steps && (
               <button
-                onClick={() => setConfirmOpen(true)}
-                className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:text-error transition-colors cursor-pointer"
+                onClick={() => setTriggerTour(true)}
+                aria-label="Panduan Pengguna"
+                className="inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-primary hover:bg-surface-container transition cursor-pointer"
               >
-                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
-                Keluar
+                <span className="material-symbols-outlined text-[22px]" aria-hidden="true">help</span>
               </button>
+            )}
 
-              {/* Mobile: hanya logout di header (nav utama di bottom) */}
-              <button
-                onClick={() => setConfirmOpen(true)}
-                aria-label="Keluar"
-                className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-error transition-colors cursor-pointer"
+            {isAnonymous ? (
+              // Tamu: arahkan untuk daftar / masuk alih-alih keluar.
+              <Link
+                to="/auth"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-semibold hover:shadow-md active:scale-95 transition-colors cursor-pointer"
               >
-                <span className="material-symbols-outlined" aria-hidden="true">logout</span>
-              </button>
-            </div>
-          )}
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">person_add</span>
+                Daftar / Masuk
+              </Link>
+            ) : (
+              <div className="flex items-center gap-1">
+                {/* Admin: pintu masuk panel (desktop pill, mobile ikon) */}
+                {isAdmin && (
+                  <>
+                    <Link
+                      to="/admin"
+                      className={`hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                        onAdmin ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-[20px]" aria-hidden="true">admin_panel_settings</span>
+                      Admin
+                    </Link>
+                    <Link
+                      to="/admin"
+                      aria-label="Panel Admin"
+                      className={`md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full transition-colors ${
+                        onAdmin ? 'text-primary' : 'text-on-surface-variant hover:text-primary'
+                      }`}
+                    >
+                      <span className="material-symbols-outlined" aria-hidden="true">admin_panel_settings</span>
+                    </Link>
+                  </>
+                )}
+
+                <button
+                  onClick={() => setConfirmOpen(true)}
+                  className="hidden md:inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold text-on-surface-variant hover:text-error transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">logout</span>
+                  Keluar
+                </button>
+
+                {/* Mobile: hanya logout di header (nav utama di bottom) */}
+                <button
+                  onClick={() => setConfirmOpen(true)}
+                  aria-label="Keluar"
+                  className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-error transition-colors cursor-pointer"
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+                </button>
+              </div>
+            )}
+          </div>
         </nav>
       </header>
 
@@ -217,6 +306,16 @@ export function AppShell({ children }) {
 
       {/* FAB masukan (global) */}
       {!isAnonymous && <FeedbackButton />}
+
+      {/* Onboarding Tour */}
+      {steps && (
+        <PageOnboarding
+          steps={steps}
+          pageKey={pathname}
+          triggerRun={triggerTour}
+          onComplete={() => setTriggerTour(false)}
+        />
+      )}
     </div>
   );
 }

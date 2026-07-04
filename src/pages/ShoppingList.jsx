@@ -74,7 +74,7 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
         </header>
 
         {/* Tab switcher */}
-        <div className="inline-flex p-1 bg-surface-container-low rounded-full mb-8" role="tablist">
+        <div id="shopping-tab-switcher" className="inline-flex p-1 bg-surface-container-low rounded-full mb-8" role="tablist">
           <button role="tab" aria-selected={tab === 'self'} onClick={() => setTab('self')}
             className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${
               tab === 'self' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
