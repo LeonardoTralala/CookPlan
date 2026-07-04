@@ -48,7 +48,7 @@ function pickThree(list) {
 function WeeklyPlanner({ 
   weeklyPlan, onSetSlot, onRemoveSlot, onToggleCookedStatus, 
   prepTasks = [], onAddPrepTask, onTogglePrepTask, onDeletePrepTask,
-  onGoToCatalog, onGoToGenerate, onGenerateShoppingList 
+  onGoToCatalog, onGoToGenerate, onGenerateShoppingList, onGoToPackages
 }) {
   const {
     showToast, restoreSlot, clearAllSlots, loading: planLoading,
@@ -458,17 +458,26 @@ function WeeklyPlanner({
                     Bingung mau masak apa minggu ini?
                   </h3>
                   <p className="text-sm text-on-surface-variant">
-                    Biar AI menyusun menu sesuai budget dan preferensimu, lalu otomatis mengisi planner ini.
+                    Pilih Paket Menu siap saji kami atau biar AI menyusun menu sesuai budget dan preferensimu.
                   </p>
                 </div>
-                <button
-                  id="planner-ai-btn"
-                  onClick={onGoToGenerate}
-                  className="shrink-0 px-6 py-3 bg-primary text-white rounded-full font-bold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
-                >
-                  <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-                  Generate dengan AI
-                </button>
+                <div className="flex flex-wrap gap-2.5 shrink-0">
+                  <button
+                    onClick={onGoToPackages}
+                    className="px-5 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 transition cursor-pointer inline-flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">shopping_bag</span>
+                    Pilih Paket Menu
+                  </button>
+                  <button
+                    id="planner-ai-btn"
+                    onClick={onGoToGenerate}
+                    className="px-5 py-3 bg-primary text-white rounded-full font-bold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+                    Generate dengan AI
+                  </button>
+                </div>
               </div>
             )}
 

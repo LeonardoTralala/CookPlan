@@ -9,13 +9,14 @@ import {
 } from '../utils/buildShoppingList.js';
 import { pantryStapleKey } from '../utils/pantryStaples.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { ModalSheet } from './ModalSheet.jsx';
 
 const DELIVERY_FEE = 15000;
 
 // Tab "Belanja di Kami": pilih paket (menu fiks, bahan kami stok), atur porsi,
 // lihat daftar belanja + harga (agregasi recipe_ingredients), order via WhatsApp.
 export function ShopWithUsTab({ onSave }) {
-  const { showToast } = usePlan();
+  const { showToast, applySlots, weekStart, restoreSlot } = usePlan();
   const navigate = useNavigate();
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -26,6 +27,17 @@ export function ShopWithUsTab({ onSave }) {
   // (opt-in): yang sudah punya di rumah biarkan, yang butuh tinggal centang.
   const [addonCatalog, setAddonCatalog] = useState([]);
   const [selectedAddons, setSelectedAddons] = useState(() => new Set());
+  const [applied, setApplied] = useState(false);
+  const [confirmApply, setConfirmApply] = useState(false);
+
+  // Reset status applied jika ganti paket atau porsi berubah (derived state pattern)
+  const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
+  const [prevServings, setPrevServings] = useState(servings);
+  if (selectedId !== prevSelectedId || servings !== prevServings) {
+    setPrevSelectedId(selectedId);
+    setPrevServings(servings);
+    setApplied(false);
+  }
 
   useEffect(() => {
     let active = true;
@@ -163,6 +175,31 @@ export function ShopWithUsTab({ onSave }) {
       sourceRef: String(selected.id),
       items: [...flattenSections(sections), ...addonItems],
       totalIdr: estimatedCost + addonsTotal,
+    });
+  };
+
+  const handleApplyToPlanner = () => {
+    if (!selected || !selected.meals || selected.meals.length === 0) return;
+    const DAYS = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
+    const slots = selected.meals.map((meal) => {
+      const dayName = DAYS[meal.dayIndex % 7];
+      return {
+        recipe: meal.recipe,
+        day: dayName,
+        mealType: meal.mealType,
+        servings: servings,
+        weekStart,
+      };
+    });
+
+    const undoList = applySlots(slots);
+    setApplied(true);
+    showToast(`${slots.length} menu dari paket "${selected.name}" diterapkan ke planner!`, {
+      onUndo: () => {
+        for (const u of undoList) restoreSlot(u.day, u.mealType, u.prev, u.weekStart);
+        setApplied(false);
+        showToast('Penerapan menu paket diurungkan.');
+      },
     });
   };
 
@@ -348,6 +385,30 @@ export function ShopWithUsTab({ onSave }) {
             </section>
           )}
 
+          {/* Card untuk Terapkan ke Planner */}
+          <div className="bg-primary/[0.04] border border-primary/20 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex-1 text-left">
+              <h3 className="font-bold text-primary mb-1 flex items-center gap-1.5 text-sm">
+                <span className="material-symbols-outlined text-[20px]">calendar_month</span>
+                Jadwalkan Menu Paket
+              </h3>
+              <p className="text-xs text-on-surface-variant">
+                Terapkan menu paket ini ke Rencana Masak Mingguan Anda secara otomatis.
+              </p>
+            </div>
+            <button
+              onClick={() => (applied ? navigate('/planner') : setConfirmApply(true))}
+              className={`px-5 py-2.5 rounded-full font-semibold text-xs min-[360px]:text-sm active:scale-95 transition cursor-pointer flex items-center justify-center gap-2 ${
+                applied 
+                  ? 'bg-white border border-primary text-primary hover:bg-primary/5' 
+                  : 'bg-primary text-white hover:opacity-95 shadow-sm'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px] min-[360px]:text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
+              {applied ? 'Lihat Rencana Mingguan' : 'Terapkan ke Planner'}
+            </button>
+          </div>
+
           {/* Ringkasan + aksi - disembunyikan di mobile (lihat sticky bar di bawah) */}
           <div className="hidden sm:block bg-surface-cream rounded-2xl p-5 space-y-2">
             <div className="flex justify-between text-sm">
@@ -412,6 +473,40 @@ export function ShopWithUsTab({ onSave }) {
           </button>
         </div>
       </div>
+    )}
+
+    {/* Konfirmasi terapkan ke planner */}
+    {confirmApply && (
+      <ModalSheet onClose={() => setConfirmApply(false)} labelledBy="confirm-apply-title" panelClassName="max-w-md">
+        <div className="p-6 pt-4 space-y-5">
+          <div className="flex flex-col items-center text-center gap-2">
+            <span className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-[26px]">calendar_month</span>
+            </span>
+            <h3 id="confirm-apply-title" className="font-headline-sm text-headline-sm text-on-surface">
+              Masuk ke Planner?
+            </h3>
+            <p className="text-sm text-on-surface-variant">
+              Menu ini akan diterapkan ke Rencana Masak Mingguan kamu. Slot yang sudah terisi akan ditimpa.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => setConfirmApply(false)}
+              className="flex-1 px-5 py-3 rounded-full border border-outline-variant text-on-surface-variant font-semibold text-sm hover:bg-surface-container-low active:scale-95 transition cursor-pointer"
+            >
+              Batal
+            </button>
+            <button
+              onClick={() => { setConfirmApply(false); handleApplyToPlanner(); }}
+              className="flex-1 px-5 py-3 rounded-full bg-primary text-on-primary font-semibold text-sm hover:shadow-md active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[20px]">check</span>
+              Ya, Terapkan
+            </button>
+          </div>
+        </div>
+      </ModalSheet>
     )}
     </>
   );
