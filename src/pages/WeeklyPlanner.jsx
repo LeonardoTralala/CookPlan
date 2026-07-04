@@ -462,6 +462,7 @@ function WeeklyPlanner({
                   </p>
                 </div>
                 <button
+                  id="planner-ai-btn"
                   onClick={onGoToGenerate}
                   className="shrink-0 px-6 py-3 bg-primary text-white rounded-full font-bold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
                 >
@@ -534,7 +535,7 @@ function WeeklyPlanner({
               })}
             </div>
 
-            <div ref={gridScrollRef} className="overflow-x-hidden md:overflow-x-auto hide-scrollbar -mx-5 px-5 md:mx-0 md:px-0">
+            <div id="planner-grid-container" ref={gridScrollRef} className="overflow-x-hidden md:overflow-x-auto hide-scrollbar -mx-5 px-5 md:mx-0 md:px-0">
               <div className="flex flex-col gap-8 md:min-w-[1000px] md:grid md:grid-cols-8 md:gap-4">
                 {/* Kolom label jenis makan (Hanya Desktop) */}
                 <div className="hidden md:flex flex-col gap-4 mt-16">
@@ -1028,6 +1029,7 @@ function WeeklyPlanner({
       {/* ---------------- Bottom Action Bar ---------------- */}
       <div className="fixed bottom-above-nav md:bottom-0 left-0 right-0 z-40 p-4 md:p-6 md:pb-safe-6 bg-gradient-to-t from-canvas-white via-canvas-white/95 to-transparent flex justify-center pointer-events-none">
         <button
+          id="planner-shopping-btn"
           onClick={handleGenerateShoppingList}
           disabled={stats.filled === 0}
           aria-disabled={stats.filled === 0}

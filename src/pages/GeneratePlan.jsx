@@ -360,7 +360,7 @@ export function GeneratePlan() {
             </div>
           </div>
 
-          <Field label="Periode plan">
+          <Field id="generate-periode-field" label="Periode plan">
             <Stepper
               value={periode}
               onDec={() => setPeriode(Math.max(1, periode - 1))}
@@ -467,7 +467,7 @@ export function GeneratePlan() {
             />
           </Field>
 
-          <Field label="Bahan yang sudah ada di rumah (opsional)">
+          <Field id="generate-pantry-field" label="Bahan yang sudah ada di rumah (opsional)">
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -553,6 +553,7 @@ export function GeneratePlan() {
               Kembali
             </button>
             <button
+              id="generate-submit-btn"
               onClick={handleGenerate}
               disabled={loading}
               className="flex-1 px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2"
@@ -693,9 +694,9 @@ export function GeneratePlan() {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, children, id }) {
   return (
-    <div>
+    <div id={id}>
       <p className="text-sm font-semibold text-on-surface mb-2.5">{label}</p>
       {children}
     </div>

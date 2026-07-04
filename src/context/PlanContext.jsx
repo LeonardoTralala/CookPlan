@@ -114,29 +114,33 @@ export function PlanProvider({ children }) {
 
   // Persist helper: tulis ke DB bila login (planId siap), kalau belum siap antri,
   // kalau guest tulis localStorage. Dipanggil DI LUAR updater setState (audit #5).
-  const persistSlot = useCallback((recipe, day, mealType, servings, nextPlan) => {
+  const persistSlot = useCallback((recipe, day, mealType, servings, nextPlan, ws = weekStart) => {
     if (isAuthenticated) {
-      if (planIdRef.current) {
+      if (ws === weekStart && planIdRef.current) {
         planService.setSlot(planIdRef.current, recipe, day, mealType, servings)
           .catch((e) => console.error("setSlot gagal:", e.message));
       } else {
-        pendingRef.current.push({ type: "set", recipe, day, mealType, servings });
+        planService.getCurrentPlan(ws)
+          .then(({ planId }) => planService.setSlot(planId, recipe, day, mealType, servings))
+          .catch((e) => console.error("setSlot multi-week gagal:", e.message));
       }
     } else {
-      localStorage.setItem(localKey(weekStart), JSON.stringify(nextPlan));
+      localStorage.setItem(localKey(ws), JSON.stringify(nextPlan));
     }
   }, [isAuthenticated, weekStart]);
 
-  const persistRemove = useCallback((day, mealType, nextPlan) => {
+  const persistRemove = useCallback((day, mealType, nextPlan, ws = weekStart) => {
     if (isAuthenticated) {
-      if (planIdRef.current) {
+      if (ws === weekStart && planIdRef.current) {
         planService.removeSlot(planIdRef.current, day, mealType)
           .catch((e) => console.error("removeSlot gagal:", e.message));
       } else {
-        pendingRef.current.push({ type: "remove", day, mealType });
+        planService.getCurrentPlan(ws)
+          .then(({ planId }) => planService.removeSlot(planId, day, mealType))
+          .catch((e) => console.error("removeSlot multi-week gagal:", e.message));
       }
     } else {
-      localStorage.setItem(localKey(weekStart), JSON.stringify(nextPlan));
+      localStorage.setItem(localKey(ws), JSON.stringify(nextPlan));
     }
   }, [isAuthenticated, weekStart]);
 
@@ -268,48 +272,74 @@ export function PlanProvider({ children }) {
 
   // applySlots: terapkan banyak slot sekaligus (hasil generate AI → planner).
   // Satu setState + satu bulk upsert, bukan loop setSlot per slot.
-  // Return daftar undo [{ day, mealType, prev }] berisi isi slot SEBELUM
+  // Return daftar undo [{ day, mealType, prev, weekStart }] berisi isi slot SEBELUM
   // tertimpa, untuk tombol "Urungkan" di toast (pakai restoreSlot per item).
   const applySlots = useCallback((slotList) => {
     const deduped = new Map();
-    for (const s of slotList ?? []) deduped.set(`${s.day}|${s.mealType}`, s);
+    for (const s of slotList ?? []) {
+      const ws = s.weekStart ?? weekStart;
+      deduped.set(`${ws}|${s.day}|${s.mealType}`, { ...s, weekStart: ws });
+    }
     if (deduped.size === 0) return [];
 
-    // Hitung nextPlan dari planRef (sinkron) — tak bergantung eager-evaluation
-    // updater React; pola yang sama dengan setSlot/removeSlot di atas.
-    const prev = planRef.current;
-    const nextPlan = { ...prev };
-    const undoList = [];
-    for (const { day, mealType } of deduped.values()) {
-      undoList.push({ day, mealType, prev: prev[day]?.[mealType] ?? null });
-    }
-    for (const { recipe, day, mealType, servings } of deduped.values()) {
-      nextPlan[day] = {
-        ...nextPlan[day],
-        [mealType]: {
-          recipeId: recipe.id,
-          title: recipe.title,
-          servings,
-          imageUrl: recipe.imageUrl,
-          priceIdr: recipe.priceIdr,
-          readyInMinutes: recipe.readyInMinutes,
-          calories: recipe.calories,
-        },
-      };
-    }
-    commitPlan(nextPlan);
-
-    if (isAuthenticated) {
-      if (planIdRef.current) {
-        planService.setSlots(planIdRef.current, [...deduped.values()])
-          .catch((e) => console.error("setSlots gagal:", e.message));
-      } else {
-        for (const s of deduped.values()) {
-          pendingRef.current.push({ type: "set", recipe: s.recipe, day: s.day, mealType: s.mealType, servings: s.servings });
-        }
+    // Group slots by weekStart
+    const slotsByWeek = new Map();
+    for (const s of deduped.values()) {
+      if (!slotsByWeek.has(s.weekStart)) {
+        slotsByWeek.set(s.weekStart, []);
       }
-    } else {
-      localStorage.setItem(localKey(weekStart), JSON.stringify(nextPlan));
+      slotsByWeek.get(s.weekStart).push(s);
+    }
+
+    const undoList = [];
+
+    for (const [ws, weekSlots] of slotsByWeek.entries()) {
+      let prevPlan;
+      if (ws === weekStart) {
+        prevPlan = planRef.current;
+      } else {
+        prevPlan = loadLocalPlan(ws);
+      }
+
+      const nextPlan = { ...prevPlan };
+      for (const s of weekSlots) {
+        undoList.push({
+          day: s.day,
+          mealType: s.mealType,
+          weekStart: ws,
+          prev: prevPlan[s.day]?.[s.mealType] ?? null
+        });
+
+        nextPlan[s.day] = {
+          ...nextPlan[s.day],
+          [s.mealType]: {
+            recipeId: s.recipe.id,
+            title: s.recipe.title,
+            servings: s.servings,
+            imageUrl: s.recipe.imageUrl,
+            priceIdr: s.recipe.priceIdr,
+            readyInMinutes: s.recipe.readyInMinutes,
+            calories: s.recipe.calories,
+          }
+        };
+      }
+
+      if (ws === weekStart) {
+        commitPlan(nextPlan);
+      }
+
+      if (isAuthenticated) {
+        if (ws === weekStart && planIdRef.current) {
+          planService.setSlots(planIdRef.current, weekSlots)
+            .catch((e) => console.error("setSlots gagal:", e.message));
+        } else {
+          planService.getCurrentPlan(ws)
+            .then(({ planId }) => planService.setSlots(planId, weekSlots))
+            .catch((e) => console.error(`setSlots untuk ${ws} gagal:`, e.message));
+        }
+      } else {
+        localStorage.setItem(localKey(ws), JSON.stringify(nextPlan));
+      }
     }
 
     return undoList;
@@ -430,16 +460,22 @@ export function PlanProvider({ children }) {
 
   const isCurrentWeek = weekStart === toWeekKey(getWeekStart());
 
-  const restoreSlot = useCallback((day, mealType, slotData) => {
-    const prev = planRef.current;
-    const nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: slotData } };
-    commitPlan(nextPlan);
-    if (slotData?.recipeId != null) {
-      persistSlot({ id: slotData.recipeId, ...slotData }, day, mealType, slotData.servings ?? 2, nextPlan);
+  const restoreSlot = useCallback((day, mealType, slotData, ws = weekStart) => {
+    let nextPlan;
+    if (ws === weekStart) {
+      const prev = planRef.current;
+      nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: slotData } };
+      commitPlan(nextPlan);
     } else {
-      persistRemove(day, mealType, nextPlan);
+      const prev = loadLocalPlan(ws);
+      nextPlan = { ...prev, [day]: { ...prev[day], [mealType]: slotData } };
     }
-  }, [commitPlan, persistSlot, persistRemove]);
+    if (slotData?.recipeId != null) {
+      persistSlot({ id: slotData.recipeId, ...slotData }, day, mealType, slotData.servings ?? 2, nextPlan, ws);
+    } else {
+      persistRemove(day, mealType, nextPlan, ws);
+    }
+  }, [commitPlan, persistSlot, persistRemove, weekStart]);
 
   const plannedCount = useMemo(() => {
     let count = 0;

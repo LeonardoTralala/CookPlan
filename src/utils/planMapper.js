@@ -3,6 +3,8 @@
 // Planner: key hari Indonesia (Senin..Minggu) × meal_type (breakfast/lunch/dinner).
 // Konstanta sengaja didefinisikan lokal agar util ini pure (tidak menarik supabase).
 
+import { getWeekStart, toWeekKey } from './week.js';
+
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 const MEAL_TYPES = ["breakfast", "lunch", "dinner"];
 
@@ -28,7 +30,7 @@ function resolveDayName(raw, idx) {
 
 // Ubah plan hasil AI menjadi daftar slot siap masuk planner.
 // recipeIndex: Map<recipe_id, recipe> (shape camelCase dari recipeService).
-// Return { slots: [{ recipe, day, mealType, servings }], skippedDays, skippedMeals }.
+// Return { slots: [{ recipe, day, mealType, servings, weekStart }], skippedDays, skippedMeals }.
 //
 // Aturan penempatan hari:
 // - Plan < 7 hari: mulai dari HARI INI (generate 3 hari di hari Jumat → Jumat,
@@ -43,8 +45,8 @@ export function mapGeneratedPlanToWeek(plan, recipeIndex, today = new Date()) {
 
   const days = plan?.days ?? [];
   const useTodayOffset = days.length > 0 && days.length < DAYS.length;
-  const startIdx = todayIndex(today);
   // Hari planner yang sudah terisi — cegah dua entri AI jatuh ke hari yang sama.
+  // Gunakan key "weekStart|dayName" agar unik lintas minggu.
   const usedDays = new Set();
 
   days.forEach((dayEntry, idx) => {
@@ -52,20 +54,34 @@ export function mapGeneratedPlanToWeek(plan, recipeIndex, today = new Date()) {
       skippedDays += 1;
       return;
     }
-    let day = useTodayOffset
-      ? DAYS[(startIdx + idx) % DAYS.length]
-      : resolveDayName(dayEntry.day, idx);
-    // resolveDayName bisa memetakan dua label AI ke hari yang sama; alihkan ke
-    // hari kosong berikutnya supaya menu hari itu tidak hilang tertimpa dedup.
-    if (usedDays.has(day)) {
-      const free = DAYS.find((d) => !usedDays.has(d));
+    
+    let day;
+    let weekStart;
+
+    if (useTodayOffset) {
+      const targetDate = new Date(today);
+      targetDate.setDate(today.getDate() + idx);
+      weekStart = toWeekKey(getWeekStart(targetDate));
+      day = DAYS[todayIndex(targetDate)];
+    } else {
+      weekStart = toWeekKey(getWeekStart(today));
+      day = resolveDayName(dayEntry.day, idx);
+    }
+
+    const key = `${weekStart}|${day}`;
+
+    // resolveDayName/offset bisa memetakan dua label AI ke hari yang sama; alihkan ke
+    // hari kosong berikutnya pada minggu tersebut supaya menu hari itu tidak hilang tertimpa dedup.
+    if (usedDays.has(key)) {
+      const free = DAYS.find((d) => !usedDays.has(`${weekStart}|${d}`));
       if (!free) {
         skippedDays += 1;
         return;
       }
       day = free;
     }
-    usedDays.add(day);
+    usedDays.add(key);
+
     for (const meal of dayEntry.meals ?? []) {
       const recipe = recipeIndex.get(meal.recipe_id);
       if (!recipe || !MEAL_TYPES.includes(meal.meal_type)) {
@@ -78,9 +94,11 @@ export function mapGeneratedPlanToWeek(plan, recipeIndex, today = new Date()) {
         day,
         mealType: meal.meal_type,
         servings: Number.isFinite(servings) && servings >= 1 ? Math.min(Math.round(servings), 20) : 2,
+        weekStart,
       });
     }
   });
 
   return { slots, skippedDays, skippedMeals };
 }
+

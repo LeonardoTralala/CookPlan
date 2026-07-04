@@ -110,7 +110,7 @@ export function GenerateResult() {
     const extra = skippedDays > 0 ? ' (7 hari pertama)' : '';
     showToast(`${slots.length} menu diterapkan ke Rencana Mingguan${extra}!`, {
       onUndo: () => {
-        for (const u of undoList) restoreSlot(u.day, u.mealType, u.prev);
+        for (const u of undoList) restoreSlot(u.day, u.mealType, u.prev, u.weekStart);
         setApplied(false);
         showToast('Perubahan di planner diurungkan.');
       },

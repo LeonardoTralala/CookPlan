@@ -289,6 +289,7 @@ function RecipeCatalog({ onAddToPlan }) {
             search
           </span>
           <input
+            id="catalog-search-input"
             type="search"
             inputMode="search"
             enterKeyHint="search"
@@ -311,7 +312,7 @@ function RecipeCatalog({ onAddToPlan }) {
 
         {/* Chip preferensi diet — dinamis dari diet_tags (sama dgn Generate step 2),
             pra-pilih dari preferensi tersimpan user. */}
-        <div className="flex flex-wrap justify-center items-center gap-3">
+        <div id="catalog-filter-chips" className="flex flex-wrap justify-center items-center gap-3">
           {dietSample.map((opt) => (
             <button
               key={opt.value}
@@ -473,7 +474,7 @@ function RecipeCatalog({ onAddToPlan }) {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+          <div id="catalog-recipe-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
             {visibleRecipes.map((recipe) => (
               <div
                 key={recipe.id}

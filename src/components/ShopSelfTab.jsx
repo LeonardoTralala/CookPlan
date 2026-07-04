@@ -327,7 +327,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
                     <h3 className="font-headline-md text-headline-md text-on-surface">{section.meta.label}</h3>
                     <span className="ml-auto text-sm font-semibold text-outline">{visibleItems.length} bahan</span>
                   </div>
-                  <div className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
+                  <div id="shopping-ingredient-list" className="bg-surface-container-lowest rounded-3xl border border-outline-variant overflow-hidden recipe-card-shadow">
                     {visibleItems.map((item) => {
                       const checked = checkedItems.has(item.id); // sudah diambil saat belanja
                       return (
@@ -465,7 +465,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
               <div className="flex justify-between"><span className="text-on-surface-variant">Estimasi Biaya</span><span className="font-bold text-on-surface">{formatRupiah(estCost)}</span></div>
               <div className="pt-3 border-t border-outline/20 flex justify-between"><span className="text-lg font-bold text-primary">Total</span><span className="text-lg font-bold text-primary">{formatRupiah(total)}</span></div>
             </div>
-            <button onClick={handleSave}
+            <button id="shopping-save-btn" onClick={handleSave}
               className="w-full bg-primary text-on-primary py-3.5 rounded-full font-bold hover:shadow-lg transition active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer">
               <span className="material-symbols-outlined">bookmark_add</span>
               Simpan Daftar Belanja
@@ -485,7 +485,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
             <p className="text-xs text-on-surface-variant leading-tight">{checkedCount} dari {visibleCount} bahan sudah dibeli</p>
             <p className="font-bold text-primary text-base leading-tight">{formatRupiah(total)}</p>
           </div>
-          <button onClick={handleSave}
+          <button id="shopping-save-btn-mobile" onClick={handleSave}
             className="shrink-0 bg-primary text-on-primary px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 active:scale-95 transition cursor-pointer">
             <span className="material-symbols-outlined text-[18px]">bookmark_add</span>
             Simpan Daftar
