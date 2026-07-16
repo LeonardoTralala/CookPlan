@@ -27,11 +27,6 @@ const SETTINGS_NAV = [
   { id: 'subscription', icon: 'payments', label: 'Langganan' }
 ];
 
-// Panel yang kontennya belum dibangun — render placeholder Coming Soon konsisten
-// dengan kartu Manajemen Langganan.
-const COMING_SOON = {
-  addresses: { icon: 'location_on', title: 'Alamat', desc: 'Simpan alamat pengiriman untuk checkout lebih cepat.' }
-};
 
 const fmtOrderDate = (iso) => {
   if (!iso) return '';
@@ -154,7 +149,7 @@ function OrderHistoryPanel() {
 // Daftar navigasi Pengaturan + blok Bantuan & Legal. Dipakai di sidebar desktop
 // (asTablist: tab ARIA penuh + navigasi panah) dan di dalam SettingsDrawer mobile
 // (asTablist=false: menu navigasi biasa, hindari duplikasi id tab di DOM).
-function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = false, asTablist = false, isAdmin = false, onNavigate }) {
+function SettingsNavList({ activeNav, onSelect, onLogout, signingOut = false, asTablist = false, isAdmin = false, onNavigate }) {
   const tabRefs = useRef({});
 
   // Navigasi panah antar-tab (roving tabindex) — hanya pada mode tablist desktop.
@@ -210,18 +205,32 @@ function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = f
           Bantuan &amp; Legal
         </h3>
         <button
-          onClick={() => onSoon('Customer Service')}
+          onClick={() => onNavigate?.('/help')}
           className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
         >
           <span className="material-symbols-outlined text-[20px]">support_agent</span>
           Layanan Pelanggan
         </button>
         <button
-          onClick={() => onSoon('Privacy Policy')}
+          onClick={() => onNavigate?.('/about')}
+          className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
+        >
+          <span className="material-symbols-outlined text-[20px]">groups</span>
+          Tentang Kami
+        </button>
+        <button
+          onClick={() => onNavigate?.('/privacy')}
           className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
         >
           <span className="material-symbols-outlined text-[20px]">policy</span>
           Kebijakan Privasi
+        </button>
+        <button
+          onClick={() => onNavigate?.('/terms')}
+          className="w-full flex items-center gap-3 px-4 py-2 rounded-lg text-on-surface-variant hover:text-primary transition-colors text-sm font-medium cursor-pointer text-left"
+        >
+          <span className="material-symbols-outlined text-[20px]">gavel</span>
+          Syarat &amp; Ketentuan
         </button>
       </div>
       {isAdmin && (
@@ -254,31 +263,203 @@ function SettingsNavList({ activeNav, onSelect, onSoon, onLogout, signingOut = f
   );
 }
 
-// Placeholder untuk panel yang fiturnya belum siap.
-function ComingSoonPanel({ icon, title, desc }) {
-  return (
-    <section className="space-y-6">
-      <h3 className="font-headline-md text-headline-md text-on-surface border-b border-outline-variant pb-2 inline-block">
-        {title}
-      </h3>
-      <div className="p-10 rounded-2xl border border-dashed border-outline-variant bg-surface-container-lowest flex flex-col items-center text-center gap-4">
-        <div className="w-14 h-14 rounded-2xl bg-surface-cream flex items-center justify-center text-primary">
-          <span className="material-symbols-outlined text-[28px]">{icon}</span>
+function AddressPanel({ profile, onUpdate }) {
+  const { showToast } = usePlan();
+  const [isEditing, setIsEditing] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
+  const [form, setForm] = useState({
+    name: profile?.deliveryCustomerName || '',
+    phone: profile?.deliveryCustomerPhone || '',
+    kecamatan: profile?.deliveryKecamatan || '',
+    detailAddress: profile?.deliveryDetailAlamat || ''
+  });
+  
+  const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setForm({
+      name: profile?.deliveryCustomerName || '',
+      phone: profile?.deliveryCustomerPhone || '',
+      kecamatan: profile?.deliveryKecamatan || '',
+      detailAddress: profile?.deliveryDetailAlamat || ''
+    });
+  }, [profile]);
+
+  const validate = () => {
+    const err = {};
+    if (!form.name.trim()) err.name = 'Nama penerima wajib diisi.';
+    if (!form.phone.trim()) err.phone = 'Nomor WhatsApp wajib diisi.';
+    else if (!/^[0-9+\s-]{8,16}$/.test(form.phone.trim())) err.phone = 'Nomor tidak valid.';
+    if (!form.kecamatan) err.kecamatan = 'Kecamatan wajib dipilih.';
+    if (!form.detailAddress.trim()) err.detailAddress = 'Detail alamat wajib diisi.';
+    return err;
+  };
+
+  const handleSave = async () => {
+    const errs = validate();
+    if (Object.keys(errs).length > 0) {
+      setErrors(errs);
+      return;
+    }
+    setLoading(true);
+    try {
+      const updated = await updateProfile({
+        deliveryCustomerName: form.name.trim(),
+        deliveryCustomerPhone: form.phone.trim(),
+        deliveryKecamatan: form.kecamatan,
+        deliveryDetailAlamat: form.detailAddress.trim()
+      });
+      onUpdate(updated);
+      setIsEditing(false);
+      showToast('Alamat pengiriman berhasil disimpan.');
+    } catch (e) {
+      showToast(e.message || 'Gagal menyimpan alamat.', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const hasAddress = profile?.deliveryCustomerName && profile?.deliveryCustomerPhone && profile?.deliveryKecamatan && profile?.deliveryDetailAlamat;
+
+  if (isEditing) {
+    return (
+      <section className="space-y-6 animate-fade-in">
+        <div className="flex items-center justify-between border-b border-outline-variant pb-2">
+          <h3 className="font-headline-md text-headline-md text-on-surface">
+            {hasAddress ? 'Ubah Alamat Pengiriman' : 'Tambah Alamat Pengiriman'}
+          </h3>
         </div>
-        <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-xs font-bold uppercase tracking-widest">
-          Coming Soon
-        </span>
-        <p className="text-sm text-on-surface-variant max-w-xs">{desc}</p>
+        
+        <div className="space-y-4 max-w-lg bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant">
+          <div className="space-y-1">
+            <label htmlFor="addr-name" className="text-xs font-bold text-on-surface-variant uppercase tracking-wider block">Nama Penerima</label>
+            <input id="addr-name" type="text" value={form.name} onChange={(e) => {
+              setForm(p => ({ ...p, name: e.target.value }));
+              setErrors(p => ({ ...p, name: undefined }));
+            }} className={`w-full px-4 py-2.5 bg-surface-container-low border-none rounded-xl text-base focus:outline-none focus:ring-2 ${errors.name ? 'focus:ring-error-100' : 'focus:ring-primary/20'}`} placeholder="Contoh: Zilfi Alvin" />
+            {errors.name && <p className="text-xs text-error font-medium">{errors.name}</p>}
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="addr-phone" className="text-xs font-bold text-on-surface-variant uppercase tracking-wider block">Nomor WhatsApp</label>
+            <input id="addr-phone" type="text" value={form.phone} onChange={(e) => {
+              setForm(p => ({ ...p, phone: e.target.value }));
+              setErrors(p => ({ ...p, phone: undefined }));
+            }} className={`w-full px-4 py-2.5 bg-surface-container-low border-none rounded-xl text-base focus:outline-none focus:ring-2 ${errors.phone ? 'focus:ring-error-100' : 'focus:ring-primary/20'}`} placeholder="Contoh: 081234567890" />
+            {errors.phone && <p className="text-xs text-error font-medium">{errors.phone}</p>}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-on-surface-variant uppercase tracking-wider block">Kota / Kabupaten</label>
+              <input type="text" value="Kota Malang" disabled className="w-full px-4 py-2.5 bg-surface-variant text-on-surface-variant opacity-70 border-none rounded-xl text-base cursor-not-allowed" />
+            </div>
+
+            <div className="space-y-1">
+              <label htmlFor="addr-kecamatan" className="text-xs font-bold text-on-surface-variant uppercase tracking-wider block">Kecamatan</label>
+              <select id="addr-kecamatan" value={form.kecamatan} onChange={(e) => {
+                setForm(p => ({ ...p, kecamatan: e.target.value }));
+                setErrors(p => ({ ...p, kecamatan: undefined }));
+              }} className={`w-full px-4 py-2.5 bg-surface-container-low border-none rounded-xl text-base focus:outline-none focus:ring-2 ${errors.kecamatan ? 'focus:ring-error-100' : 'focus:ring-primary/20'}`}>
+                <option value="">Pilih Kecamatan</option>
+                <option value="Blimbing">Blimbing</option>
+                <option value="Klojen">Klojen</option>
+                <option value="Kedungkandang">Kedungkandang</option>
+                <option value="Lowokwaru">Lowokwaru</option>
+                <option value="Sukun">Sukun</option>
+              </select>
+              {errors.kecamatan && <p className="text-xs text-error font-medium">{errors.kecamatan}</p>}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label htmlFor="addr-detail" className="text-xs font-bold text-on-surface-variant uppercase tracking-wider block">Detail Alamat</label>
+            <textarea id="addr-detail" value={form.detailAddress} onChange={(e) => {
+              setForm(p => ({ ...p, detailAddress: e.target.value }));
+              setErrors(p => ({ ...p, detailAddress: undefined }));
+            }} rows={3} className={`w-full px-4 py-2.5 bg-surface-container-low border-none rounded-xl text-base focus:outline-none focus:ring-2 ${errors.detailAddress ? 'focus:ring-error-100' : 'focus:ring-primary/20'}`} placeholder="Nama jalan, nomor rumah, RT/RW, kelurahan, info kos" />
+            {errors.detailAddress && <p className="text-xs text-error font-medium">{errors.detailAddress}</p>}
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button onClick={() => {
+              setIsEditing(false);
+              setErrors({});
+            }} disabled={loading} className="px-5 py-2.5 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm hover:bg-surface-container-low transition cursor-pointer disabled:opacity-50">
+              Batal
+            </button>
+            <button onClick={handleSave} disabled={loading} className="flex-1 px-5 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1.5">
+              {loading ? (
+                <><span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> Menyimpan...</>
+              ) : (
+                <><span className="material-symbols-outlined text-[18px]">save</span> Simpan Alamat</>
+              )}
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between border-b border-outline-variant pb-2">
+        <h3 className="font-headline-md text-headline-md text-on-surface">
+          Alamat Pengiriman
+        </h3>
+        {hasAddress && (
+          <button onClick={() => setIsEditing(true)} className="flex items-center gap-1 text-xs font-bold text-primary hover:underline cursor-pointer">
+            <span className="material-symbols-outlined text-[16px]">edit</span> Ubah Alamat
+          </button>
+        )}
       </div>
+
+      {!hasAddress ? (
+        <div className="p-10 rounded-2xl border border-dashed border-outline-variant bg-surface-container-lowest flex flex-col items-center text-center gap-4">
+          <div className="w-14 h-14 rounded-2xl bg-surface-cream flex items-center justify-center text-primary">
+            <span className="material-symbols-outlined text-[28px]">location_on</span>
+          </div>
+          <div>
+            <p className="font-semibold text-on-surface text-base">Alamat Pengiriman Belum Disimpan</p>
+            <p className="text-sm text-on-surface-variant mt-1">Simpan alamat pengiriman Kota Malang Anda untuk mempercepat proses checkout paket belanja.</p>
+          </div>
+          <button onClick={() => setIsEditing(true)} className="px-5 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[18px]">add_location_alt</span>
+            Tambah Alamat
+          </button>
+        </div>
+      ) : (
+        <div className="p-6 rounded-2xl border border-outline-variant bg-surface-container-lowest hover:shadow-[0_4px_20px_-4px_rgba(44,58,30,0.04)] transition-all space-y-4 max-w-lg">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-full bg-surface-variant flex items-center justify-center text-primary shrink-0">
+              <span className="material-symbols-outlined">home_pin</span>
+            </div>
+            <div className="space-y-1">
+              <p className="font-bold text-on-surface text-base">{profile.deliveryCustomerName}</p>
+              <p className="text-sm text-on-surface-variant flex items-center gap-1">
+                <span className="material-symbols-outlined text-[16px] text-primary">call</span>
+                {profile.deliveryCustomerPhone}
+              </p>
+              <div className="pt-2 text-sm text-on-surface leading-relaxed">
+                <p className="font-semibold text-primary">Kota Malang, Kec. {profile.deliveryKecamatan}</p>
+                <p className="text-on-surface-variant mt-0.5">{profile.deliveryDetailAlamat}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
+
 
 function UserProfile() {
   const { showToast } = usePlan();
   const { user, updatePassword, signOut, resendVerification } = useAuth();
   const navigate = useNavigate();
-  const soon = (fitur) => showToast(`Fitur ${fitur} sedang dikembangkan oleh rekan tim!`);
+  const soon = (fitur) => showToast(`Fitur ${fitur} sedang dikembangkan oleh Tim Pengembang CookPlan.`);
 
   // Tab aktif disimpan di URL (?tab=...) supaya refresh, bookmark, dan tombol
   // back/forward browser konsisten. Nilai tak dikenal jatuh ke 'saved'.
@@ -654,13 +835,16 @@ function UserProfile() {
   };
   const activeLabel = SETTINGS_NAV.find((i) => i.id === activeNav)?.label ?? 'Pengaturan';
 
-  // Konten panel sesuai tab aktif. Section yang belum dibangun → ComingSoonPanel.
+  // Konten panel sesuai tab aktif.
   const renderPanel = () => {
-    if (COMING_SOON[activeNav]) return <ComingSoonPanel {...COMING_SOON[activeNav]} />;
 
     switch (activeNav) {
       case 'orders':
         return <OrderHistoryPanel />;
+
+      case 'addresses':
+        return <AddressPanel profile={profile} onUpdate={setProfile} />;
+
 
       case 'saved':
         return (
