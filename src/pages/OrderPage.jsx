@@ -75,7 +75,7 @@ export function OrderPage() {
     const errs = validate();
     if (Object.keys(errs).length > 0) {
       setFormErr(errs);
-      showToast('Lengkapi data pengiriman dulu ya.', { variant: 'error' });
+      showToast('Lengkapi data pengirimanmu dulu, yuk!', { variant: 'error' });
       return;
     }
     setSubmitting(true);
@@ -117,9 +117,9 @@ export function OrderPage() {
       <div className="max-w-lg mx-auto px-5 py-20 text-center">
         <span className="material-symbols-outlined text-5xl text-error mb-4">error</span>
         <h1 className="font-headline-md text-headline-md text-on-surface mb-2">Paket Tidak Ditemukan</h1>
-        <p className="text-on-surface-variant text-sm mb-6">{error || 'Data tidak ada.'}</p>
+        <p className="text-on-surface-variant text-sm mb-6">{error || 'Rencana makan tidak ditemukan.'}</p>
         <button onClick={() => navigate('/generate')} className="px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer">
-          Buat Plan Baru
+          Buat Rencana Baru
         </button>
       </div>
     );
@@ -133,7 +133,7 @@ export function OrderPage() {
           Pesan Paket Belanja
         </h1>
         <p className="text-on-surface-variant text-body-md">
-          Lengkapi data pengiriman. Pesanan diteruskan ke admin CookPlan via WhatsApp.
+          Lengkapi data pengirimanmu. Setelah ini, pesanan akan diteruskan ke admin CookPlan via WhatsApp.
         </p>
       </div>
 
@@ -157,15 +157,15 @@ export function OrderPage() {
       <div className="space-y-4">
         <OrderField id="o-name" label="Nama Penerima" error={formErr.name}>
           <input id="o-name" type="text" value={form.name} onChange={update('name')}
-            placeholder="Nama lengkap" autoComplete="name" className={inputCls(formErr.name)} />
+            placeholder="Nama lengkapmu" autoComplete="name" className={inputCls(formErr.name)} />
         </OrderField>
         <OrderField id="o-phone" label="Nomor WhatsApp" error={formErr.phone}>
           <input id="o-phone" type="tel" value={form.phone} onChange={update('phone')}
-            placeholder="0812xxxxxxxx" autoComplete="tel" className={inputCls(formErr.phone)} />
+            placeholder="Contoh: 081234567890" autoComplete="tel" className={inputCls(formErr.phone)} />
         </OrderField>
         <OrderField id="o-address" label="Alamat Pengiriman" error={formErr.address}>
           <textarea id="o-address" value={form.address} onChange={update('address')} rows={3}
-            placeholder="Jalan, nomor, kecamatan, kota" className={inputCls(formErr.address)} />
+            placeholder="Nama jalan, nomor rumah, kecamatan, kota" className={inputCls(formErr.address)} />
         </OrderField>
         <OrderField id="o-payment" label="Metode Pembayaran">
           <select id="o-payment" value={form.paymentMethod} onChange={update('paymentMethod')} className={inputCls()}>
@@ -176,7 +176,7 @@ export function OrderPage() {
         </OrderField>
         <OrderField id="o-notes" label="Catatan (opsional)">
           <input id="o-notes" type="text" value={form.notes} onChange={update('notes')}
-            placeholder="mis. titip ke satpam kos" className={inputCls()} />
+            placeholder="Contoh: Titipkan ke satpam kos" className={inputCls()} />
         </OrderField>
       </div>
 
@@ -188,7 +188,7 @@ export function OrderPage() {
         <button onClick={handleSubmit} disabled={submitting}
           className="flex-1 px-6 py-3.5 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2">
           {submitting ? (
-            <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Memproses…</>
+            <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Memproses pesanan...</>
           ) : (
             <><span className="material-symbols-outlined text-[20px]">chat</span> Pesan via WhatsApp</>
           )}

@@ -429,7 +429,7 @@ function WeeklyPlanner({
 
   const handleGenerateShoppingList = () => {
     if (stats.filled === 0) return; // guard: tanpa slot terisi tidak ada yang bisa dibelanjakan
-    showToast('Daftar belanja berhasil dibuat berdasarkan rencana makan Anda!');
+    showToast('Daftar belanja berhasil dibuat berdasarkan rencana makanmu!');
     onGenerateShoppingList();
   };
 
@@ -444,7 +444,7 @@ function WeeklyPlanner({
                 Rencana Masak Mingguan
               </h1>
               <p className="text-on-surface-variant text-body-lg">
-                Atur jadwal makan Anda untuk hidup yang lebih sehat dan teratur.
+                Atur jadwal makanmu untuk hidup yang lebih sehat dan teratur.
               </p>
             </div>
 
@@ -458,7 +458,7 @@ function WeeklyPlanner({
                     Bingung mau masak apa minggu ini?
                   </h3>
                   <p className="text-sm text-on-surface-variant">
-                    Pilih Paket Menu siap saji kami atau biar AI menyusun menu sesuai budget dan preferensimu.
+                    Pilih paket menu siap saji kami atau biarkan AI menyusun menu sesuai anggaran dan preferensimu.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2.5 shrink-0">
@@ -475,7 +475,7 @@ function WeeklyPlanner({
                     className="px-5 py-3 bg-primary text-white rounded-full font-bold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
                   >
                     <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-                    Generate dengan AI
+                    Susun Menu dengan AI
                   </button>
                 </div>
               </div>
@@ -656,11 +656,11 @@ function WeeklyPlanner({
                                   const savedSlot = weeklyPlan[day.key][meal.key];
                                   onRemoveSlot(day.key, meal.key);
                                   showToast(
-                                    `Menu dihapus dari ${meal.label} hari ${day.key}`,
+                                    `Menu berhasil dihapus dari ${meal.label} hari ${day.key}`,
                                     {
                                       onUndo: () => {
                                         restoreSlot(day.key, meal.key, savedSlot);
-                                        showToast('Menu dikembalikan');
+                                        showToast('Menu berhasil dikembalikan');
                                       }
                                     }
                                   );
@@ -792,7 +792,7 @@ function WeeklyPlanner({
                 </p>
                 {confirmClear ? (
                   <div className="flex flex-col gap-2">
-                    <p className="text-sm font-semibold text-on-surface">Yakin hapus semua menu?</p>
+                    <p className="text-sm font-semibold text-on-surface">Apakah kamu yakin ingin menghapus semua menu?</p>
                     <div className="flex gap-2">
                       <button
                         onClick={() => {
@@ -1000,7 +1000,7 @@ function WeeklyPlanner({
             <div className="bg-surface-cream/40 border border-outline-variant rounded-panel p-6">
               <h3 className="font-headline-md text-headline-md text-primary mb-2">Inspirasi Menu</h3>
               <p className="text-on-surface-variant text-sm mb-6">
-                Beberapa pilihan resep untuk mengisi rencana mingguanmu.
+                Beberapa pilihan resep menarik untuk melengkapi rencana mingguanmu.
               </p>
               <div className="space-y-4">
                 {recommended.map((recipe) => (
@@ -1042,7 +1042,7 @@ function WeeklyPlanner({
           onClick={handleGenerateShoppingList}
           disabled={stats.filled === 0}
           aria-disabled={stats.filled === 0}
-          title={stats.filled === 0 ? 'Isi minimal satu slot makan dulu' : undefined}
+          title={stats.filled === 0 ? 'Isi minimal satu jadwal makan terlebih dahulu' : undefined}
           className={`pointer-events-auto px-8 py-4 rounded-full flex items-center gap-3 transition-all group ${stats.filled === 0
               ? 'bg-surface-container-high text-on-surface-variant cursor-not-allowed shadow-none'
               : 'bg-primary hover:bg-primary-container text-white shadow-2xl shadow-primary/30 active:scale-95 cursor-pointer'
@@ -1055,7 +1055,7 @@ function WeeklyPlanner({
             shopping_cart
           </span>
           <span className="font-bold text-lg">
-            {stats.filled === 0 ? 'Isi Rencana Dulu' : 'Buat Daftar Belanja'}
+            {stats.filled === 0 ? 'Isi Jadwal Makan Dahulu' : 'Buat Daftar Belanja'}
           </span>
         </button>
       </div>
@@ -1168,7 +1168,7 @@ function WeeklyPlanner({
                   Atur Jumlah Porsi
                 </h3>
                 <p className="text-xs text-on-surface-variant mb-6 leading-relaxed">
-                  Berapa porsi <strong>{pickerSelectedRecipe.title}</strong> yang ingin Anda masak untuk{' '}
+                  Berapa porsi <strong>{pickerSelectedRecipe.title}</strong> yang ingin kamu masak untuk{' '}
                   <strong>{MEALS.find((m) => m.key === pickerTarget.meal)?.label}</strong> hari{' '}
                   <strong>{pickerTarget.day}</strong>?
                 </p>

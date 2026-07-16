@@ -216,7 +216,7 @@ export function ShopWithUsTab({ onSave }) {
     return (
       <div className="text-center py-16 text-on-surface-variant">
         <span className="material-symbols-outlined text-5xl text-primary mb-3">inventory_2</span>
-        <p className="text-sm">Belum ada paket tersedia. Cek lagi nanti ya!</p>
+        <p className="text-sm">Belum ada paket bahan yang tersedia. Periksa kembali nanti, ya!</p>
       </div>
     );
   }
@@ -253,8 +253,8 @@ export function ShopWithUsTab({ onSave }) {
           {/* Stepper porsi */}
           <div className="flex items-center justify-between bg-surface-container-low rounded-2xl p-4">
             <div>
-              <p className="font-semibold text-on-surface text-sm">Porsi per menu</p>
-              <p className="text-xs text-on-surface-variant">Atur sesuai jumlah orang.</p>
+              <p className="font-semibold text-on-surface text-sm">Porsi per Menu</p>
+              <p className="text-xs text-on-surface-variant">Sesuaikan dengan jumlah anggota keluarga atau porsi makanmu.</p>
             </div>
             <div className="flex items-center gap-3">
               <button onClick={() => setServings((s) => Math.max(1, s - 1))} aria-label="Kurangi porsi"

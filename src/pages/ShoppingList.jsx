@@ -69,7 +69,7 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
             Belanja
           </h1>
           <p className="text-on-surface-variant text-body-lg">
-            Belanja sendiri bahan menumu, atau pesan paket lengkap yang kami siapkan.
+            Atur bahan makananmu tanpa mubazir. Belanja sendiri ke pasar, atau pesan paket segar praktis langsung dari CookPlan!
           </p>
         </header>
 
@@ -83,7 +83,7 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
           <button role="tab" aria-selected={tab === 'us'} onClick={() => setTab('us')}
             className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${
               tab === 'us' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
-            Belanja di Kami
+            Belanja Lewat CookPlan
           </button>
         </div>
 

@@ -14,7 +14,7 @@ export function PrivacyPolicy({ onNavigate }) {
                 Kebijakan Privasi
               </h1>
               <p className="text-on-surface-variant text-sm">
-                Terakhir Diperbarui: 7 Juni 2026
+                Terakhir diperbarui: 7 Juni 2026
               </p>
             </div>
 
@@ -49,7 +49,7 @@ export function PrivacyPolicy({ onNavigate }) {
 
               <section>
                 <h2 className="font-headline-md text-on-surface mb-3">4. Pembagian Data dengan Pihak Ketiga</h2>
-                <p>Kami sangat menjaga kerahasiaan data Anda dan tidak menjual data pribadi Anda kepada siapapun. Namun, agar fitur pemesanan dan logistik CookPlan dapat berjalan, kami membagikan data Anda dengan ketentuan berikut:</p>
+                <p>Kami sangat menjaga kerahasiaan data Anda dan tidak menjual data pribadi Anda kepada siapa pun. Namun, agar fitur pemesanan dan logistik CookPlan dapat berjalan, kami membagikan data Anda dengan ketentuan berikut:</p>
                 <ul className="list-disc pl-5 mt-2 space-y-2">
                   <li><strong>Mitra Penjual & Kurir:</strong> Data alamat pengiriman, nama pemesan, dan nomor telepon <strong>hanya dibagikan</strong> kepada mitra produsen/distributor dan kurir yang menangani pesanan Anda secara langsung. Informasi ini sangat dibatasi hanya pada hal-hal yang dibutuhkan untuk kelancaran pengiriman pesanan Anda.</li>
                 </ul>

@@ -259,22 +259,22 @@ export function GeneratePlan() {
       <div className="mb-8">
         <h1 className="font-headline-lg text-headline-lg text-primary mb-2 flex items-center gap-2">
           <span className="material-symbols-outlined text-3xl">auto_awesome</span>
-          Generate Foodplan
+          Susun Foodplan AI
         </h1>
         <p className="text-on-surface-variant text-body-md mb-2">
-          Biar AI susun menu & belanja mingguanmu otomatis.
+          Biarkan AI menyusun menu dan daftar belanja mingguanmu secara otomatis.
         </p>
         {usageCount != null && isAnonymous && (
           <p className="text-xs text-on-surface-variant/80 mb-5 flex items-center gap-1">
             <span className="material-symbols-outlined text-[16px]">bolt</span>
-            Sisa percobaan gratis: <strong>{guestRemaining}</strong> dari {GUEST_LIMIT} generate
+            Sisa percobaan gratis: <strong>{guestRemaining}</strong> dari {GUEST_LIMIT} kali pembuatan
           </p>
         )}
         {usageCount != null && !isAnonymous && (
           quotaExhausted ? (
             <div className="mb-5 flex items-start gap-2 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
               <span className="material-symbols-outlined text-[20px] shrink-0">hourglass_empty</span>
-              <span>Kuota generate harian habis ({DAILY_LIMIT}/hari). Bisa generate lagi mulai <strong>{quotaResetText}</strong>.</span>
+              <span>Kuota pembuatan harian habis ({DAILY_LIMIT}/hari). Bisa menyusun rencana lagi mulai <strong>{quotaResetText}</strong>.</span>
             </div>
           ) : (
             <p className="text-xs text-on-surface-variant mb-5 flex items-center gap-1">
@@ -305,20 +305,20 @@ export function GeneratePlan() {
                 className="inline-flex items-center gap-1.5 rounded-full border border-outline-variant bg-white px-4 py-2 text-sm font-semibold text-on-surface-variant hover:border-primary/50 hover:text-primary active:scale-95 transition cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[18px]">history</span>
-                Riwayat Generate ({history.length})
+                Riwayat Rencana Makan ({history.length})
               </button>
             </div>
           )}
           {/* Pilihan mode belanja (notulen: di page generate ada pilihan belanja sendiri / di kami). */}
           <div className="bg-surface-container-low rounded-2xl p-5">
-            <p className="text-sm font-semibold text-on-surface mb-3">Mau belanja gimana?</p>
+            <p className="text-sm font-semibold text-on-surface mb-3">Bagaimana kamu ingin berbelanja?</p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-xl border-2 border-primary bg-primary/5 p-4">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="material-symbols-outlined text-primary text-xl">shopping_cart</span>
                   <span className="font-bold text-primary text-sm">Belanja Sendiri</span>
                 </div>
-                <p className="text-xs text-on-surface-variant">AI susun menu, kamu belanja sendiri bahannya di pasar/toko.</p>
+                <p className="text-xs text-on-surface-variant">AI menyusun menu, lalu kamu berbelanja bahan sendiri di pasar atau toko.</p>
                 <p className="text-[11px] text-primary font-semibold mt-2 flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px]">check_circle</span>
                   Sedang dipilih
@@ -330,9 +330,9 @@ export function GeneratePlan() {
               >
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary text-xl">local_shipping</span>
-                  <span className="font-bold text-on-surface text-sm">Belanja di Kami (Menu Fix Kami)</span>
+                  <span className="font-bold text-on-surface text-sm">Belanja melalui CookPlan (Paket Menu Siap Masak)</span>
                 </div>
-                <p className="text-xs text-on-surface-variant">Pilih Paket FoodPrep Menu khusus yang Kami sediakan, Kami antar sampai rumah!</p>
+                <p className="text-xs text-on-surface-variant">Pilih paket food prep menu khusus yang kami sediakan, kami antar sampai ke rumah!</p>
                 <p className="text-[11px] text-on-surface-variant font-semibold mt-2 flex items-center gap-1 group-hover:text-primary">
                   <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                   Lihat paket
@@ -351,16 +351,16 @@ export function GeneratePlan() {
                 </span>
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className="material-symbols-outlined text-on-surface-variant text-xl">local_shipping</span>
-                  <span className="font-bold text-on-surface text-sm">Belanja di Kami (Menu Pilihan Kamu)</span>
+                  <span className="font-bold text-on-surface text-sm">Belanja melalui CookPlan (Menu Pilihanmu)</span>
                 </div>
                 <p className="text-xs text-on-surface-variant">
-                  AI susun menu, Kamu pilih daftar belanja, Kami antar sampai rumah!
+                  AI menyusun menu, kamu memilih daftar belanja, kami antar sampai ke rumah!
                 </p>
               </button>
             </div>
           </div>
 
-          <Field id="generate-periode-field" label="Periode plan">
+          <Field id="generate-periode-field" label="Durasi Rencana Makan">
             <Stepper
               value={periode}
               onDec={() => setPeriode(Math.max(1, periode - 1))}
@@ -370,7 +370,7 @@ export function GeneratePlan() {
             <p className="text-xs text-on-surface-variant mt-2">Maksimal {PERIODE_MAX} hari.</p>
           </Field>
 
-          <Field label="Jumlah porsi per jam makan">
+          <Field label="Jumlah porsi sekali makan">
             <Stepper value={porsi} onDec={() => setPorsi(Math.max(1, porsi - 1))} onInc={() => setPorsi(porsi + 1)} suffix="Porsi" />
             <p className="text-xs text-on-surface-variant mt-2">
               Porsi sekali makan (mis. 2 = buat 2 orang). Total masak otomatis dikali jumlah waktu makan.
@@ -395,7 +395,7 @@ export function GeneratePlan() {
 
           <Field label="Waktu makan per hari">
             <p className="text-xs text-on-surface-variant mb-2.5">
-              Ketuk jam makan yang mau direncanakan. Boleh lebih dari satu.
+              Ketuk waktu makan yang ingin direncanakan. Kamu dapat memilih lebih dari satu.
             </p>
             <div className="grid grid-cols-3 gap-2.5">
               {MEAL_OPTIONS.map((opt) => (
@@ -440,11 +440,11 @@ export function GeneratePlan() {
               </button>
             </div>
             <p className="text-xs text-on-surface-variant mt-2">
-              Pilih yang sesuai seleramu. Klik <strong>Pilihan lain</strong> buat lihat preferensi berbeda.
+              Pilih yang sesuai seleramu. Klik <strong>Pilihan lain</strong> untuk melihat preferensi berbeda.
             </p>
           </Field>
 
-          <Field label="Budget total">
+          <Field label="Total Anggaran">
             <div className="flex flex-wrap gap-2 mb-3">
               {BUDGET_PRESETS.map((b) => (
                 <Chip key={b} active={budget === b} onClick={() => setBudget(b)}>{formatRupiah(b)}</Chip>
@@ -463,11 +463,11 @@ export function GeneratePlan() {
                 setBudget(digits === '' ? 0 : Number(digits));
               }}
               className="w-full px-4 py-3 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
-              placeholder="Budget dalam Rupiah"
+              placeholder="Anggaran dalam Rupiah"
             />
           </Field>
 
-          <Field id="generate-pantry-field" label="Bahan yang sudah ada di rumah (opsional)">
+          <Field id="generate-pantry-field" label="Bahan yang tersedia di rumah (opsional)">
             <div className="flex gap-2 mb-3">
               <input
                 type="text"
@@ -500,7 +500,7 @@ export function GeneratePlan() {
               value={notes}
               onChange={(e) => setNotes(e.target.value.slice(0, NOTES_MAX))}
               rows={3}
-              placeholder="mis. hindari pedas, pengen menu serba ayam, alergi seaafood"
+              placeholder="Contoh: Hindari makanan pedas, ingin menu serba ayam, atau alergi seafood."
               className="w-full px-4 py-3 rounded-xl bg-white border border-outline-variant text-base resize-none focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
             />
             <div className="flex items-center justify-between mt-1.5">
@@ -561,19 +561,19 @@ export function GeneratePlan() {
               {loading ? (
                 <>
                   <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
-                  AI sedang menyusun…
+                  AI sedang menyusun...
                 </>
               ) : (
                 <>
                   <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
-                  Generate Plan-ku
+                  Buat Rencana Makanku
                 </>
               )}
             </button>
           </div>
           {loading && (
             <p className="text-center text-xs text-on-surface-variant">
-              AI sedang menyusun menu mingguanmu — ini bisa memakan beberapa detik…
+              AI sedang menyusun menu mingguanmu. Proses ini memerlukan waktu beberapa detik...
             </p>
           )}
         </div>
@@ -586,7 +586,7 @@ export function GeneratePlan() {
             <span className="material-symbols-outlined text-primary text-[32px] mb-1" aria-hidden="true">local_shipping</span>
             <h2 className="text-lg font-bold text-on-surface">Pindah ke Belanja di Kami?</h2>
             <p className="text-sm text-on-surface-variant">
-              Kamu akan keluar dari wizard generate. Isian yang belum di-generate tidak akan tersimpan.
+              Kamu akan keluar dari proses pembuatan menu. Pilihan menu yang belum dibuat tidak akan tersimpan.
             </p>
           </div>
           <div className="mt-6 flex gap-3">
@@ -623,7 +623,7 @@ export function GeneratePlan() {
           <div className="px-6 pb-6 pt-5 text-center">
             <h2 className="text-lg font-bold text-on-surface">Belanja di Kami</h2>
             <p className="mt-2 text-sm text-on-surface-variant">
-              Sebentar lagi! Kamu bisa pilih Paket FoodPrep yang kami sediakan, kami antar FoodPrep sesuai yang kamu generate. 🚚
+              Sebentar lagi! Kamu bisa memilih paket food prep yang kami sediakan, kami antar bahan siap masak (food prep) sesuai rencana menu yang kamu buat. 🚚
             </p>
             <button
               onClick={() => setShowFoodPrepSoon(false)}
@@ -642,7 +642,7 @@ export function GeneratePlan() {
           <div className="flex items-center justify-between gap-3 border-b border-outline-variant/60 px-5 py-4">
             <h2 className="flex items-center gap-1.5 text-base font-bold text-on-surface">
               <span className="material-symbols-outlined text-[20px] text-primary">history</span>
-              Hasil Generate Sebelumnya
+              Hasil Pembuatan Sebelumnya
             </h2>
             <button
               onClick={() => setShowHistory(false)}

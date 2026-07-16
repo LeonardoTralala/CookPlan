@@ -89,7 +89,7 @@ export function OrderSuccess() {
       <div className="max-w-lg mx-auto px-5 py-20 text-center">
         <span className="material-symbols-outlined text-5xl text-error mb-4">error</span>
         <h1 className="font-headline-md text-headline-md text-on-surface mb-2">Pesanan Tidak Ditemukan</h1>
-        <p className="text-on-surface-variant text-sm mb-6">{error || 'Data tidak ada.'}</p>
+        <p className="text-on-surface-variant text-sm mb-6">{error || 'Detail pesanan tidak ditemukan.'}</p>
         <button onClick={() => navigate('/shopping')} className="px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer">
           Kembali ke Belanja
         </button>
@@ -104,7 +104,7 @@ export function OrderSuccess() {
         <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto mb-4">
           <span className="material-symbols-outlined text-4xl">receipt_long</span>
         </div>
-        <h1 className="font-headline-lg text-headline-lg text-primary mb-1">Pesanan Tersimpan</h1>
+        <h1 className="font-headline-lg text-headline-lg text-primary mb-1">Tinggal Satu Langkah Lagi!</h1>
         <p className="text-on-surface-variant text-body-md">
           ID pesanan kamu: <span className="font-bold text-on-surface">{order.id}</span>
         </p>
@@ -114,8 +114,8 @@ export function OrderSuccess() {
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex gap-3">
         <span className="material-symbols-outlined text-amber-600 shrink-0">info</span>
         <p className="text-sm text-amber-800">
-          Pesananmu <strong>belum terkirim</strong> ke admin. Tekan <strong>Buka WhatsApp</strong> di bawah
-          untuk mengirim rincian agar pesanan diproses.
+          Pesananmu <strong>belum terkirim</strong> ke admin CookPlan. Yuk, klik tombol <strong>Kirim via WhatsApp</strong> di bawah
+          untuk mengirim rincian belanja agar segera diproses.
         </p>
       </div>
 
@@ -159,19 +159,19 @@ export function OrderSuccess() {
           {sending ? (
             <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Memproses…</>
           ) : (
-            <><span className="material-symbols-outlined text-[20px]">chat</span> Buka WhatsApp</>
+            <><span className="material-symbols-outlined text-[20px]">chat</span> Kirim via WhatsApp</>
           )}
         </button>
         <div className="flex flex-col sm:flex-row gap-3">
           <button onClick={handleCopy}
             className="flex-1 px-5 py-3 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm hover:bg-surface-container-low transition cursor-pointer inline-flex items-center justify-center gap-2">
             <span className="material-symbols-outlined text-[20px]">content_copy</span>
-            Salin Pesanan
+            Salin Rincian Pesanan
           </button>
           <button onClick={() => navigate('/profile?tab=orders')}
             className="flex-1 px-5 py-3 border border-outline-variant text-on-surface-variant rounded-full font-semibold text-sm hover:bg-surface-container-low transition cursor-pointer inline-flex items-center justify-center gap-2">
             <span className="material-symbols-outlined text-[20px]">receipt_long</span>
-            Riwayat Pesanan
+            Lihat Riwayat Pesanan
           </button>
         </div>
       </div>

@@ -39,7 +39,7 @@ export function Onboarding() {
       <div className="w-full max-w-lg">
         <div className="text-center mb-8">
           <span className="material-symbols-outlined text-4xl text-primary mb-2">waving_hand</span>
-          <h1 className="font-headline-lg text-headline-lg text-primary mb-2">Siapakah kamu?</h1>
+          <h1 className="font-headline-lg text-headline-lg text-primary mb-2">Pilih profil yang menggambarkanmu:</h1>
           <p className="text-on-surface-variant text-body-md">
             Bantu kami menyesuaikan rekomendasi menu untukmu. Cukup pilih satu — bisa diubah nanti di Profil.
           </p>
@@ -81,7 +81,7 @@ export function Onboarding() {
           {saving ? (
             <>
               <span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span>
-              Menyimpan…
+              Menyimpan...
             </>
           ) : (
             <>
