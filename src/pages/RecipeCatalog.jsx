@@ -35,8 +35,10 @@ const PROTEIN_SOURCE_TAGS = new Set([
 function recipeMatchesDiet(recipe, slug, label) {
   if ((recipe.tags ?? []).includes(slug)) return true;
   if (label && (recipe.badges ?? []).some((b) => b.toLowerCase() === label.toLowerCase())) return true;
-  if (slug === 'cepat' && recipe.readyInMinutes <= 30) return true;
-  if (slug === 'hemat' && recipe.priceIdr <= 30000) return true;
+  // NULL/unknown sengaja tidak match (selaras dietFilter.ts edge): tanpa guard,
+  // null <= 30 / null <= 30000 bernilai true dan resep tanpa waktu/harga ikut lolos.
+  if (slug === 'cepat' && recipe.readyInMinutes != null && recipe.readyInMinutes <= 30) return true;
+  if (slug === 'hemat' && recipe.priceIdr != null && recipe.priceIdr <= 30000) return true;
   if (slug === 'tinggi-protein' && (recipe.tags ?? []).some((t) => PROTEIN_SOURCE_TAGS.has(t))) return true;
   return false;
 }
