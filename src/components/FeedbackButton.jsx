@@ -15,6 +15,13 @@ const RATING_HINTS = {
   5: 'Luar biasa!',
 };
 
+const PLACEHOLDERS = {
+  saran: 'Bagikan ide kreatifmu untuk fitur baru atau hal yang perlu dikembangkan...',
+  masalah: 'Tulis di sini bug, error, atau kendala teknis yang kamu temukan secara mendetail...',
+  pujian: 'Apa yang paling kamu sukai dari platform CookPlan? Beritahu kami...',
+  lainnya: 'Tulis pertanyaan, keluhan, atau masukan lainnya di sini...'
+};
+
 // Tombol Feedback mengambang + modal. Dipasang sekali di AppShell sehingga
 // tersedia di seluruh halaman aplikasi untuk mengumpulkan masukan evaluasi.
 export function FeedbackButton() {
@@ -105,7 +112,7 @@ export function FeedbackButton() {
 
   const activeStars = hoverRating || rating;
 
-  const showFAB = pathname === '/profile';
+  const showFAB = false;
 
   return (
     <>
@@ -215,7 +222,7 @@ export function FeedbackButton() {
               id="feedback-message"
               value={message}
               onChange={(e) => setMessage(e.target.value.slice(0, MAX_MESSAGE_LEN))}
-              placeholder="Ceritakan apa yang kamu sukai atau hal yang perlu kami tingkatkan..."
+              placeholder={PLACEHOLDERS[category] || "Ceritakan apa yang kamu sukai atau hal yang perlu kami tingkatkan..."}
               rows={4}
               className="w-full px-4 py-3 bg-surface-container-low border border-outline-variant rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
             />

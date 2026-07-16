@@ -1,7 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPackages } from '../services/packageService.js';
-import { createOrder } from '../services/orderService.js';
 import { getPantryAddons } from '../services/ingredientService.js';
 import {
   buildShoppingListFromSlots, slotsFromPackageMeals, flattenSections,
@@ -22,7 +21,7 @@ export function ShopWithUsTab({ onSave }) {
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
   const [servings, setServings] = useState(2);
-  const [ordering, setOrdering] = useState(false);
+
   // Katalog bumbu dapur add-on (garam, minyak, dll) + pilihan user. Default KOSONG
   // (opt-in): yang sudah punya di rumah biarkan, yang butuh tinggal centang.
   const [addonCatalog, setAddonCatalog] = useState([]);
@@ -136,35 +135,22 @@ export function ShopWithUsTab({ onSave }) {
 
   const total = estimatedCost + addonsTotal + (totalItems > 0 ? DELIVERY_FEE : 0);
 
-  const handleOrder = async () => {
-    if (ordering || !selected || totalItems === 0) return;
-    setOrdering(true);
-    try {
-      // Bahan paket + bumbu dapur add-on yang dicentang (harga server di-derive
-      // dari SUM order_items, jadi total ikut bertambah otomatis).
-      const items = [
-        ...flattenSections(sections).map((it) => ({
-          name: it.name, amount: it.amount, unit: it.unit,
-          category: it.category, priceIdr: it.priceIdr,
-        })),
-        ...addonItems,
-      ];
-      const order = await createOrder({
-        planId: null,
-        outputType: 'package',
+  const handleOrder = () => {
+    if (!selected || totalItems === 0) return;
+    const items = [
+      ...flattenSections(sections).map((it) => ({
+        name: it.name, amount: it.amount, unit: it.unit,
+        category: it.category, priceIdr: it.priceIdr,
+      })),
+      ...addonItems,
+    ];
+    navigate('/order/package', {
+      state: {
         items,
-        totalPrice: estimatedCost + addonsTotal,
-        deliveryFee: DELIVERY_FEE,
+        subtotal: estimatedCost + addonsTotal,
         notes: `Paket: ${selected.name} (${servings} porsi/menu, ${selected.periodeDays} hari)`,
-      });
-      // Order tersimpan sebagai 'draft' → ke layar konfirmasi in-app. User
-      // menekan "Buka WhatsApp" di sana (promosi draft → received + buka WA).
-      navigate(`/order/sukses/${order.id}`, { state: { order, items } });
-    } catch (e) {
-      showToast(e.message || 'Gagal membuat pesanan.', { variant: 'error' });
-    } finally {
-      setOrdering(false);
-    }
+      }
+    });
   };
 
   const handleSave = () => {
@@ -224,6 +210,12 @@ export function ShopWithUsTab({ onSave }) {
   return (
     <>
     <div className="space-y-6 pb-32 sm:pb-0">
+      {/* Info pengiriman area terbatas */}
+      <div className="flex items-center gap-2 text-xs text-on-surface-variant bg-surface-container-low px-4 py-2.5 rounded-2xl w-fit">
+        <span className="material-symbols-outlined text-primary text-[18px]">info</span>
+        <span>Layanan pengiriman CookPlan saat ini baru melayani area <strong>Kota Malang</strong>.</span>
+      </div>
+
       {/* Pemilih paket */}
       <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
         {packages.map((p) => (
@@ -437,13 +429,9 @@ export function ShopWithUsTab({ onSave }) {
               <span className="material-symbols-outlined text-[20px]">bookmark_add</span>
               Simpan Daftar
             </button>
-            <button onClick={handleOrder} disabled={ordering || totalItems === 0}
+            <button onClick={handleOrder} disabled={totalItems === 0}
               className="flex-1 px-6 py-3.5 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-2">
-              {ordering ? (
-                <><span className="material-symbols-outlined animate-spin text-[20px]">progress_activity</span> Memproses…</>
-              ) : (
-                <><span className="material-symbols-outlined text-[20px]">chat</span> Pesan via WhatsApp</>
-              )}
+              <span className="material-symbols-outlined text-[20px]">chat</span> Pesan via WhatsApp
             </button>
           </div>
         </>
@@ -463,13 +451,9 @@ export function ShopWithUsTab({ onSave }) {
             <span className="material-symbols-outlined text-[18px]">bookmark_add</span>
             Simpan
           </button>
-          <button onClick={handleOrder} disabled={ordering || totalItems === 0}
+          <button onClick={handleOrder} disabled={totalItems === 0}
             className="flex-1 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm transition cursor-pointer disabled:opacity-60 inline-flex items-center justify-center gap-1.5 active:scale-95">
-            {ordering ? (
-              <><span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span> Proses…</>
-            ) : (
-              <><span className="material-symbols-outlined text-[18px]">chat</span> Pesan WA</>
-            )}
+            <span className="material-symbols-outlined text-[18px]">chat</span> Pesan WA
           </button>
         </div>
       </div>

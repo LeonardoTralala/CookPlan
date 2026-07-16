@@ -179,6 +179,18 @@ export function AppShell({ children }) {
               </button>
             )}
 
+            {/* Tombol Beri Masukan */}
+            {!isAnonymous && (
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('trigger-feedback-modal'))}
+                aria-label="Beri Masukan &amp; Saran"
+                title="Beri Masukan &amp; Saran"
+                className="inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-primary hover:bg-surface-container transition cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[22px]" aria-hidden="true">rate_review</span>
+              </button>
+            )}
+
             {isAnonymous ? (
               // Tamu: arahkan untuk daftar / masuk alih-alih keluar.
               <Link
