@@ -406,7 +406,7 @@ Deno.serve(async (req) => {
     let budgetMsg = "";
     if (finalCost > budgetVal) {
       const diff = finalCost - budgetVal;
-      budgetMsg = `Total estimasi belanja (Rp ${finalCost.toLocaleString('id-ID')}) sedikit melebihi target budget Rp ${budgetVal.toLocaleString('id-ID')} (selisih Rp ${diff.toLocaleString('id-ID')}). Anda dapat menyesuaikan atau mengurangi porsi bahan secara mandiri di Weekly Planner atau menaikkan budget.`;
+      budgetMsg = `Total estimasi belanja (Rp ${finalCost.toLocaleString('id-ID')}) sedikit melebihi target budget Rp ${budgetVal.toLocaleString('id-ID')} (selisih Rp ${diff.toLocaleString('id-ID')}). Kamu dapat menyesuaikan atau mengurangi porsi bahan secara mandiri di Weekly Planner atau menaikkan budget.`;
     } else if (finalCost < budgetVal) {
       const diff = budgetVal - finalCost;
       budgetMsg = `Total estimasi belanja (Rp ${finalCost.toLocaleString('id-ID')}) di bawah target budget Rp ${budgetVal.toLocaleString('id-ID')} (sisa budget Rp ${diff.toLocaleString('id-ID')}).`;
