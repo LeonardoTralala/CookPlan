@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getGeneratedPlanById } from '../services/aiService.js';
 import { createOrder, formatRupiah } from '../services/orderService.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { trackOrderCreated } from '../lib/posthog.js';
 
 // Fitur 3: Menu Order via WhatsApp. Ambil hasil generate (foodprep/full) → form
 // alamat & kontak → buat order (ID CP-...) → buka WhatsApp dengan teks terformat.
@@ -92,6 +93,7 @@ export function OrderPage() {
         paymentMethod: form.paymentMethod,
         notes: form.notes.trim() || null,
       });
+      trackOrderCreated(order.id, total, form.paymentMethod);
       // Order tersimpan sebagai 'draft'. Arahkan ke layar konfirmasi in-app
       // (bukan langsung wa.me): di sana user menekan "Buka WhatsApp" yang
       // mempromosikan draft → received + membuka WA dgn user-activation bersih.

@@ -6,6 +6,7 @@ import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 import { CatalogGridSkeleton } from '../components/Skeleton.jsx';
 import { RecipeDetailModal } from '../components/RecipeDetailModal.jsx';
+import { trackRecipeView } from '../lib/posthog.js';
 
 // Opsi diet untuk chip "Inspirasi Masakan Hari Ini" diambil dinamis dari diet_tags
 // (sama sumbernya dengan Generate step 2). Konstanta ini hanya FALLBACK bila fetch
@@ -481,13 +482,14 @@ function RecipeCatalog({ onAddToPlan }) {
               <div
                 key={recipe.id}
                 className="recipe-card-shadow bg-surface-container rounded-2xl overflow-hidden group cursor-pointer hover:-translate-y-0.5 transition-all duration-300 flex flex-col focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                onClick={() => setSelectedRecipeForDetail(recipe)}
+                onClick={() => { setSelectedRecipeForDetail(recipe); trackRecipeView(recipe.id, recipe.title); }}
                 role="button"
                 tabIndex={0}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     setSelectedRecipeForDetail(recipe);
+                    trackRecipeView(recipe.id, recipe.title);
                   }
                 }}
               >

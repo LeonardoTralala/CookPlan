@@ -5,6 +5,7 @@ import {
 } from '../services/orderService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { FeedbackCard } from '../components/FeedbackCard.jsx';
+import { trackWhatsappCheckout } from '../lib/posthog.js';
 
 // Layar konfirmasi pasca-checkout. Order sudah tersimpan sebagai 'draft'; di sini
 // user meninjau ringkasan + ID pesanan, lalu menekan "Buka WhatsApp" untuk
@@ -53,6 +54,7 @@ export function OrderSuccess() {
   const handleOpenWhatsapp = async () => {
     if (sending || !order || !waUrl) return;
     setSending(true);
+    trackWhatsappCheckout(order.id);
     try {
       // Promosikan draft → received. Best-effort: kalau gagal, tetap buka WA
       // (order sudah tersimpan, admin masih bisa lihat lewat rekonsiliasi).

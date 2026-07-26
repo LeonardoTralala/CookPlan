@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabase.js";
 import { onSessionExpired } from "../lib/session.js";
 import { AuthContext } from "./auth-context.js";
+import { identifyUser, resetUser } from "../lib/posthog.js";
 
 // URL tujuan redirect untuk OAuth & email (konfirmasi / reset password).
 const SITE_URL = window.location.origin;
@@ -30,6 +31,12 @@ export function AuthProvider({ children }) {
       .then(({ data }) => {
         if (active) {
           setSession(data.session ?? null);
+          if (data.session?.user) {
+            identifyUser(data.session.user.id, {
+              email: data.session.user.email,
+              is_anonymous: data.session.user.is_anonymous,
+            });
+          }
           setLoading(false);
         }
       })
@@ -41,6 +48,14 @@ export function AuthProvider({ children }) {
     // Pantau perubahan sesi (login, logout, refresh token, OAuth redirect).
     const { data: sub } = supabase.auth.onAuthStateChange((event, newSession) => {
       if (event === "PASSWORD_RECOVERY") setIsRecovery(true);
+      if (newSession?.user) {
+        identifyUser(newSession.user.id, {
+          email: newSession.user.email,
+          is_anonymous: newSession.user.is_anonymous,
+        });
+      } else if (event === "SIGNED_OUT" || !newSession) {
+        resetUser();
+      }
       setSession(newSession);
     });
 
