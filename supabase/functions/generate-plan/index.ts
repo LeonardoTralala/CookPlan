@@ -406,12 +406,12 @@ Deno.serve(async (req) => {
     let budgetMsg = "";
     if (finalCost > budgetVal) {
       const diff = finalCost - budgetVal;
-      budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) sedikit melebihi budget Rp ${budgetVal.toLocaleString('id-ID')} (selisih Rp ${diff.toLocaleString('id-ID')} lebih mahal).`;
+      budgetMsg = `Total estimasi belanja (Rp ${finalCost.toLocaleString('id-ID')}) sedikit melebihi target budget Rp ${budgetVal.toLocaleString('id-ID')} (selisih Rp ${diff.toLocaleString('id-ID')}). Kamu dapat menyesuaikan atau mengurangi porsi bahan secara mandiri di Weekly Planner atau menaikkan budget.`;
     } else if (finalCost < budgetVal) {
       const diff = budgetVal - finalCost;
-      budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) di bawah budget Rp ${budgetVal.toLocaleString('id-ID')} (sisa budget Rp ${diff.toLocaleString('id-ID')}).`;
+      budgetMsg = `Total estimasi belanja (Rp ${finalCost.toLocaleString('id-ID')}) di bawah target budget Rp ${budgetVal.toLocaleString('id-ID')} (sisa budget Rp ${diff.toLocaleString('id-ID')}).`;
     } else {
-      budgetMsg = `Total biaya (Rp ${finalCost.toLocaleString('id-ID')}) tepat sesuai dengan budget Rp ${budgetVal.toLocaleString('id-ID')}.`;
+      budgetMsg = `Total estimasi belanja (Rp ${finalCost.toLocaleString('id-ID')}) tepat sesuai dengan target budget Rp ${budgetVal.toLocaleString('id-ID')}.`;
     }
     
     finalWarnings.push(budgetMsg);
@@ -424,24 +424,6 @@ Deno.serve(async (req) => {
     shopping_list: shoppingPatch.shopping_list,
     total_estimated_cost: shoppingPatch.total_estimated_cost,
   };
-
-  // 10.c. Validasi budget akhir (toleransi 10%)
-  if (input.budget > 0 && finalOutput.total_estimated_cost > input.budget * 1.1) {
-    const cost = estimateCost(aiResult.tokensInput, aiResult.tokensOutput);
-    await admin.from("ai_usage_log").insert({
-      user_id: userId, endpoint: "generate-plan", cache_hit: false,
-      provider_id: usedProvider.id, model: usedProvider.model,
-      tokens_input: aiResult.tokensInput, tokens_output: aiResult.tokensOutput,
-      cost_usd: cost,
-    });
-    await admin.from("generated_plans").insert({
-      user_id: userId, input_hash: inputHash, input_json: input,
-      output_json: finalOutput, output_type: input.outputType, status: "failed",
-      error_message: `Budget validation failed: ${finalOutput.total_estimated_cost} > ${input.budget}`,
-      provider_id: usedProvider.id, model: usedProvider.model,
-    });
-    return json({ error: `Maaf, menu yang dihasilkan AI kali ini masih melebihi budget (Total asli: Rp ${finalOutput.total_estimated_cost.toLocaleString('id-ID')}). Silakan coba generate lagi.` }, 502);
-  }
 
   // 11. Persist
   const cost = estimateCost(aiResult.tokensInput, aiResult.tokensOutput);
