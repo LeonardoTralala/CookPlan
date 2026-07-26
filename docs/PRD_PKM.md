@@ -79,9 +79,9 @@ Karena tim pengembang terdiri dari 2 orang yang berfokus menggunakan bantuan cod
 2. **Autentikasi (Sign Up/In):** Pengguna masuk menggunakan email/password (dikelola oleh Supabase Auth).
 3. **Memilih Resep (Recipe Selection):** Pengguna menelusuri katalog resep, menggunakan filter bahan dasar atau estimasi harga, lalu menekan **"Add to Plan"** (memilih hari dan jumlah porsi).
 4. **Penyusunan Rencana (Weekly Planner):** Pengguna meninjau jadwal mingguan (Senin-Minggu). Di sini mereka bisa menghapus menu atau menekan **"Generate Daftar Belanja"**.
-5. **Kompilasi Daftar Belanja (Shopping List):** Sistem otomatis merangkum bahan-bahan belanjaan yang sudah dikonversi porsinya. Pengguna dapat menandai (*check-off*) bahan yang sudah mereka miliki di kulkas agar tidak dibeli ulang.
-6. **Proses Checkout:** Pengguna memasukkan alamat pengiriman kos/kantor, memilih metode pembayaran simulasi, lalu menekan **"Konfirmasi & Kirim Pesanan"**.
-7. **Simpan Data & Redirect WhatsApp:** Sistem menyimpan rekaman pesanan ke tabel `orders` di Supabase untuk mendapatkan **ID Pesanan**, lalu secara otomatis mengarahkan browser untuk membuka aplikasi WhatsApp dengan pesan terformat rapi berisi rincian pesanan dan ID unik tersebut.
+5. **Kompilasi Daftar Belanja (Shopping List):** Sistem otomatis merangkum bahan-bahan belanjaan yang sudah dikonversi porsinya. Pada tab *Belanja Sendiri*, pengguna dapat menandai (*check-off*) bahan yang sudah mereka miliki di kulkas agar tidak dibeli ulang sebagai checklist belanja mandiri.
+6. **Proses Checkout (Belanja Lewat CookPlan):** Di tab *Belanja Lewat CookPlan*, pengguna memilih paket bahan makanan, memasukkan nama, nomor WhatsApp, dan alamat pengiriman area Kota Malang (layanan hanya tersedia untuk Kota Malang saja), memilih metode pembayaran, lalu menekan **"Konfirmasi & Kirim Pesanan"**.
+7. **Simpan Data & Redirect WhatsApp:** Sistem menyimpan rekaman pesanan ke tabel `orders` di Supabase untuk mendapatkan **ID Pesanan**, lalu secara otomatis mengarahkan browser untuk membuka aplikasi WhatsApp dengan pesan terformat rapi berisi rincian pesanan dan ID unik tersebut untuk diproses oleh admin.
 
 ---
 

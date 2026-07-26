@@ -120,12 +120,13 @@ Sistem secara otomatis mengkonversi rencana menu mingguan menjadi daftar belanja
 | 🌶️ Spices | Kunyit, jahe, ketumbar, merica, garam, kecap manis |
 | 🌾 Dry Goods | Nasi, bihun, tahu, tempe, tepung, kentang, kacang tanah |
 
-### Fitur Shopping List
-- **Konsolidasi bahan:** Bahan yang sama dari resep berbeda digabung otomatis
-- **Estimasi biaya:** Total perkiraan biaya mingguan ditampilkan
-- **Check-off:** Checkbox per item → efek strikethrough ketika dicentang
-- **Update List:** Tombol refresh untuk menyinkronkan dengan perubahan planner
-- **Print/Share:** Tombol print dan share tersedia (UI only, belum functional)
+### Fitur Shopping List (Belanja Sendiri)
+- **Konsolidasi bahan:** Bahan yang sama dari resep berbeda digabung otomatis.
+- **Estimasi biaya:** Total perkiraan biaya mingguan ditampilkan.
+- **Check-off:** Checkbox per item → efek strikethrough ketika dicentang (berfungsi sebagai checklist pribadi pengguna saat belanja mandiri di pasar).
+- **Simpan Daftar:** Pengguna dapat menyimpan daftar belanja untuk dilihat kembali nanti, namun **tidak membuat pesanan riil** ke database admin.
+- **Update List:** Tombol refresh untuk menyinkronkan dengan perubahan planner.
+- **Print/Share:** Tombol print dan share tersedia (UI only, belum functional).
 
 ---
 
@@ -157,16 +158,16 @@ Daftar Belanja → Matching Supplier → Tampilkan Pilihan → Pengguna Konfirma
 
 ---
 
-## Fitur 5: Pengiriman Bahan Masakan 🔄 Planned
+## Fitur 5: Pengiriman Bahan Masakan (Belanja Lewat CookPlan) 🔄 Planned
 
 ### Deskripsi
-Layanan kurir yang mengantarkan bahan masakan sesuai daftar belanja langsung ke rumah pengguna.
+Layanan kurir yang mengantarkan bahan masakan sesuai paket belanja langsung ke rumah pengguna.
 
 ### Konsep yang Direncanakan
 
 #### Alur Pemesanan
 ```
-Shopping List → Pilih Supplier → Tentukan Alamat & Waktu → Konfirmasi → Pembayaran → Tracking
+Belanja Lewat CookPlan → Pilih Paket → Tentukan Alamat & WA (Malang Kota) → Konfirmasi → Pembayaran → Tracking
 ```
 
 #### Fitur Delivery
@@ -176,7 +177,7 @@ Shopping List → Pilih Supplier → Tentukan Alamat & Waktu → Konfirmasi → 
 - Notifikasi WhatsApp/SMS saat bahan tiba
 
 #### Tombol "Checkout & WhatsApp Order Redirect"
-> Setelah pengguna meninjau belanjaan, tombol Checkout akan memicu penyimpanan detail transaksi ke database Supabase untuk memperoleh **ID Pesanan unik** (misal: `#CP-260527-004`). Aplikasi kemudian me-redirect pengguna ke nomor WhatsApp Admin CookPlan dengan teks pesanan yang terformat rapi (mencakup ID Pesanan tersebut untuk mempermudah pelacakan admin).
+> Setelah pengguna memilih paket bahan makanan, tombol Checkout akan memicu navigasi ke halaman pengisian alamat (`OrderPage.jsx`). Halaman ini akan memvalidasi alamat pengiriman agar hanya melayani wilayah **Kota Malang**. Setelah dikonfirmasi, sistem menyimpan detail transaksi ke database Supabase untuk memperoleh **ID Pesanan unik** (misal: `#CP-260527-004`) dan memperbarui alamat profil user untuk auto-fill pesanan selanjutnya. Terakhir, aplikasi me-redirect pengguna ke nomor WhatsApp Admin CookPlan dengan teks pesanan terformat rapi berisi ID Pesanan unik tersebut.
 
 ### Kebutuhan Backend (Supabase Integration)
 - Tabel: `orders` (menyimpan ID pesanan, ID user, total harga, alamat, dan metode pembayaran).

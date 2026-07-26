@@ -7,7 +7,7 @@ import { supabase } from "../lib/supabase.js";
 // avatar_url. Email tidak disimpan di profiles — selalu dibaca dari auth.users.
 // RLS owner-only (profiles_select_own / profiles_update_own) menjaga akses.
 
-const PROFILE_SELECT = "id, full_name, username, gender, avatar_url, created_at, diet_prefs, persona";
+const PROFILE_SELECT = "id, full_name, username, gender, avatar_url, created_at, diet_prefs, persona, delivery_customer_name, delivery_customer_phone, delivery_kecamatan, delivery_detail_alamat";
 
 // Persona valid (selaras CHECK constraint DB & VALID_PERSONA di Edge Function).
 const VALID_PERSONA = ["mahasiswa", "pekerja", "ibu_rumah_tangga", "keluarga", "lainnya"];
@@ -35,6 +35,10 @@ export async function getProfile() {
     createdAt: data.created_at ?? user.created_at ?? null,
     dietPrefs: data.diet_prefs ?? [], // array slug diet_tags.value
     persona: data.persona || "",      // NULL di DB → "" untuk UI ("belum diisi")
+    deliveryCustomerName: data.delivery_customer_name || "",
+    deliveryCustomerPhone: data.delivery_customer_phone || "",
+    deliveryKecamatan: data.delivery_kecamatan || "",
+    deliveryDetailAlamat: data.delivery_detail_alamat || "",
   };
 }
 
@@ -71,6 +75,18 @@ export async function updateProfile(patch = {}) {
     } else {
       throw new Error("Persona tidak valid.");
     }
+  }
+  if (patch.deliveryCustomerName !== undefined) {
+    updates.delivery_customer_name = patch.deliveryCustomerName.trim() || null;
+  }
+  if (patch.deliveryCustomerPhone !== undefined) {
+    updates.delivery_customer_phone = patch.deliveryCustomerPhone.trim() || null;
+  }
+  if (patch.deliveryKecamatan !== undefined) {
+    updates.delivery_kecamatan = patch.deliveryKecamatan || null;
+  }
+  if (patch.deliveryDetailAlamat !== undefined) {
+    updates.delivery_detail_alamat = patch.deliveryDetailAlamat.trim() || null;
   }
 
   if (Object.keys(updates).length === 0) return getProfile();

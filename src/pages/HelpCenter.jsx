@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navbar } from "../components/Navbar.jsx";
 import { Footer } from "../components/Footer.jsx";
 import { Toast } from "../components/Toast.jsx";
+import { useAuth } from "../hooks/useAuth.js";
 
 const FAQ_ITEMS = [
   {
@@ -29,8 +30,17 @@ const FAQ_ITEMS = [
 export function HelpCenter({ onNavigate }) {
   const [openIndex, setOpenIndex] = useState(null);
 
+  const { user } = useAuth();
+  const isLoggedIn = !!user;
+
   const toggleFAQ = (index) => {
     setOpenIndex(openIndex === index ? null : index);
+  };
+
+  const handleOpenFeedback = () => {
+    window.dispatchEvent(new CustomEvent('trigger-feedback-modal', {
+      detail: { category: 'saran' }
+    }));
   };
 
   return (
@@ -100,13 +110,32 @@ export function HelpCenter({ onNavigate }) {
             <p className="text-on-surface-variant max-w-lg mx-auto mb-6">
               Tim bantuan kami selalu siap membantumu. Jangan ragu untuk menghubungi kami jika pertanyaanmu belum terjawab di FAQ.
             </p>
-            <a
-              href="mailto:cookplanofficial@gmail.com"
-              className="inline-flex py-3 px-8 bg-primary text-on-primary rounded-full font-label-md text-label-md hover:shadow-lg transition-shadow cursor-pointer font-semibold items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-[18px]">mail</span>
-              Hubungi Bantuan via Email
-            </a>
+            {isLoggedIn ? (
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-3">
+                <a
+                  href="mailto:cookplanofficial@gmail.com"
+                  className="inline-flex py-3 px-8 border border-primary text-primary rounded-full font-label-md text-label-md hover:bg-primary/5 transition cursor-pointer font-semibold items-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-[18px]">mail</span>
+                  Hubungi via Email
+                </a>
+                <button
+                  onClick={handleOpenFeedback}
+                  className="inline-flex py-3 px-8 bg-primary text-on-primary rounded-full font-label-md text-label-md hover:shadow-lg active:scale-95 transition cursor-pointer font-semibold items-center gap-2 border-none"
+                >
+                  <span className="material-symbols-outlined text-[18px]">rate_review</span>
+                  Kirim Masukan &amp; Saran
+                </button>
+              </div>
+            ) : (
+              <a
+                href="mailto:cookplanofficial@gmail.com"
+                className="inline-flex py-3 px-8 bg-primary text-on-primary rounded-full font-label-md text-label-md hover:shadow-lg transition-shadow cursor-pointer font-semibold items-center gap-2"
+              >
+                <span className="material-symbols-outlined text-[18px]">mail</span>
+                Hubungi Bantuan via Email
+              </a>
+            )}
           </div>
 
         </div>
