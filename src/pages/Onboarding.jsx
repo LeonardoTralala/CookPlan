@@ -5,6 +5,7 @@ import { usePlan } from "../hooks/usePlan.js";
 import { updateProfile } from "../services/profileService.js";
 import { setCachedPersona } from "../utils/personaCache.js";
 import { PERSONA_OPTIONS } from "../utils/persona.js";
+import { trackOnboarding } from "../lib/posthog.js";
 
 // Onboarding sekali seumur hidup: pengguna baru memilih persona ("siapakah
 // kamu"). Disimpan ke profiles.persona; setelah itu OnboardingGate tidak pernah
@@ -27,6 +28,7 @@ export function Onboarding() {
     try {
       await updateProfile({ persona: selected });
       setCachedPersona(user?.id ?? null, selected); // lepas gate tanpa refetch
+      trackOnboarding(selected);
       navigate(dest, { replace: true });
     } catch (err) {
       showToast(err.message || "Gagal menyimpan. Coba lagi.");

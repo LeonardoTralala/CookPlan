@@ -8,6 +8,7 @@ import { mapGeneratedPlanToWeek } from '../utils/planMapper.js';
 import { buildShoppingList } from '../utils/shoppingList.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 import { FeedbackCard } from '../components/FeedbackCard.jsx';
+import { trackPlanApplied } from '../lib/posthog.js';
 
 const MEAL_LABEL = { breakfast: 'Sarapan', lunch: 'Makan Siang', dinner: 'Makan Malam' };
 
@@ -107,6 +108,7 @@ export function GenerateResult() {
     }
     const undoList = applySlots(slots);
     setApplied(true);
+    trackPlanApplied(planId);
     const extra = skippedDays > 0 ? ' (7 hari pertama)' : '';
     showToast(`${slots.length} menu diterapkan ke Rencana Mingguan${extra}!`, {
       onUndo: () => {
@@ -115,7 +117,7 @@ export function GenerateResult() {
         showToast('Perubahan di planner diurungkan.');
       },
     });
-  }, [applySlots, restoreSlot, showToast]);
+  }, [planId, applySlots, restoreSlot, showToast]);
 
   // Muat hasil: utamakan sessionStorage (baru di-generate), fallback DB.
   useEffect(() => {

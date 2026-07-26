@@ -9,6 +9,7 @@ import {
   saveShoppingList, getSavedShoppingLists, deleteSavedShoppingList,
 } from '../services/shoppingListService.js';
 import { formatRupiah, formatAmount } from '../utils/buildShoppingList.js';
+import { trackShoppingMode } from '../lib/posthog.js';
 
 const SOURCE_LABEL = {
   generate: 'Hasil Generate',
@@ -75,12 +76,12 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
 
         {/* Tab switcher */}
         <div id="shopping-tab-switcher" className="inline-flex p-1 bg-surface-container-low rounded-full mb-8" role="tablist">
-          <button role="tab" aria-selected={tab === 'self'} onClick={() => setTab('self')}
+          <button role="tab" aria-selected={tab === 'self'} onClick={() => { setTab('self'); trackShoppingMode('self'); }}
             className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${
               tab === 'self' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
             Belanja Sendiri
           </button>
-          <button role="tab" aria-selected={tab === 'us'} onClick={() => setTab('us')}
+          <button role="tab" aria-selected={tab === 'us'} onClick={() => { setTab('us'); trackShoppingMode('cookplan'); }}
             className={`px-5 py-2.5 rounded-full text-sm font-semibold transition-colors cursor-pointer ${
               tab === 'us' ? 'bg-primary text-on-primary' : 'text-on-surface-variant hover:text-primary'}`}>
             Belanja Lewat CookPlan

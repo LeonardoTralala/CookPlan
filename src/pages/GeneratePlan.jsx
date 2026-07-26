@@ -7,6 +7,7 @@ import { usePlan } from '../hooks/usePlan.js';
 import { Modal } from '../components/Modal.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 import { GenerateLoading } from '../components/GenerateLoading.jsx';
+import { trackPlanGenerationStart, trackPlanGenerationError } from '../lib/posthog.js';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
 // Step 1: periode + porsi + waktu makan
@@ -206,10 +207,11 @@ export function GeneratePlan() {
     }
     setLoading(true);
     setError('');
+    const input = { periode, porsi, meals, variasiPerHari, diet, budget, pantry, notes, persona, outputType: 'full' };
+    trackPlanGenerationStart(input);
     try {
       // outputType selalu 'full' — pilihan jenis output dihapus dari wizard;
       // hasil selalu lengkap (menu + belanja + prep), Core Offer tetap tersedia.
-      const input = { periode, porsi, meals, variasiPerHari, diet, budget, pantry, notes, persona, outputType: 'full' };
       const result = await generatePlan(input);
       // Simpan hasil + input ke sessionStorage agar GenerateResult bisa baca tanpa
       // refetch. `input` (terutama pantry) dipakai untuk recompute belanja saat
@@ -227,6 +229,7 @@ export function GeneratePlan() {
       navigate(`/generate/${result.planId}`);
     } catch (e) {
       const msg = e.message || 'Gagal generate plan. Coba lagi.';
+      trackPlanGenerationError(msg);
       // Tamu kehabisan percobaan gratis → langsung ke halaman login/daftar.
       if (isAnonymous && /percobaan gratis/i.test(msg)) {
         navigate('/auth', { replace: true, state: { from: '/generate' } });

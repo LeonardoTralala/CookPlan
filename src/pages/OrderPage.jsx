@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getGeneratedPlanById } from '../services/aiService.js';
 import { createOrder, formatRupiah } from '../services/orderService.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { trackOrderCreated } from '../lib/posthog.js';
 import { getProfile, updateProfile } from '../services/profileService.js';
 
 // Fitur 3: Menu Order via WhatsApp. Ambil hasil generate (foodprep/full) → form
@@ -149,6 +150,7 @@ export function OrderPage() {
           ? `${plan?.notes || ''}${form.notes.trim() ? ` (Catatan: ${form.notes.trim()})` : ''}` 
           : (form.notes.trim() || null),
       });
+      trackOrderCreated(order.id, total, form.paymentMethod);
 
       try {
         await updateProfile({
@@ -160,7 +162,6 @@ export function OrderPage() {
       } catch (pe) {
         console.warn('Gagal menyimpan default alamat pengiriman:', pe);
       }
-
       // Order tersimpan sebagai 'draft'. Arahkan ke layar konfirmasi in-app
       // (bukan langsung wa.me): di sana user menekan "Buka WhatsApp" yang
       // mempromosikan draft → received + membuka WA dgn user-activation bersih.

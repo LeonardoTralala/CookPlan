@@ -5,6 +5,7 @@ import { Toast } from "../components/Toast.jsx";
 import { useAuth } from "../hooks/useAuth.js";
 import { usePlan } from "../hooks/usePlan.js";
 import { SESSION_EXPIRED_FLAG } from "../lib/session.js";
+import { trackSignUp, trackLogIn } from "../lib/posthog.js";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -142,6 +143,8 @@ export default function AuthPage() {
       setLoading(false);
       if (err) return setError(friendlyError(err));
 
+      trackSignUp('email');
+
       // Bila konfirmasi email diaktifkan, belum ada sesi → minta cek email.
       if (!data.session) {
         setNotice("Akun berhasil dibuat! Silakan periksa email kamu untuk melakukan konfirmasi sebelum masuk.");
@@ -158,6 +161,7 @@ export default function AuthPage() {
     const { error: err } = await signIn({ email, password });
     setLoading(false);
     if (err) return setError(friendlyError(err));
+    trackLogIn('email');
     showToast("Berhasil masuk!");
     navigate("/catalog");
   }

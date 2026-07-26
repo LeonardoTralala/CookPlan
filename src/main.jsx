@@ -8,6 +8,10 @@ import { BrowserRouter } from 'react-router-dom'
 import { ScrollToTop } from './components/ScrollToTop.jsx'
 import { ErrorBoundary } from './components/ErrorBoundary.jsx'
 import { Analytics } from '@vercel/analytics/react'
+import { initPostHog } from './lib/posthog'
+
+// Inisialisasi PostHog Analytics
+initPostHog()
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
