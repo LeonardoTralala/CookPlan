@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Modal } from '../../components/Modal.jsx';
 import { checkIsAdmin } from '../../services/adminService.js';
 import {
   getAllFeedback,
@@ -45,6 +46,8 @@ export function AdminFeedback() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all'); // 'all' | category value
   const [deletingId, setDeletingId] = useState(null);
+  const [feedbackToDelete, setFeedbackToDelete] = useState(null);
+
 
   useEffect(() => {
     let active = true;
@@ -66,13 +69,19 @@ export function AdminFeedback() {
     [rows, filter]
   );
 
-  const handleDelete = async (id) => {
-    if (!window.confirm('Hapus feedback ini? Tindakan tidak bisa dibatalkan.')) return;
+  const handleDelete = (f) => {
+    setFeedbackToDelete(f);
+  };
+
+  const confirmDeleteFeedback = async () => {
+    if (!feedbackToDelete) return;
+    const f = feedbackToDelete;
     const prev = rows;
-    setDeletingId(id);
-    setRows((list) => list.filter((r) => r.id !== id)); // optimistic
+    setDeletingId(f.id);
+    setRows((list) => list.filter((r) => r.id !== f.id)); // optimistic
+    setFeedbackToDelete(null);
     try {
-      await deleteFeedback(id);
+      await deleteFeedback(f.id);
       showToast('Feedback dihapus.');
     } catch (e) {
       setRows(prev); // rollback
@@ -81,6 +90,7 @@ export function AdminFeedback() {
       setDeletingId(null);
     }
   };
+
 
   if (allowed === null) {
     return <div className="flex justify-center py-24"><span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span></div>;
@@ -192,7 +202,7 @@ export function AdminFeedback() {
                     </span>
                   </div>
                   <button
-                    onClick={() => handleDelete(f.id)}
+                    onClick={() => handleDelete(f)}
                     disabled={deletingId === f.id}
                     className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-full text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer disabled:opacity-60"
                     aria-label="Hapus feedback"
@@ -217,6 +227,63 @@ export function AdminFeedback() {
           })}
         </div>
       )}
+
+      {/* Modal Konfirmasi Hapus Feedback Mewah */}
+      <Modal isOpen={Boolean(feedbackToDelete)} onClose={() => setFeedbackToDelete(null)}>
+        <div className="bg-white rounded-[32px] p-6 sm:p-8 max-w-md w-full shadow-2xl border border-error/10 text-center animate-scale-up">
+          <div className="w-16 h-16 rounded-full bg-error/10 text-error flex items-center justify-center mx-auto mb-4 border border-error/20 shadow-inner">
+            <span className="material-symbols-outlined text-3xl text-error">delete_forever</span>
+          </div>
+
+          <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold mb-1">
+            Hapus Masukan Pengguna?
+          </h3>
+
+          {feedbackToDelete && (
+            <div className="my-4 p-3.5 rounded-2xl bg-surface-cream/80 border border-outline-variant/60 text-left space-y-1.5 text-xs text-on-surface-variant">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold uppercase text-primary text-[11px]">{feedbackToDelete.category}</span>
+                <Stars value={feedbackToDelete.rating} />
+              </div>
+              <p className="text-on-surface line-clamp-3 italic">"{feedbackToDelete.message}"</p>
+              <p className="text-[11px] text-outline">{fmtDate(feedbackToDelete.created_at)}</p>
+            </div>
+          )}
+
+          <p className="text-xs text-on-surface-variant leading-relaxed mb-6">
+            Masukan ini akan dihapus secara permanen dari evaluasi admin. Tindakan ini tidak dapat dibatalkan.
+          </p>
+
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setFeedbackToDelete(null)}
+              disabled={Boolean(deletingId)}
+              className="flex-1 py-3 px-5 rounded-full border border-outline-variant text-on-surface-variant font-semibold text-sm hover:bg-surface-container-low transition cursor-pointer disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              onClick={confirmDeleteFeedback}
+              disabled={Boolean(deletingId)}
+              className="flex-1 py-3 px-5 rounded-full bg-error text-on-error font-semibold text-sm shadow-md hover:bg-error/90 hover:shadow-lg active:scale-95 transition cursor-pointer flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              {deletingId ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+                  Menghapus…
+                </>
+              ) : (
+                <>
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                  Hapus Permanen
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
