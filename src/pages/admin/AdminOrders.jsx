@@ -197,11 +197,27 @@ export function AdminOrders() {
                       {o.customer_name || 'Tanpa nama'} · {o.items?.length ?? 0} item · {fmtDate(o.createdAt)}
                     </p>
                   </div>
-                  <div className="text-right shrink-0">
-                    <span className="block font-bold text-primary">{formatRupiah(grand)}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="font-bold text-primary text-right">{formatRupiah(grand)}</span>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteOrder(o);
+                      }}
+                      disabled={deletingId === o.id}
+                      className="p-1.5 rounded-full text-on-surface-variant hover:text-error hover:bg-error/10 transition-colors cursor-pointer disabled:opacity-60"
+                      title="Hapus Pesanan"
+                      aria-label="Hapus Pesanan"
+                    >
+                      <span className={`material-symbols-outlined text-[20px] ${deletingId === o.id ? 'animate-spin text-error' : ''}`}>
+                        {deletingId === o.id ? 'progress_activity' : 'delete'}
+                      </span>
+                    </button>
                     <span className="material-symbols-outlined text-on-surface-variant text-[20px]">{isOpen ? 'expand_less' : 'expand_more'}</span>
                   </div>
                 </button>
+
 
                 {/* Detail */}
                 {isOpen && (
