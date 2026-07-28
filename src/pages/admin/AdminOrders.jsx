@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { checkIsAdmin } from '../../services/adminService.js';
-import { listOrders, updateOrder, waLink } from '../../services/adminOrderService.js';
+import { listOrders, updateOrder, deleteOrder, waLink } from '../../services/adminOrderService.js';
 import { downloadReceiptImage, orderJenisLabel } from '../../services/orderService.js';
 import {
   ORDER_STATUSES, PAYMENT_STATUSES, STATUS_TONE_CLS as TONE_CLS, orderMeta, payMeta,
@@ -29,6 +29,8 @@ export function AdminOrders() {
   const [expanded, setExpanded] = useState(null);
   const [busyId, setBusyId] = useState(null);
   const [strukId, setStrukId] = useState(null); // order sedang dibuatkan struk PNG
+  const [deletingId, setDeletingId] = useState(null);
+
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -95,6 +97,23 @@ export function AdminOrders() {
       setStrukId(null);
     }
   };
+
+  const handleDeleteOrder = async (o) => {
+    if (!window.confirm(`Hapus pesanan #${o.id}? Tindakan ini tidak dapat dibatalkan.`)) return;
+    setDeletingId(o.id);
+    const prev = orders;
+    setOrders((list) => list.filter((x) => x.id !== o.id));
+    try {
+      await deleteOrder(o.id);
+      showToast('Pesanan berhasil dihapus.');
+    } catch (e) {
+      setOrders(prev);
+      showToast(e.message || 'Gagal menghapus pesanan.', { variant: 'error' });
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
 
   if (allowed === null) {
     return <div className="flex justify-center py-24"><span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span></div>;
@@ -267,7 +286,19 @@ export function AdminOrders() {
                           Hubungi via WhatsApp
                         </a>
                       )}
+                      <button
+                        onClick={() => handleDeleteOrder(o)}
+                        disabled={deletingId === o.id}
+                        className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 border border-error/30 text-error hover:bg-error/10 rounded-full font-semibold text-sm transition cursor-pointer disabled:opacity-60"
+                        aria-label="Hapus pesanan"
+                      >
+                        <span className={`material-symbols-outlined text-[20px] ${deletingId === o.id ? 'animate-spin' : ''}`}>
+                          {deletingId === o.id ? 'progress_activity' : 'delete'}
+                        </span>
+                        Hapus Pesanan
+                      </button>
                     </div>
+
                   </div>
                 )}
               </div>

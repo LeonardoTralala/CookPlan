@@ -50,6 +50,14 @@ export async function updateOrder(id, { orderStatus, paymentStatus } = {}) {
   if (error) throw error;
 }
 
+// Hapus satu pesanan (khusus admin). Order_items terhapus otomatis via CASCADE.
+export async function deleteOrder(id) {
+  await requireUser();
+  const { error } = await supabase.from("orders").delete().eq("id", id);
+  if (error) throw error;
+}
+
+
 // Normalisasi nomor HP Indonesia → format wa.me (62xxxx). 0812 → 62812.
 export function waLink(phone) {
   if (!phone) return null;
