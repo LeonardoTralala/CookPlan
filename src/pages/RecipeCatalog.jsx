@@ -1,9 +1,20 @@
 import { useState, useMemo, useEffect } from 'react';
-import { getRecipes, getSavedRecipeIds, saveRecipe, unsaveRecipe } from '../services/recipeService.js';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  getRecipes,
+  getSavedRecipeIds,
+  saveRecipe,
+  unsaveRecipe,
+  getMyLikedRecipeIds,
+  toggleLikeRecipe,
+  deleteRecipe,
+} from '../services/recipeService.js';
 import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
+import { useAuth } from '../hooks/useAuth.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
+import { Modal } from '../components/Modal.jsx';
 import { CatalogGridSkeleton } from '../components/Skeleton.jsx';
 import { RecipeDetailModal } from '../components/RecipeDetailModal.jsx';
 import { trackRecipeView } from '../lib/posthog.js';
@@ -54,12 +65,38 @@ function shuffle(arr) {
 }
 
 function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
+  const navigate = useNavigate();
   const { showToast, weeklyPlan } = usePlan();
+  const { user } = useAuth();
 
   // Bank resep dari DB (Supabase) — menggantikan mockRecipes statis.
   const [recipes, setRecipes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+
+  // Catalog Tab: 'semua' | 'komunitas' | 'tersimpan' | 'resep-saya'
+  const [activeTab, setActiveTab] = useState('semua');
+  const [myRecipesFilter, setMyRecipesFilter] = useState('semua'); // 'semua' | 'publik' | 'draf'
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  // Sorting: 'newest' | 'popular'
+  const [sortBy, setSortBy] = useState('newest');
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await deleteRecipe(deleteTarget.id);
+      showToast(`Resep "${deleteTarget.title}" berhasil dihapus.`);
+      setRecipes((prev) => prev.filter((r) => r.id !== deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error("Gagal menghapus resep:", err);
+      showToast(err.message || 'Gagal menghapus resep.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   // activeFilters menyimpan slug diet_tags.value (mis. 'vegetarian', 'serba-ayam').
@@ -105,6 +142,8 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
 
   // Set id resep yang sudah disimpan user (untuk menandai status bookmark).
   const [savedIds, setSavedIds] = useState(() => new Set());
+  // Set id resep yang disukai user (like).
+  const [likedIds, setLikedIds] = useState(() => new Set());
 
   // Muat bank resep dari Supabase saat mount.
   useEffect(() => {
@@ -136,6 +175,15 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
     getSavedRecipeIds()
       .then((ids) => { if (active) setSavedIds(new Set(ids)); })
       .catch((err) => { console.error('Gagal memuat resep tersimpan:', err); });
+    return () => { active = false; };
+  }, []);
+
+  // Muat daftar id resep yang disukai (like).
+  useEffect(() => {
+    let active = true;
+    getMyLikedRecipeIds()
+      .then((ids) => { if (active) setLikedIds(new Set(ids)); })
+      .catch((err) => { console.error('Gagal memuat resep disukai:', err); });
     return () => { active = false; };
   }, []);
 
@@ -192,6 +240,65 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
     }
   };
 
+  // Toggle like resep (optimistic + rollback bila gagal).
+  const handleToggleLike = async (recipe, e) => {
+    if (e) e.stopPropagation();
+    const id = recipe.id;
+    const isLiked = likedIds.has(id);
+
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (isLiked) next.delete(id); else next.add(id);
+      return next;
+    });
+
+    setRecipes((prevRecipes) =>
+      prevRecipes.map((r) => {
+        if (r.id === id) {
+          const count = r.likesCount ?? 0;
+          return { ...r, likesCount: isLiked ? Math.max(0, count - 1) : count + 1 };
+        }
+        return r;
+      })
+    );
+
+    if (selectedRecipeForDetail?.id === id) {
+      setSelectedRecipeForDetail((prev) => {
+        if (!prev) return null;
+        const count = prev.likesCount ?? 0;
+        return { ...prev, likesCount: isLiked ? Math.max(0, count - 1) : count + 1 };
+      });
+    }
+
+    try {
+      await toggleLikeRecipe(id, !isLiked);
+      showToast(isLiked ? 'Menyukai resep dibatalkan.' : `Menyukai "${recipe.title}"! ❤️`);
+    } catch (err) {
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (isLiked) next.add(id); else next.delete(id);
+        return next;
+      });
+      setRecipes((prevRecipes) =>
+        prevRecipes.map((r) => {
+          if (r.id === id) {
+            const count = r.likesCount ?? 0;
+            return { ...r, likesCount: isLiked ? count + 1 : Math.max(0, count - 1) };
+          }
+          return r;
+        })
+      );
+      if (selectedRecipeForDetail?.id === id) {
+        setSelectedRecipeForDetail((prev) => {
+          if (!prev) return null;
+          const count = prev.likesCount ?? 0;
+          return { ...prev, likesCount: isLiked ? count + 1 : Math.max(0, count - 1) };
+        });
+      }
+      showToast(err.message || 'Gagal memperbarui Like.');
+    }
+  };
+
   // Toggle quick filter tag
   const handleToggleFilter = (filterName) => {
     if (activeFilters.includes(filterName)) {
@@ -202,6 +309,8 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
   };
 
   const handleResetFilters = () => {
+    setActiveTab('semua');
+    setSortBy('newest');
     setSearchQuery('');
     setActiveFilters([]);
     setMaxTime(120);
@@ -209,9 +318,18 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
     setOnlyVerified(false);
   };
 
-  // Filter recipes based on search query, quick filters, and advanced criteria
+  // Filter recipes based on tab, search query, quick filters, and advanced criteria
   const filteredRecipes = useMemo(() => {
     return recipes.filter((recipe) => {
+      // 0. Catalog Tab Filter
+      if (activeTab === 'komunitas' && !recipe.userId) return false;
+      if (activeTab === 'tersimpan' && !savedIds.has(recipe.id)) return false;
+      if (activeTab === 'resep-saya') {
+        if (!user || recipe.userId !== user.id) return false;
+        if (myRecipesFilter === 'publik' && !recipe.isPublic) return false;
+        if (myRecipesFilter === 'draf' && recipe.isPublic) return false;
+      }
+
       // 1. Search Query Filter (matches title or ingredients)
       if (searchQuery.trim() !== '') {
         const query = searchQuery.toLowerCase();
@@ -223,10 +341,6 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
       }
 
       // 2. Preferensi diet (chip) — cocokkan slug ke recipe.tags / badges.
-      //    Semantik OR (union): resep lolos bila cocok dengan SALAH SATU chip aktif.
-      //    Mis. pilih "Serba Ayam" + "Serba Sapi" → tampil resep ayam ATAU sapi
-      //    (kalau pakai AND, dua protein selalu 0 hasil karena tak ada resep ayam
-      //    sekaligus sapi). Selaras perilaku OR di filter wizard AI (overlaps).
       if (activeFilters.length > 0) {
         const matchesAnyActive = activeFilters.some((slug) =>
           recipeMatchesDiet(recipe, slug, dietLabelOf.get(slug))
@@ -234,12 +348,10 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
         if (!matchesAnyActive) return false;
       }
 
-      // 3. Max Cooking Time — 120 = "Semua" (tanpa batas), jadi skip filter.
+      // 3. Max Cooking Time
       if (maxTime < 120 && recipe.readyInMinutes > maxTime) return false;
 
-      // 4. Price Category — bandingkan HARGA PER PORSI agar selaras dengan label
-      //    filter "(per porsi)". priceIdr di DB adalah total resep utk base_servings,
-      //    jadi dibagi dulu (guard baseServings null/0 → anggap 1 porsi).
+      // 4. Price Category
       const perServing = recipe.priceIdr / (recipe.baseServings || 1);
       if (priceCategory === 'Hemat' && perServing >= 15000) return false;
       if (priceCategory === 'Standar' && (perServing < 15000 || perServing > 30000)) return false;
@@ -250,20 +362,32 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
 
       return true;
     });
-  }, [recipes, searchQuery, activeFilters, maxTime, priceCategory, onlyVerified, dietLabelOf]);
+  }, [recipes, activeTab, myRecipesFilter, savedIds, searchQuery, activeFilters, maxTime, priceCategory, onlyVerified, dietLabelOf, user]);
 
-  // Reset pagination ke halaman pertama tiap kali kriteria filter berubah, agar
-  // user tidak "nyangkut" di posisi muat-banyak setelah memfilter. Pola adjust-
-  // state-during-render (lint-safe), sama seperti recoverySynced di AuthPage.
-  const filterSig = `${searchQuery}|${activeFilters.join(',')}|${maxTime}|${priceCategory}|${onlyVerified}`;
+  // Sort recipes based on sortBy selector ('newest' vs 'popular')
+  const sortedRecipes = useMemo(() => {
+    return [...filteredRecipes].sort((a, b) => {
+      if (sortBy === 'popular') {
+        const likesA = a.likesCount ?? 0;
+        const likesB = b.likesCount ?? 0;
+        if (likesB !== likesA) return likesB - likesA;
+      }
+      const timeA = a.createdAt ? new Date(a.createdAt).getTime() : a.id;
+      const timeB = b.createdAt ? new Date(b.createdAt).getTime() : b.id;
+      return timeB - timeA;
+    });
+  }, [filteredRecipes, sortBy]);
+
+  // Reset pagination ke halaman pertama tiap kali kriteria filter berubah
+  const filterSig = `${activeTab}|${sortBy}|${searchQuery}|${activeFilters.join(',')}|${maxTime}|${priceCategory}|${onlyVerified}`;
   const [lastFilterSig, setLastFilterSig] = useState(filterSig);
   if (filterSig !== lastFilterSig) {
     setLastFilterSig(filterSig);
     setVisibleCount(RECIPES_PER_PAGE);
   }
 
-  const visibleRecipes = filteredRecipes.slice(0, visibleCount);
-  const hasMore = visibleCount < filteredRecipes.length;
+  const visibleRecipes = sortedRecipes.slice(0, visibleCount);
+  const hasMore = visibleCount < sortedRecipes.length;
 
   // Handle confirming "Add to Plan"
   const handleConfirmAddToPlan = () => {
@@ -300,99 +424,120 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
           Inspirasi Masakan Hari Ini
         </h2>
 
-        {/* Search Input */}
-        <div className="max-w-2xl mx-auto relative group mb-4">
-          <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-xl group-focus-within:text-primary transition-colors">
-            search
-          </span>
-          <input
-            id="catalog-search-input"
-            type="search"
-            inputMode="search"
-            enterKeyHint="search"
-            autoComplete="off"
-            className="w-full pl-11 pr-6 py-2.5 rounded-full border border-outline-variant bg-white focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary shadow-sm transition-all text-base md:text-sm font-medium"
-            placeholder="Cari resep sehat untuk keluarga..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
+        {/* Unified Search & Control Bar */}
+        <div className="max-w-4xl mx-auto space-y-4 mb-6">
+          {/* Row 1: Search Input + Sort Selector + Filter Buttons */}
+          <div className="flex flex-col sm:flex-row items-center gap-2.5">
+            {/* Search Input */}
+            <div className="relative flex-1 w-full group">
+              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant text-xl group-focus-within:text-primary transition-colors">
+                search
+              </span>
+              <input
+                id="catalog-search-input"
+                type="search"
+                inputMode="search"
+                enterKeyHint="search"
+                autoComplete="off"
+                className="w-full pl-11 pr-8 py-2.5 rounded-full border border-outline-variant bg-white focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-xs transition-all text-sm font-medium"
+                placeholder="Cari resep atau bahan masakan..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
+                  aria-label="Hapus pencarian"
+                >
+                  <span className="material-symbols-outlined text-lg" aria-hidden="true">close</span>
+                </button>
+              )}
+            </div>
+
+            {/* Sort Selector & Extra Controls */}
+            <div className="flex items-center gap-2 w-full sm:w-auto shrink-0 justify-between sm:justify-end">
+              {/* Sort Selector */}
+              <div className="flex items-center gap-1.5 bg-white border border-outline-variant rounded-full px-3.5 py-2 shadow-xs">
+                <span className="material-symbols-outlined text-base text-primary">sort</span>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value)}
+                  className="bg-transparent text-xs font-bold text-on-surface focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="newest">Terbaru</option>
+                  <option value="popular">Paling Populer</option>
+                </select>
+              </div>
+
+              {/* Toggle Advanced Filters Button */}
+              <button
+                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                className={`px-3.5 py-2 rounded-full font-bold text-xs border transition-all flex items-center gap-1 cursor-pointer shadow-xs ${
+                  showAdvancedFilters
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/20'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">tune</span>
+                Filter
+              </button>
+
+              {/* Toggle Verified Only */}
+              <button
+                onClick={() => setOnlyVerified((v) => !v)}
+                aria-pressed={onlyVerified}
+                className={`px-3.5 py-2 rounded-full font-bold text-xs border transition-all cursor-pointer flex items-center gap-1 shadow-xs ${
+                  onlyVerified
+                    ? 'bg-primary text-white border-primary'
+                    : 'bg-white text-primary border-outline-variant hover:bg-primary/5'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">verified</span>
+                Verified
+              </button>
+
+              {(searchQuery || activeFilters.length > 0 || maxTime < 120 || priceCategory !== 'Semua' || onlyVerified) && (
+                <button
+                  onClick={handleResetFilters}
+                  className="p-2 text-xs font-bold text-error hover:bg-error/10 rounded-full transition-colors flex items-center justify-center cursor-pointer"
+                  title="Atur Ulang Filter"
+                >
+                  <span className="material-symbols-outlined text-base">restart_alt</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Chip preferensi diet — dinamis dari diet_tags */}
+          <div id="catalog-filter-chips" className="flex flex-wrap justify-center items-center gap-2 pt-1">
+            {dietSample.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => handleToggleFilter(opt.value)}
+                className={`inline-flex items-center justify-center px-4 py-1.5 rounded-full font-semibold text-xs border transition-all cursor-pointer ${
+                  activeFilters.includes(opt.value)
+                    ? 'bg-primary text-white border-primary shadow-xs'
+                    : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
             <button
-              onClick={() => setSearchQuery('')}
-              className="absolute right-6 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface transition-colors"
-              aria-label="Hapus pencarian"
+              type="button"
+              onClick={reshuffleDiet}
+              className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-dashed border-primary/50 text-primary hover:bg-primary/5 active:scale-95 transition cursor-pointer"
             >
-              <span className="material-symbols-outlined text-lg" aria-hidden="true">close</span>
+              <span className="material-symbols-outlined text-base">casino</span>
+              Lainnya
             </button>
-          )}
-        </div>
-
-        {/* Chip preferensi diet — dinamis dari diet_tags (sama dgn Generate step 2),
-            pra-pilih dari preferensi tersimpan user. */}
-        <div id="catalog-filter-chips" className="flex flex-wrap justify-center items-center gap-3">
-          {dietSample.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => handleToggleFilter(opt.value)}
-              className={`inline-flex items-center justify-center min-h-[44px] px-6 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
-                activeFilters.includes(opt.value)
-                  ? 'bg-primary text-white border-primary shadow-sm'
-                  : 'bg-surface-cream/50 text-primary border-outline-variant hover:bg-primary-container hover:text-white'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={reshuffleDiet}
-            className="inline-flex items-center justify-center min-h-[44px] gap-1.5 px-4 py-2 rounded-full text-xs md:text-sm font-semibold border border-dashed border-primary/50 text-primary hover:bg-primary/5 active:scale-95 transition cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-[18px]">casino</span>
-            Pilihan lain
-          </button>
-
-          {/* Toggle Advanced Filters Button */}
-          <button
-            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-            className={`min-h-[44px] px-4 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              showAdvancedFilters
-                ? 'bg-primary text-white border-primary'
-                : 'bg-white text-on-surface-variant border-outline-variant hover:bg-secondary-container/20'
-            }`}
-          >
-            <span className="material-symbols-outlined text-lg">tune</span>
-            Filter
-          </button>
-
-          {/* Toggle "Hanya terverifikasi" — badge ✓ resep yang sudah dicek admin */}
-          <button
-            onClick={() => setOnlyVerified((v) => !v)}
-            aria-pressed={onlyVerified}
-            className={`inline-flex items-center justify-center min-h-[44px] gap-1.5 px-4 py-2 rounded-full font-semibold text-xs md:text-sm border transition-all cursor-pointer ${
-              onlyVerified
-                ? 'bg-primary text-white border-primary shadow-sm'
-                : 'bg-white text-primary border-outline-variant hover:bg-primary/5'
-            }`}
-          >
-            <span className="material-symbols-outlined text-[18px]">verified</span>
-            Terverifikasi
-          </button>
-
-          {(searchQuery || activeFilters.length > 0 || maxTime < 120 || priceCategory !== 'Semua' || onlyVerified) && (
-            <button
-              onClick={handleResetFilters}
-              className="min-h-[44px] text-xs md:text-sm font-bold text-error hover:text-error/80 transition-colors flex items-center gap-1 cursor-pointer pl-2"
-            >
-              <span className="material-symbols-outlined text-base">restart_alt</span>
-              Atur Ulang
-            </button>
-          )}
+          </div>
         </div>
 
         {/* Sliding Panel / Advanced Filters Section */}
         {showAdvancedFilters && (
-          <div className="max-w-2xl mx-auto mt-6 p-6 bg-white border border-outline-variant rounded-3xl shadow-sm animate-fade-in text-left">
+          <div className="max-w-2xl mx-auto mb-6 p-6 bg-white border border-outline-variant rounded-3xl shadow-sm animate-fade-in text-left">
             <div className="flex items-center justify-between mb-4">
               <h4 className="font-bold text-primary flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-xl">tune</span>
@@ -407,8 +552,7 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Max Cooking Time Filter — chip rentang bertingkat agar mudah dipilih dengan jari
-                  (slider lama butuh presisi tinggi di layar sentuh). value 120 = tanpa batas. */}
+              {/* Max Cooking Time Filter */}
               <div className="space-y-3">
                 <div className="text-xs font-semibold text-on-surface-variant">
                   Waktu Masak Maksimal
@@ -466,6 +610,91 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
 
       {/* Catalog Grid */}
       <section className="px-4 max-w-container-max mx-auto">
+        {/* Catalog Tab Navigation Bar & Sorting Selector */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-6 pb-3 border-b border-outline-variant/50">
+          {/* Tabs: Semua | Komunitas | Tersimpan | Resep Saya */}
+          <div className="flex bg-surface-container-high p-1 rounded-full border border-outline-variant/50 gap-1 w-full sm:w-auto overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('semua')}
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-full font-bold text-xs sm:text-sm transition-all cursor-pointer whitespace-nowrap ${
+                activeTab === 'semua'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              Semua
+            </button>
+            <button
+              onClick={() => setActiveTab('komunitas')}
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-full font-bold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'komunitas'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-base">groups</span>
+              Komunitas
+            </button>
+            <button
+              onClick={() => setActiveTab('tersimpan')}
+              className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-full font-bold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'tersimpan'
+                  ? 'bg-primary text-white shadow-xs'
+                  : 'text-on-surface-variant hover:text-primary'
+              }`}
+            >
+              <span className="material-symbols-outlined text-base">bookmark</span>
+              Tersimpan ({savedIds.size})
+            </button>
+            {user && (
+              <button
+                onClick={() => setActiveTab('resep-saya')}
+                className={`flex-1 sm:flex-initial px-3.5 py-1.5 rounded-full font-bold text-xs sm:text-sm transition-all cursor-pointer flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                  activeTab === 'resep-saya'
+                    ? 'bg-primary text-white shadow-xs'
+                    : 'text-on-surface-variant hover:text-primary'
+                }`}
+              >
+                <span className="material-symbols-outlined text-base">edit_note</span>
+                Resep Saya
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sub-Filter Bar for Resep Saya */}
+        {activeTab === 'resep-saya' && user && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-5 p-3 bg-surface-cream/40 rounded-2xl border border-outline-variant/40">
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto">
+              {[
+                { id: 'semua', label: 'Semua Resep', count: recipes.filter((r) => r.userId === user.id).length },
+                { id: 'publik', label: 'Publik', count: recipes.filter((r) => r.userId === user.id && r.isPublic).length },
+                { id: 'draf', label: 'Draf Pribadi', count: recipes.filter((r) => r.userId === user.id && !r.isPublic).length },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setMyRecipesFilter(tab.id)}
+                  className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1 ${
+                    myRecipesFilter === tab.id
+                      ? 'bg-primary text-white shadow-xs'
+                      : 'bg-white text-on-surface-variant border border-outline-variant hover:bg-primary/5'
+                  }`}
+                >
+                  {tab.label} <span className="opacity-80">({tab.count})</span>
+                </button>
+              ))}
+            </div>
+
+            <Link
+              to="/recipes/create"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white font-bold text-xs hover:bg-primary-container transition-all shadow-xs shrink-0 cursor-pointer w-full sm:w-auto justify-center"
+            >
+              <span className="material-symbols-outlined text-base">add</span>
+              + Buat Resep Baru
+            </Link>
+          </div>
+        )}
+
         {loading ? (
           <CatalogGridSkeleton />
         ) : loadError ? (
@@ -474,21 +703,35 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
             <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Gagal Memuat Resep</h3>
             <p className="text-on-surface-variant text-sm max-w-md mx-auto">{loadError}</p>
           </div>
-        ) : filteredRecipes.length === 0 ? (
+        ) : sortedRecipes.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-3xl border border-outline-variant p-8">
             <span className="material-symbols-outlined text-5xl md:text-6xl text-outline-variant mb-4">
-              sentiment_dissatisfied
+              {activeTab === 'resep-saya' ? 'menu_book' : 'sentiment_dissatisfied'}
             </span>
-            <h3 className="font-headline-md text-headline-md text-on-surface mb-2">Resep Tidak Ditemukan</h3>
+            <h3 className="font-headline-md text-headline-md text-on-surface mb-2">
+              {activeTab === 'resep-saya' ? 'Belum Ada Resep Kreasi' : 'Resep Tidak Ditemukan'}
+            </h3>
             <p className="text-on-surface-variant text-sm max-w-md mx-auto">
-              Maaf, kami tidak dapat menemukan resep yang sesuai dengan kriteria pencarian dan filtermu. Silakan coba atur ulang filter.
+              {activeTab === 'resep-saya'
+                ? 'Anda belum pernah membuat resep kreasi sendiri. Yuk ciptakan resep andalan Anda sekarang!'
+                : 'Maaf, kami tidak dapat menemukan resep yang sesuai dengan kriteria pencarian dan filtermu. Silakan coba atur ulang filter.'}
             </p>
-            <button
-              onClick={handleResetFilters}
-              className="mt-6 px-6 py-2.5 bg-primary text-white font-bold rounded-full hover:bg-primary-container transition-all cursor-pointer shadow-md"
-            >
-              Atur Ulang Filter
-            </button>
+            {activeTab === 'resep-saya' ? (
+              <Link
+                to="/recipes/create"
+                className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-bold rounded-full hover:bg-primary-container transition-all cursor-pointer shadow-md"
+              >
+                <span className="material-symbols-outlined text-lg">add</span>
+                Buat Resep Baru
+              </Link>
+            ) : (
+              <button
+                onClick={handleResetFilters}
+                className="mt-6 px-6 py-2.5 bg-primary text-white font-bold rounded-full hover:bg-primary-container transition-all cursor-pointer shadow-md"
+              >
+                Atur Ulang Filter
+              </button>
+            )}
           </div>
         ) : (
           <div id="catalog-recipe-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -508,7 +751,7 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
                 }}
               >
                 {/* Image Section */}
-                <div className="relative h-24 sm:h-32 md:h-36 overflow-hidden">
+                <div className="relative h-28 sm:h-32 md:h-36 overflow-hidden">
                   <img
                     src={recipe.imageUrl}
                     alt={recipe.title}
@@ -516,42 +759,121 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
                     onError={(e) => { e.currentTarget.src = '/img/recipe-placeholder.svg'; }}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                   />
-                  {recipe.badges?.[0] && (
-                    <div className="absolute top-2 left-2">
-                      <span className="px-2 py-0.5 rounded-full bg-white/95 text-primary font-bold text-[9px] shadow-sm tracking-wide">
-                        {recipe.badges[0]}
+
+                  {/* Status Badge */}
+                  <div className="absolute top-2 left-2 flex items-center gap-1">
+                    {activeTab === 'resep-saya' ? (
+                      <span className={`px-2 py-0.5 rounded-full font-extrabold text-[9px] uppercase tracking-wide shadow-xs flex items-center gap-0.5 text-white ${
+                        recipe.isPublic ? 'bg-emerald-600' : 'bg-amber-600'
+                      }`}>
+                        <span className="material-symbols-outlined text-[11px]">{recipe.isPublic ? 'public' : 'lock'}</span>
+                        {recipe.isPublic ? 'Publik' : 'Draf'}
                       </span>
-                    </div>
-                  )}
-                  {recipe.isVerified && (
-                    <div className="absolute top-2 right-2" title="Terverifikasi admin">
-                      <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center shadow-sm">
-                        <span className="material-symbols-outlined text-[15px]">verified</span>
+                    ) : !recipe.userId ? (
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-600/90 text-white font-bold text-[9px] shadow-xs tracking-wide flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[11px]">verified</span>
+                        Official
                       </span>
-                    </div>
-                  )}
+                    ) : recipe.isVerified ? (
+                      <span className="px-2 py-0.5 rounded-full bg-sky-500/90 text-white font-bold text-[9px] shadow-xs tracking-wide flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[11px]">verified</span>
+                        Terverifikasi
+                      </span>
+                    ) : null}
+                  </div>
+
+                  {/* Interactive Like Pill Button */}
+                  <button
+                    onClick={(e) => handleToggleLike(recipe, e)}
+                    className={`absolute top-2 right-2 px-2 py-0.5 rounded-full backdrop-blur-md border text-[10px] font-extrabold flex items-center gap-1 shadow-xs transition-transform active:scale-90 cursor-pointer ${
+                      likedIds.has(recipe.id)
+                        ? 'bg-rose-500 text-white border-rose-400'
+                        : 'bg-black/40 text-white border-white/30 hover:bg-black/60'
+                    }`}
+                    title={likedIds.has(recipe.id) ? 'Batal Suka' : 'Sukai Resep'}
+                  >
+                    <span className="material-symbols-outlined text-[12px]">favorite</span>
+                    <span>{recipe.likesCount ?? 0}</span>
+                  </button>
                 </div>
 
                 {/* Content Section */}
                 <div className="p-2.5 md:p-3 flex-1 flex flex-col justify-between">
-                  <div className="flex justify-between items-start gap-1.5 mb-1.5">
-                    <h3 className="text-xs md:text-sm font-bold text-on-surface hover:text-primary transition-colors leading-tight line-clamp-2 flex-1">
-                      {recipe.title}
-                    </h3>
+                  <div>
+                    <div className="flex justify-between items-start gap-1.5 mb-1">
+                      <h3 className="text-xs md:text-sm font-bold text-on-surface hover:text-primary transition-colors leading-tight line-clamp-2 flex-1">
+                        {recipe.title}
+                      </h3>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedRecipeForPlan(recipe);
+                        }}
+                        className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xs shrink-0 cursor-pointer"
+                        title="Tambah ke Rencana Mingguan"
+                        aria-label="Tambah ke Rencana Mingguan"
+                      >
+                        <span className="material-symbols-outlined text-sm" aria-hidden="true">add</span>
+                      </button>
+                    </div>
+
+                    {/* Author Attribution Line */}
+                    {recipe.userId && (
+                      <p className="text-[11px] font-semibold text-primary/80 mb-1.5 truncate flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[12px]">person</span>
+                        Oleh @{recipe.authorName || 'Pengguna'}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Card Bottom Meta Bar */}
+                  <div className="flex items-center justify-between pt-1.5 border-t border-outline-variant/30 text-[11px] text-on-surface-variant font-medium">
+                    <span className="truncate">
+                      {recipe.readyInMinutes ? `${recipe.readyInMinutes} mnt` : `${recipe.baseServings || 2} porsi`}
+                    </span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedRecipeForPlan(recipe);
+                        handleToggleSaved(recipe);
                       }}
-                      className="w-7 h-7 rounded-full bg-primary text-white flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-sm shrink-0 cursor-pointer"
-                      title="Tambah ke Rencana Mingguan"
-                      aria-label="Tambah ke Rencana Mingguan"
+                      className={`transition-all cursor-pointer flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                        savedIds.has(recipe.id)
+                          ? 'bg-primary text-white shadow-xs'
+                          : 'text-on-surface-variant hover:text-primary hover:bg-primary/10 border border-outline-variant/40'
+                      }`}
+                      title={savedIds.has(recipe.id) ? 'Resep Tersimpan' : 'Simpan Resep'}
                     >
-                      <span className="material-symbols-outlined text-sm" aria-hidden="true">add</span>
+                      <span className="material-symbols-outlined text-sm">
+                        {savedIds.has(recipe.id) ? 'bookmark' : 'bookmark_border'}
+                      </span>
+                      <span>{savedIds.has(recipe.id) ? 'Tersimpan' : 'Simpan'}</span>
                     </button>
                   </div>
 
-                  {/* Waktu masak & kalori disembunyikan sementara */}
+                  {activeTab === 'resep-saya' && (
+                    <div className="flex items-center gap-1.5 pt-2 border-t border-outline-variant/30 mt-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/recipes/${recipe.id}/edit`);
+                        }}
+                        className="flex-1 py-1 px-2 rounded-full border border-primary text-primary font-bold text-[11px] hover:bg-primary/5 transition-colors cursor-pointer flex items-center justify-center gap-0.5"
+                      >
+                        <span className="material-symbols-outlined text-xs">edit</span>
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(recipe);
+                        }}
+                        className="py-1 px-2 rounded-full border border-error/40 text-error font-bold text-[11px] hover:bg-error/10 transition-colors cursor-pointer flex items-center justify-center gap-0.5"
+                        title="Hapus Resep"
+                      >
+                        <span className="material-symbols-outlined text-xs">delete</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -568,7 +890,7 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
               Muat Lebih Banyak Resep
             </button>
             <p className="mt-3 text-xs text-on-surface-variant">
-              Menampilkan {visibleRecipes.length} dari {filteredRecipes.length} resep
+              Menampilkan {visibleRecipes.length} dari {sortedRecipes.length} resep
             </p>
           </div>
         )}
@@ -580,6 +902,8 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
           recipe={selectedRecipeForDetail}
           isSaved={savedIds.has(selectedRecipeForDetail.id)}
           onToggleSave={handleToggleSaved}
+          isLiked={likedIds.has(selectedRecipeForDetail.id)}
+          onToggleLike={handleToggleLike}
           onClose={() => setSelectedRecipeForDetail(null)}
           showAddToPlan={true}
           onAddToPlan={(recipe) => {
@@ -704,6 +1028,59 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
             </div>
         </ModalSheet>
       )}
+
+      {/* Delete Confirmation Modal for User Recipes */}
+      <Modal isOpen={Boolean(deleteTarget)} onClose={() => !deleting && setDeleteTarget(null)}>
+        <div className="w-full max-w-sm bg-canvas-white rounded-3xl p-6 shadow-xl text-center space-y-4">
+          <div className="w-12 h-12 rounded-full bg-error/10 text-error mx-auto flex items-center justify-center">
+            <span className="material-symbols-outlined text-2xl">delete_forever</span>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-bold text-on-surface">Hapus Resep ini?</h3>
+            <p className="text-xs text-on-surface-variant mt-1 leading-relaxed">
+              Resep <strong className="text-on-surface">"{deleteTarget?.title}"</strong> akan dihapus secara permanen dari CookPlan.
+            </p>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 pt-2">
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={() => setDeleteTarget(null)}
+              className="flex-1 py-2.5 rounded-full border border-outline-variant text-on-surface-variant font-bold text-xs hover:bg-surface-container transition-colors cursor-pointer disabled:opacity-50"
+            >
+              Batal
+            </button>
+            <button
+              type="button"
+              disabled={deleting}
+              onClick={handleDeleteConfirm}
+              className="flex-1 py-2.5 rounded-full bg-error text-white font-bold text-xs hover:bg-error/90 transition-colors shadow-sm cursor-pointer disabled:opacity-60 flex items-center justify-center gap-1"
+            >
+              {deleting ? (
+                <>
+                  <span className="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+                  Menghapus...
+                </>
+              ) : (
+                'Ya, Hapus'
+              )}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Floating Action Button (FAB) "+ Buat Resep" */}
+      <Link
+        to="/recipes/create"
+        className="fixed bottom-20 md:bottom-8 right-6 z-30 inline-flex items-center gap-2 px-5 py-3.5 rounded-full bg-primary text-white font-extrabold text-sm shadow-xl hover:bg-primary-container hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20"
+        title="Buat Resep Baru"
+        aria-label="Buat Resep Baru"
+      >
+        <span className="material-symbols-outlined text-xl">add</span>
+        <span>Buat Resep</span>
+      </Link>
     </div>
   );
 }

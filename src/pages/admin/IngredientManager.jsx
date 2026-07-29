@@ -26,12 +26,20 @@ export function IngredientManager() {
   const { showToast } = usePlan();
 
   const [allowed, setAllowed] = useState(null);
+  const [activeTab, setActiveTab] = useState('master'); // 'master' | 'unlinked'
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [onlyUnpriced, setOnlyUnpriced] = useState(false);
   const [onlyStaple, setOnlyStaple] = useState(false);
   const [category, setCategory] = useState(''); // '' = semua, '__none' = tanpa kategori
+
+  // State untuk Antrean Bahan Bebas (Unlinked Queue)
+  const [unlinkedItems, setUnlinkedItems] = useState([]);
+  const [loadingUnlinked, setLoadingUnlinked] = useState(false);
+  const [unlinkedQuery, setUnlinkedQuery] = useState('');
+  const [selectedMasters, setSelectedMasters] = useState({});
+  const [linkingName, setLinkingName] = useState(null);
 
   const [editing, setEditing] = useState(null); // ingredient camelCase | null
   const [overrides, setOverrides] = useState([]);
@@ -42,12 +50,19 @@ export function IngredientManager() {
 
   const refresh = useCallback(async () => {
     setLoading(true);
+    setLoadingUnlinked(true);
     try {
-      setItems(await ingredientService.listIngredients());
+      const [mList, uList] = await Promise.all([
+        ingredientService.listIngredients(),
+        ingredientService.getUnlinkedIngredients(),
+      ]);
+      setItems(mList);
+      setUnlinkedItems(uList);
     } catch (e) {
       showToast(e.message, { variant: 'error' });
     } finally {
       setLoading(false);
+      setLoadingUnlinked(false);
     }
   }, [showToast]);
 
@@ -71,7 +86,38 @@ export function IngredientManager() {
     );
   }, [items, query, onlyUnpriced, onlyStaple, category]);
 
+  const filteredUnlinked = useMemo(() => {
+    const q = unlinkedQuery.trim().toLowerCase();
+    return unlinkedItems.filter(
+      (item) =>
+        !q ||
+        item.name.toLowerCase().includes(q) ||
+        item.sampleRecipeTitles.some((t) => t.toLowerCase().includes(q))
+    );
+  }, [unlinkedItems, unlinkedQuery]);
+
   const pricedCount = useMemo(() => items.filter((i) => i.pricePerBase != null).length, [items]);
+
+  const handleLink = async (unlinkedName) => {
+    const targetId = selectedMasters[unlinkedName];
+    if (!targetId || linkingName) return;
+    setLinkingName(unlinkedName);
+    try {
+      await ingredientService.linkUnlinkedIngredient(unlinkedName, targetId);
+      const masterObj = items.find((i) => i.id === targetId);
+      showToast(`Berhasil menghubungkan "${unlinkedName}" ke "${masterObj?.name || 'master'}".`);
+      setSelectedMasters((prev) => {
+        const next = { ...prev };
+        delete next[unlinkedName];
+        return next;
+      });
+      await refresh();
+    } catch (e) {
+      showToast(e.message, { variant: 'error' });
+    } finally {
+      setLinkingName(null);
+    }
+  };
 
   const openEdit = async (ing) => {
     setEditing({ ...ing });
@@ -207,60 +253,186 @@ export function IngredientManager() {
           <span className="material-symbols-outlined text-3xl">inventory_2</span>
           Master Bahan
         </h1>
-        <button onClick={openCreate} className="px-4 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer inline-flex items-center gap-1.5 shrink-0">
-          <span className="material-symbols-outlined text-[20px]">add</span> Tambah
+        {activeTab === 'master' && (
+          <button onClick={openCreate} className="px-4 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer inline-flex items-center gap-1.5 shrink-0">
+            <span className="material-symbols-outlined text-[20px]">add</span> Tambah
+          </button>
+        )}
+      </div>
+
+      {/* Navigasi Tab */}
+      <div className="flex border-b border-outline-variant gap-4">
+        <button
+          onClick={() => setActiveTab('master')}
+          className={`pb-3 font-semibold text-sm cursor-pointer border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'master'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">inventory_2</span>
+          Master Bahan ({items.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('unlinked')}
+          className={`pb-3 font-semibold text-sm cursor-pointer border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === 'unlinked'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-on-surface-variant hover:text-on-surface'
+          }`}
+        >
+          <span className="material-symbols-outlined text-[20px]">link_off</span>
+          Antrean Bahan Bebas Pengguna
+          {unlinkedItems.length > 0 && (
+            <span className="rounded-full bg-error/10 text-error text-xs font-bold px-2 py-0.5">
+              {unlinkedItems.length}
+            </span>
+          )}
         </button>
       </div>
 
-      <p className="text-xs text-on-surface-variant">
-        {pricedCount}/{items.length} bahan sudah berharga. Ubah harga di sini → biaya bahan & total resep ikut otomatis di semua resep.
-      </p>
+      {activeTab === 'master' && (
+        <>
+          <p className="text-xs text-on-surface-variant">
+            {pricedCount}/{items.length} bahan sudah berharga. Ubah harga di sini → biaya bahan & total resep ikut otomatis di semua resep.
+          </p>
 
-      <div className="flex flex-wrap gap-2 items-center">
-        <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari bahan…"
-          className="flex-1 min-w-[10rem] px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
-        <select value={category} onChange={(e) => setCategory(e.target.value)} title="Filter kategori"
-          className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
-          <option value="">Semua kategori</option>
-          {CATEGORIES.filter((c) => c.value).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-          <option value="__none">Tanpa kategori</option>
-        </select>
-        <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
-          <input type="checkbox" checked={onlyUnpriced} onChange={(e) => setOnlyUnpriced(e.target.checked)} /> Belum berharga
-        </label>
-        <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
-          <input type="checkbox" checked={onlyStaple} onChange={(e) => setOnlyStaple(e.target.checked)} /> Bahan pokok
-        </label>
-      </div>
-      {(query || category || onlyUnpriced || onlyStaple) && (
-        <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setOnlyUnpriced(false); setOnlyStaple(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari bahan…"
+              className="flex-1 min-w-[10rem] px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+            <select value={category} onChange={(e) => setCategory(e.target.value)} title="Filter kategori"
+              className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
+              <option value="">Semua kategori</option>
+              {CATEGORIES.filter((c) => c.value).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+              <option value="__none">Tanpa kategori</option>
+            </select>
+            <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
+              <input type="checkbox" checked={onlyUnpriced} onChange={(e) => setOnlyUnpriced(e.target.checked)} /> Belum berharga
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
+              <input type="checkbox" checked={onlyStaple} onChange={(e) => setOnlyStaple(e.target.checked)} /> Bahan pokok
+            </label>
+          </div>
+          {(query || category || onlyUnpriced || onlyStaple) && (
+            <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setOnlyUnpriced(false); setOnlyStaple(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
+          )}
+
+          {loading ? (
+            <div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span></div>
+          ) : (
+            <div className="space-y-2">
+              {filtered.length === 0 && <p className="text-center text-sm text-on-surface-variant py-8">Tidak ada bahan.</p>}
+              {filtered.slice(0, 300).map((ing) => (
+                <button key={ing.id} onClick={() => openEdit(ing)}
+                  className="w-full text-left rounded-xl border border-outline-variant p-3 flex items-center justify-between gap-3 hover:bg-surface-container-low cursor-pointer">
+                  <div className="min-w-0">
+                    <span className="font-semibold text-on-surface truncate flex items-center gap-1.5">
+                      <span className="truncate">{ing.name}</span>
+                      {ing.isStaple && (
+                        <span title="Bahan pokok dapur — tak masuk daftar belanja" className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[10px] font-bold px-1.5 py-0.5">
+                          <span className="material-symbols-outlined text-[12px]">home</span> pokok
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-xs text-on-surface-variant">{labelOf(CATEGORIES, ing.category)} · dasar {ing.baseUnit}</span>
+                  </div>
+                  <span className={`text-sm font-bold shrink-0 ${ing.pricePerBase == null ? 'text-error/70' : 'text-primary'}`}>
+                    {ing.pricePerBase == null ? 'belum berharga' : `Rp${formatNum(ing.pricePerBase)}/${ing.baseUnit}`}
+                  </span>
+                </button>
+              ))}
+              {filtered.length > 300 && <p className="text-center text-xs text-on-surface-variant py-2">Menampilkan 300 dari {filtered.length}. Persempit dengan pencarian.</p>}
+            </div>
+          )}
+        </>
       )}
 
-      {loading ? (
-        <div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span></div>
-      ) : (
-        <div className="space-y-2">
-          {filtered.length === 0 && <p className="text-center text-sm text-on-surface-variant py-8">Tidak ada bahan.</p>}
-          {filtered.slice(0, 300).map((ing) => (
-            <button key={ing.id} onClick={() => openEdit(ing)}
-              className="w-full text-left rounded-xl border border-outline-variant p-3 flex items-center justify-between gap-3 hover:bg-surface-container-low cursor-pointer">
-              <div className="min-w-0">
-                <span className="font-semibold text-on-surface truncate flex items-center gap-1.5">
-                  <span className="truncate">{ing.name}</span>
-                  {ing.isStaple && (
-                    <span title="Bahan pokok dapur — tak masuk daftar belanja" className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[10px] font-bold px-1.5 py-0.5">
-                      <span className="material-symbols-outlined text-[12px]">home</span> pokok
-                    </span>
-                  )}
-                </span>
-                <span className="text-xs text-on-surface-variant">{labelOf(CATEGORIES, ing.category)} · dasar {ing.baseUnit}</span>
-              </div>
-              <span className={`text-sm font-bold shrink-0 ${ing.pricePerBase == null ? 'text-error/70' : 'text-primary'}`}>
-                {ing.pricePerBase == null ? 'belum berharga' : `Rp${formatNum(ing.pricePerBase)}/${ing.baseUnit}`}
+      {activeTab === 'unlinked' && (
+        <div className="space-y-4">
+          <p className="text-xs text-on-surface-variant">
+            Daftar bahan manual yang di-input pengguna pada resep kreasi. Hubungkan ke master bahan sekali klik agar harga & daftar belanja terhitung otomatis.
+          </p>
+
+          <div className="flex items-center gap-2">
+            <input
+              value={unlinkedQuery}
+              onChange={(e) => setUnlinkedQuery(e.target.value)}
+              placeholder="Cari bahan bebas atau judul resep..."
+              className="flex-1 px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+            />
+            {unlinkedQuery && (
+              <button
+                onClick={() => setUnlinkedQuery('')}
+                className="text-xs text-primary font-semibold cursor-pointer"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+
+          {loadingUnlinked ? (
+            <div className="flex justify-center py-16">
+              <span className="material-symbols-outlined animate-spin text-3xl text-primary">
+                progress_activity
               </span>
-            </button>
-          ))}
-          {filtered.length > 300 && <p className="text-center text-xs text-on-surface-variant py-2">Menampilkan 300 dari {filtered.length}. Persempit dengan pencarian.</p>}
+            </div>
+          ) : filteredUnlinked.length === 0 ? (
+            <div className="text-center py-12 bg-surface-container-low rounded-2xl p-6 border border-outline-variant">
+              <span className="material-symbols-outlined text-4xl text-primary mb-2">check_circle</span>
+              <p className="text-sm font-semibold text-on-surface">Tidak ada antrean bahan bebas</p>
+              <p className="text-xs text-on-surface-variant mt-1">
+                Semua bahan resep kreasi pengguna sudah terhubung ke master bahan!
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredUnlinked.map((item) => (
+                <div
+                  key={item.name}
+                  className="rounded-2xl border border-outline-variant p-4 bg-white space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:gap-4 hover:shadow-sm transition-shadow"
+                >
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-bold text-on-surface text-base">{item.name}</span>
+                      <span className="rounded-full bg-primary/10 text-primary text-xs font-bold px-2.5 py-0.5">
+                        {item.count}x digunakan
+                      </span>
+                    </div>
+                    {item.sampleRecipeTitles.length > 0 && (
+                      <p className="text-xs text-on-surface-variant truncate">
+                        <span className="font-semibold">Resep:</span> {item.sampleRecipeTitles.join(', ')}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0 pt-2 md:pt-0 border-t md:border-t-0 border-outline-variant/40">
+                    <MasterIngredientCombobox
+                      items={items}
+                      value={selectedMasters[item.name] || null}
+                      onChange={(val) =>
+                        setSelectedMasters((prev) => ({ ...prev, [item.name]: val }))
+                      }
+                      disabled={linkingName === item.name}
+                    />
+                    <button
+                      onClick={() => handleLink(item.name)}
+                      disabled={!selectedMasters[item.name] || linkingName === item.name}
+                      className="px-4 py-2 bg-primary text-on-primary rounded-full font-semibold text-xs cursor-pointer hover:bg-primary/90 disabled:opacity-40 inline-flex items-center gap-1.5 shrink-0 transition-opacity"
+                    >
+                      {linkingName === item.name ? (
+                        <span className="material-symbols-outlined animate-spin text-[16px]">
+                          progress_activity
+                        </span>
+                      ) : (
+                        <span className="material-symbols-outlined text-[16px]">link</span>
+                      )}
+                      Hubungkan
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -433,6 +605,66 @@ export function IngredientManager() {
   );
 }
 
+function MasterIngredientCombobox({ items, value, onChange, disabled }) {
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(false);
+  const [prevValue, setPrevValue] = useState(value);
+
+  const selectedItem = useMemo(() => items.find((i) => i.id === value), [items, value]);
+
+  if (value !== prevValue) {
+    setPrevValue(value);
+    setQuery(selectedItem ? selectedItem.name : '');
+  }
+
+  const candidates = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return items.slice(0, 30);
+    return items.filter((i) => i.name.toLowerCase().includes(q)).slice(0, 30);
+  }, [items, query]);
+
+  return (
+    <div className="relative min-w-[180px] max-w-[240px]">
+      <input
+        type="text"
+        value={query}
+        disabled={disabled}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setIsOpen(true);
+          if (value) onChange(null);
+        }}
+        onFocus={() => setIsOpen(true)}
+        onBlur={() => setTimeout(() => setIsOpen(false), 200)}
+        placeholder="Pilih master bahan..."
+        className="w-full px-3 py-2 text-xs rounded-xl bg-white border border-outline-variant focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary disabled:opacity-50"
+      />
+      {isOpen && candidates.length > 0 && (
+        <ul className="absolute z-30 left-0 right-0 mt-1 max-h-48 overflow-y-auto rounded-xl border border-outline-variant bg-white shadow-lg text-xs divide-y divide-outline-variant/30">
+          {candidates.map((c) => (
+            <li
+              key={c.id}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                onChange(c.id);
+                setQuery(c.name);
+                setIsOpen(false);
+              }}
+              className="px-3 py-2 hover:bg-primary/10 cursor-pointer flex items-center justify-between gap-2"
+            >
+              <span className="font-medium text-on-surface truncate">{c.name}</span>
+              <span className="text-[10px] text-on-surface-variant shrink-0">
+                {c.pricePerBase == null ? 'belum berharga' : `Rp${formatNum(c.pricePerBase)}/${c.baseUnit}`}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+
 function labelOf(opts, value) {
   return opts.find((o) => o.value === (value ?? ''))?.label ?? '—';
 }
@@ -447,3 +679,4 @@ function Field({ label, children }) {
     </label>
   );
 }
+

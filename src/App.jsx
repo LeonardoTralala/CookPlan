@@ -35,6 +35,8 @@ const AdminOrders = lazy(() => import('./pages/admin/AdminOrders.jsx').then((m) 
 const AdminFeedback = lazy(() => import('./pages/admin/AdminFeedback.jsx').then((m) => ({ default: m.AdminFeedback })));
 const SharedPlanPage = lazy(() => import('./pages/SharedPlanPage.jsx').then((m) => ({ default: m.SharedPlanPage })));
 const SharedRecipePage = lazy(() => import('./pages/SharedRecipePage.jsx').then((m) => ({ default: m.SharedRecipePage })));
+const RecipeFormPage = lazy(() => import('./pages/RecipeFormPage.jsx'));
+const MyRecipesPage = lazy(() => import('./pages/MyRecipesPage.jsx'));
 
 // Routing penuh CookPlan. Membuka aplikasi (root "/") langsung mengarahkan ke
 // /generate; pengguna yang belum login akan dilempar ke /auth oleh
@@ -89,6 +91,9 @@ function App() {
               <Route path="/planner" element={<AppShell><PlannerPage /></AppShell>} />
               <Route path="/shopping" element={<AppShell><ShoppingPage /></AppShell>} />
               <Route path="/profile" element={<AppShell><UserProfile /></AppShell>} />
+              <Route path="/my-recipes" element={<AppShell><MyRecipesPage /></AppShell>} />
+              <Route path="/recipes/create" element={<AppShell><RecipeFormPage /></AppShell>} />
+              <Route path="/recipes/:id/edit" element={<AppShell><RecipeFormPage /></AppShell>} />
               <Route path="/admin" element={<AppShell><AdminLayout><AdminDashboard /></AdminLayout></AppShell>} />
               <Route path="/admin/ai" element={<AppShell><AdminLayout><AIProviders /></AdminLayout></AppShell>} />
               <Route path="/admin/recipes" element={<AppShell><AdminLayout><RecipeManager /></AdminLayout></AppShell>} />

@@ -129,14 +129,18 @@ Deno.serve(async (req) => {
   //    Catatan: filter dilakukan pada kolom `tags` (sumber kebenaran yang sama
   //    dengan chip katalog & diet_tags.value). Kolom `diet` lama deprecated.
   const RECIPE_COLS =
-    "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings";
+    "id, title, calories, price_idr, ready_in_minutes, difficulty, cuisine, tags, badges, ingredients_text, base_servings, author_name, is_public, user_id";
   const RECIPE_CAP = 42;
 
   //    Filter preferensi dilakukan di memori (pool aktif kecil, ~ratusan resep)
   //    memakai filterRecipesByDiet — semantik UNION/OR antar chip, sama persis
   //    dengan filter katalog. Ini menangani slug yang BUKAN tag literal
   //    ('tinggi-protein', 'cepat', 'hemat') yang tidak bisa dijaring overlaps().
-  const { data: allActive } = await admin.from("recipes").select(RECIPE_COLS).eq("is_active", true);
+  const { data: allActive } = await admin
+    .from("recipes")
+    .select(RECIPE_COLS)
+    .eq("is_active", true)
+    .or("user_id.is.null,is_public.eq.true");
   let pool = filterRecipesByDiet(allActive ?? [], input.diet);
   if (pool.length === 0) {
     return json({ error: "Bank resep kosong. Tambahkan resep dulu." }, 422);

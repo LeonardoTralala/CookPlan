@@ -19,6 +19,7 @@ import { FeedbackCard } from '../components/FeedbackCard.jsx';
 // Item navigasi Pengaturan. Dipakai bersama oleh sidebar (desktop) & drawer (mobile).
 const SETTINGS_NAV = [
   { id: 'personal', icon: 'person', label: 'Info Personal' },
+  { id: 'my-recipes', icon: 'skillet', label: 'Resep Saya' },
   { id: 'orders', icon: 'receipt_long', label: 'Riwayat Pesanan' },
   { id: 'addresses', icon: 'location_on', label: 'Alamat' },
   { id: 'preferences', icon: 'tune', label: 'Preferensi' },
@@ -467,6 +468,10 @@ function UserProfile() {
   const tabParam = searchParams.get('tab');
   const activeNav = SETTINGS_NAV.some((i) => i.id === tabParam) ? tabParam : 'saved';
   const setActiveNav = (id) => {
+    if (id === 'my-recipes') {
+      navigate('/my-recipes');
+      return;
+    }
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('tab', id);
