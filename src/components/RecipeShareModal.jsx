@@ -345,7 +345,8 @@ export function RecipeShareModal({ recipe, onClose }) {
     }
     ctx.restore();
 
-    // 6. Ingredients Highlights Bar (dengan Vektor Ikon Daun #60A5FA) - Digeser lebih ke bawah
+    // 6. Ingredients Highlights Bar (dengan Vektor Ikon Daun #60A5FA)
+    // 📌 LOKASI UBAH POSISI BAHAN UTAMA: ubah angka '+ 115' di bawah ini
     const ingY = pillsY + 115;
     ctx.save();
     drawLeafIcon(ctx, 75, ingY - 7, 24, "#60A5FA");
@@ -364,7 +365,8 @@ export function RecipeShareModal({ recipe, onClose }) {
     const nextYAfterIngredients = wrapCanvasText(ctx, ingText, 60, ingY + 40, 960, 38, 2);
     ctx.restore();
 
-    // 7. Langkah Memasak Teaser (2 Langkah Pertama) - Digeser lebih ke bawah
+    // 7. Langkah Memasak Teaser (Terpisah per Baris)
+    // 📌 LOKASI UBAH POSISI LANGKAH MEMASAK: ubah angka '+ 85' di bawah ini
     const stepsY = nextYAfterIngredients + 85;
     ctx.save();
     ctx.fillStyle = "#AFBAA8";
@@ -377,22 +379,19 @@ export function RecipeShareModal({ recipe, onClose }) {
     const step1Str = typeof step1 === "string" ? step1 : step1?.text || step1?.step;
     const step2Str = typeof step2 === "string" ? step2 : step2?.text || step2?.step;
 
-    let stepsCombined = "";
-    if (step1Str) stepsCombined += `1. ${step1Str}`;
-    if (step2Str) stepsCombined += `   2. ${step2Str}`;
-    if (!stepsCombined) stepsCombined = "1. Siapkan bahan dan bumbu pilihan...";
-
     ctx.fillStyle = "#F7FAF2";
     ctx.font = "500 24px 'Inter', sans-serif";
-    const nextYAfterSteps = wrapCanvasText(
-      ctx,
-      stepsCombined,
-      60,
-      stepsY + 40,
-      960,
-      36,
-      3
-    );
+
+    let nextYAfterSteps = stepsY + 40;
+    if (step1Str) {
+      nextYAfterSteps = wrapCanvasText(ctx, `1. ${step1Str}`, 60, nextYAfterSteps, 960, 34, 2);
+    }
+    if (step2Str) {
+      nextYAfterSteps = wrapCanvasText(ctx, `2. ${step2Str}`, 60, nextYAfterSteps + 24, 960, 34, 2);
+    }
+    if (!step1Str && !step2Str) {
+      nextYAfterSteps = wrapCanvasText(ctx, "1. Siapkan bahan dan bumbu pilihan...", 60, nextYAfterSteps, 960, 34, 2);
+    }
     ctx.restore();
 
     // 8. Bottom Card dengan QR Code + Teks CTA
