@@ -4,6 +4,7 @@ import { Logo } from "../components/Logo.jsx";
 import { Toast } from "../components/Toast.jsx";
 import { useAuth } from "../hooks/useAuth.js";
 import { usePlan } from "../hooks/usePlan.js";
+import { importSharedPlan } from "../services/planService.js";
 import { SESSION_EXPIRED_FLAG } from "../lib/session.js";
 import { trackSignUp, trackLogIn } from "../lib/posthog.js";
 
@@ -36,7 +37,7 @@ export default function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isFullUser, loading: authLoading, isRecovery, signUp, signIn, signInWithGoogle, resetPassword, updatePassword, clearRecovery } = useAuth();
-  const { showToast } = usePlan();
+  const { showToast, refreshPlan } = usePlan();
 
   // Halaman yang tadi dituju sebelum diarahkan ke login (dari ProtectedRoute).
   const redirectTo = location.state?.from || "/catalog";
@@ -70,13 +71,28 @@ export default function AuthPage() {
     setMode("update");
   }
 
-  // Sudah punya AKUN PENUH? Langsung arahkan ke aplikasi — kecuali sedang alur
-  // recovery. Tamu (sesi anonim) sengaja TIDAK diarahkan: mereka datang ke sini
-  // justru untuk daftar/masuk, jadi membiarkan halaman ini tampil (kalau tidak,
-  // /generate ↔ /auth saling lempar dan layar berkedip).
+  // Sudah punya AKUN PENUH? Langsung arahkan ke aplikasi — jika ada pending_import_token,
+  // jalankan impor rencana sebelum redirect ke /planner.
   useEffect(() => {
-    if (!authLoading && isFullUser && !isRecovery) navigate(redirectTo, { replace: true });
-  }, [authLoading, isFullUser, isRecovery, navigate, redirectTo]);
+    if (!authLoading && isFullUser && !isRecovery) {
+      const pendingToken = sessionStorage.getItem("pending_import_token");
+      if (pendingToken) {
+        sessionStorage.removeItem("pending_import_token");
+        importSharedPlan(pendingToken)
+          .then(async () => {
+            await refreshPlan();
+            showToast("Rencana makan mingguan berhasil diimpor ke jadwal kamu! 🎉");
+            navigate("/planner", { replace: true });
+          })
+          .catch((err) => {
+            showToast(err?.message || "Gagal mengimpor rencana yang dibagikan.", { variant: "error" });
+            navigate(redirectTo, { replace: true });
+          });
+      } else {
+        navigate(redirectTo, { replace: true });
+      }
+    }
+  }, [authLoading, isFullUser, isRecovery, navigate, redirectTo, showToast, refreshPlan]);
 
   // Konsumsi flag sesi-berakhir sekali (pesan sudah dibaca ke notice di atas).
   useEffect(() => {
@@ -152,7 +168,10 @@ export default function AuthPage() {
         return;
       }
       showToast("Akun berhasil dibuat 🎉");
-      navigate(redirectTo);
+      const hasPending = Boolean(sessionStorage.getItem("pending_import_token"));
+      if (!hasPending) {
+        navigate(redirectTo);
+      }
       return;
     }
 
@@ -163,7 +182,10 @@ export default function AuthPage() {
     if (err) return setError(friendlyError(err));
     trackLogIn('email');
     showToast("Berhasil masuk!");
-    navigate("/catalog");
+    const hasPending = Boolean(sessionStorage.getItem("pending_import_token"));
+    if (!hasPending) {
+      navigate(redirectTo);
+    }
   }
 
   async function handleGoogle() {

@@ -33,6 +33,7 @@ const PackageManager = lazy(() => import('./pages/admin/PackageManager.jsx').the
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx').then((m) => ({ default: m.AdminDashboard })));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders.jsx').then((m) => ({ default: m.AdminOrders })));
 const AdminFeedback = lazy(() => import('./pages/admin/AdminFeedback.jsx').then((m) => ({ default: m.AdminFeedback })));
+const SharedPlanPage = lazy(() => import('./pages/SharedPlanPage.jsx').then((m) => ({ default: m.SharedPlanPage })));
 
 // Routing penuh CookPlan. Membuka aplikasi (root "/") langsung mengarahkan ke
 // /generate; pengguna yang belum login akan dilempar ke /auth oleh
@@ -59,6 +60,7 @@ function App() {
           <Route path="/about" element={<TeamProfile onNavigate={handleNavigate} />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/share/plan/:shareToken" element={<SharedPlanPage />} />
 
           {/* Onboarding sekali: hanya akun penuh, TIDAK dibungkus OnboardingGate
               (mencegah redirect loop ke dirinya sendiri). */}
@@ -66,13 +68,14 @@ function App() {
             <Route path="/onboarding" element={<Onboarding />} />
           </Route>
 
-          {/* Bisa dicoba tamu (sesi anonim) — generate + lihat hasil, limit 2x.
+          {/* Bisa dicoba tamu (sesi anonim) — generate & catalog.
               OnboardingGate: user PENUH tanpa persona diarahkan ke /onboarding;
               tamu dilewati. */}
           <Route element={<ProtectedRoute allowAnonymous />}>
             <Route element={<OnboardingGate />}>
               <Route path="/generate" element={<AppShell><GeneratePlan /></AppShell>} />
               <Route path="/generate/:planId" element={<AppShell><GenerateResult /></AppShell>} />
+              <Route path="/catalog" element={<AppShell><CatalogPage /></AppShell>} />
             </Route>
           </Route>
 
@@ -81,7 +84,6 @@ function App() {
             <Route element={<OnboardingGate />}>
               <Route path="/order/:planId" element={<AppShell><OrderPage /></AppShell>} />
               <Route path="/order/sukses/:orderId" element={<AppShell><OrderSuccess /></AppShell>} />
-              <Route path="/catalog" element={<AppShell><CatalogPage /></AppShell>} />
               <Route path="/planner" element={<AppShell><PlannerPage /></AppShell>} />
               <Route path="/shopping" element={<AppShell><ShoppingPage /></AppShell>} />
               <Route path="/profile" element={<AppShell><UserProfile /></AppShell>} />

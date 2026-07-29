@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
+import { usePlan } from "../hooks/usePlan.js";
+import { importSharedPlan } from "../services/planService.js";
 
 // Halaman tujuan redirect setelah login OAuth (Google). Rute ini PUBLIK dan
 // sengaja TIDAK diproteksi: saat browser kembali dari Google, URL membawa
@@ -11,8 +13,8 @@ import { useAuth } from "../hooks/useAuth.js";
 // arahkan ke aplikasi.
 export default function AuthCallback() {
   const { loading, isFullUser } = useAuth();
-  // Batas waktu agar tidak memutar loader selamanya bila pertukaran kode gagal
-  // (mis. code verifier PKCE hilang). Setelah itu kembalikan ke /auth.
+  const { showToast, refreshPlan } = usePlan();
+  const navigate = useNavigate();
   const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
@@ -20,8 +22,26 @@ export default function AuthCallback() {
     return () => clearTimeout(t);
   }, []);
 
-  // Sesi penuh sudah terbentuk → masuk aplikasi.
-  if (!loading && isFullUser) return <Navigate to="/catalog" replace />;
+  useEffect(() => {
+    if (!loading && isFullUser) {
+      const pendingToken = sessionStorage.getItem("pending_import_token");
+      if (pendingToken) {
+        sessionStorage.removeItem("pending_import_token");
+        importSharedPlan(pendingToken)
+          .then(async () => {
+            await refreshPlan();
+            showToast("Rencana makan mingguan berhasil diimpor ke jadwal kamu! 🎉");
+            navigate("/planner", { replace: true });
+          })
+          .catch((err) => {
+            showToast(err?.message || "Gagal mengimpor rencana yang dibagikan.", { variant: "error" });
+            navigate("/catalog", { replace: true });
+          });
+      } else {
+        navigate("/catalog", { replace: true });
+      }
+    }
+  }, [loading, isFullUser, navigate, refreshPlan, showToast]);
 
   // Pertukaran kode tak kunjung menghasilkan sesi penuh → balik ke login.
   if (timedOut && !isFullUser) return <Navigate to="/auth" replace />;
