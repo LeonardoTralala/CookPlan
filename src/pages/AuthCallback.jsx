@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
+import { usePlan } from "../hooks/usePlan.js";
+import { getRecipeById } from "../services/recipeService.js";
+import { importSharedPlan, getCurrentPlan, setSlot, getCurrentWeekStart } from "../services/planService.js";
 
 // Halaman tujuan redirect setelah login OAuth (Google). Rute ini PUBLIK dan
 // sengaja TIDAK diproteksi: saat browser kembali dari Google, URL membawa
@@ -11,8 +14,8 @@ import { useAuth } from "../hooks/useAuth.js";
 // arahkan ke aplikasi.
 export default function AuthCallback() {
   const { loading, isFullUser } = useAuth();
-  // Batas waktu agar tidak memutar loader selamanya bila pertukaran kode gagal
-  // (mis. code verifier PKCE hilang). Setelah itu kembalikan ke /auth.
+  const { showToast, refreshPlan } = usePlan();
+  const navigate = useNavigate();
   const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
@@ -20,8 +23,52 @@ export default function AuthCallback() {
     return () => clearTimeout(t);
   }, []);
 
-  // Sesi penuh sudah terbentuk → masuk aplikasi.
-  if (!loading && isFullUser) return <Navigate to="/catalog" replace />;
+  useEffect(() => {
+    if (!loading && isFullUser) {
+      const pendingToken = sessionStorage.getItem("pending_import_token");
+      const pendingRecipeAction = sessionStorage.getItem("pending_recipe_action");
+
+      if (pendingToken) {
+        sessionStorage.removeItem("pending_import_token");
+        importSharedPlan(pendingToken)
+          .then(async () => {
+            await refreshPlan();
+            showToast("Rencana makan mingguan berhasil diimpor ke jadwal kamu! 🎉");
+            navigate("/planner", { replace: true });
+          })
+          .catch((err) => {
+            showToast(err?.message || "Gagal mengimpor rencana yang dibagikan.", { variant: "error" });
+            navigate("/catalog", { replace: true });
+          });
+      } else if (pendingRecipeAction) {
+        sessionStorage.removeItem("pending_recipe_action");
+        (async () => {
+          try {
+            const actionData = JSON.parse(pendingRecipeAction);
+            if (actionData?.type === "add_to_plan" && actionData?.recipeId) {
+              const recipe = await getRecipeById(actionData.recipeId);
+              if (recipe) {
+                const currentWeekKey = getCurrentWeekStart();
+                const { planId } = await getCurrentPlan(currentWeekKey);
+                const targetDay = actionData.day || "Senin";
+                const targetMeal = actionData.meal || "breakfast";
+                const targetServings = actionData.servings || recipe.baseServings || 2;
+                await setSlot(planId, recipe, targetDay, targetMeal, targetServings);
+                await refreshPlan(currentWeekKey);
+                showToast(`Resep ${recipe.title} berhasil ditambahkan ke jadwal ${targetDay} kamu! 🎉`, { variant: "success" });
+              }
+            }
+            navigate("/planner", { replace: true, state: { from: "/planner" } });
+          } catch (err) {
+            showToast(err?.message || "Gagal menambahkan resep ke jadwal.", { variant: "error" });
+            navigate("/catalog", { replace: true });
+          }
+        })();
+      } else {
+        navigate("/catalog", { replace: true });
+      }
+    }
+  }, [loading, isFullUser, navigate, refreshPlan, showToast]);
 
   // Pertukaran kode tak kunjung menghasilkan sesi penuh → balik ke login.
   if (timedOut && !isFullUser) return <Navigate to="/auth" replace />;

@@ -486,6 +486,26 @@ export function PlanProvider({ children }) {
     return count;
   }, [weeklyPlan]);
 
+  const refreshPlan = useCallback(async (ws = weekStart) => {
+    if (isAuthenticated) {
+      const { planId, plan } = await planService.getCurrentPlan(ws);
+      planIdRef.current = planId;
+      commitPlan(plan);
+    } else {
+      const local = loadLocalPlan(ws);
+      commitPlan(local);
+    }
+  }, [isAuthenticated, weekStart, commitPlan]);
+
+  const getShareToken = useCallback(async () => {
+    if (!isAuthenticated) throw new Error("Belum login.");
+    if (!planIdRef.current) {
+      const { planId } = await planService.getCurrentPlan(weekStart);
+      planIdRef.current = planId;
+    }
+    return await planService.getOrCreateShareToken(planIdRef.current);
+  }, [isAuthenticated, weekStart]);
+
   const value = useMemo(() => ({
     toast,
     showToast,
@@ -507,7 +527,9 @@ export function PlanProvider({ children }) {
     isCurrentWeek,
     goToWeek,
     goToCurrentWeek,
-  }), [toast, showToast, isInPlan, weeklyPlan, prepTasks, loading, setSlot, applySlots, removeSlot, toggleCookedStatus, addPrepTask, togglePrepTask, deletePrepTask, restoreSlot, clearAllSlots, plannedCount, weekStart, isCurrentWeek, goToWeek, goToCurrentWeek]);
+    getShareToken,
+    refreshPlan,
+  }), [toast, showToast, isInPlan, weeklyPlan, prepTasks, loading, setSlot, applySlots, removeSlot, toggleCookedStatus, addPrepTask, togglePrepTask, deletePrepTask, restoreSlot, clearAllSlots, plannedCount, weekStart, isCurrentWeek, goToWeek, goToCurrentWeek, getShareToken, refreshPlan]);
 
   return <PlanContext.Provider value={value}>{children}</PlanContext.Provider>;
 }

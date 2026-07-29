@@ -41,15 +41,21 @@ function entriesToPlanShape(entries) {
   return plan;
 }
 
+async function getAuthUser() {
+  const { data: userData } = await supabase.auth.getUser().catch(() => ({ data: null }));
+  if (userData?.user) return userData.user;
+  const { data: sessionData } = await supabase.auth.getSession().catch(() => ({ data: null }));
+  return sessionData?.session?.user ?? null;
+}
+
 // Ambil (atau buat) plan untuk satu minggu milik user yang sedang login.
 // `weekStart` = kunci minggu (YYYY-MM-DD), default minggu berjalan. Backend
 // (weekly_plans unik per user+week_start_date, RLS per-owner) sudah mendukung
 // banyak minggu — parameter ini yang membuka navigasi antar-minggu di UI.
 // Return { planId, plan } di mana plan = shape state frontend.
 export async function getCurrentPlan(weekStart = getCurrentWeekStart()) {
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (!user) throw new Error("Belum login.");
+  const user = await getAuthUser();
+  if (!user || user.is_anonymous) throw new Error("Silakan masuk atau daftar akun untuk menyimpan rencana ke jadwal kamu.");
 
   // cari plan minggu ini
   let { data: planRow, error } = await supabase
@@ -220,4 +226,92 @@ export async function deletePrepTask(taskId) {
   if (error) throw error;
 }
 
+// --- FITUR SHARE & IMPORT RENCANA MINGGUAN ----------------------------------
+
+// Mengambil (atau membuat) share_token unguessable untuk plan tertentu milik user
+export async function getOrCreateShareToken(planId) {
+  const user = await getAuthUser();
+  if (!user || user.is_anonymous) throw new Error("Silakan masuk atau daftar akun untuk membagikan rencana makan ini.");
+
+  const { data, error } = await supabase
+    .from("weekly_plans")
+    .select("share_token")
+    .eq("id", planId)
+    .single();
+  if (error) throw error;
+
+  if (data?.share_token) return data.share_token;
+
+  // Generate token acak jika belum ada
+  const newToken = Array.from(crypto.getRandomValues(new Uint8Array(8)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+
+  const { data: updated, error: updateErr } = await supabase
+    .from("weekly_plans")
+    .update({ share_token: newToken })
+    .eq("id", planId)
+    .select("share_token")
+    .single();
+
+  if (updateErr) throw updateErr;
+  return updated.share_token;
+}
+
+// Memuat rencana mingguan publik berdasarkan share_token (Tanpa perlu login / public read)
+export async function getSharedPlanByToken(shareToken) {
+  if (!shareToken) throw new Error("Token share tidak ditemukan.");
+
+  const { data: planRow, error } = await supabase
+    .from("weekly_plans")
+    .select("id, week_start_date, user_id")
+    .eq("share_token", shareToken)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!planRow) throw new Error("Rencana mingguan yang dibagikan tidak ditemukan atau telah dihapus.");
+
+  const { data: entries, error: entErr } = await supabase
+    .from("meal_entries")
+    .select("recipe_id, day_of_week, meal_type, servings, title, image_url, price_idr, ready_in_minutes, calories, is_cooked")
+    .eq("plan_id", planRow.id);
+
+  if (entErr) throw entErr;
+
+  return {
+    planId: planRow.id,
+    weekStartDate: planRow.week_start_date,
+    plan: entriesToPlanShape(entries),
+    rawEntries: entries ?? [],
+  };
+}
+
+// Mengimpor slot menu dari plan yang di-share ke rencana mingguan milik user yang sedang login
+export async function importSharedPlan(shareToken, targetWeekStart = getCurrentWeekStart()) {
+  const { rawEntries } = await getSharedPlanByToken(shareToken);
+  const { planId: targetPlanId } = await getCurrentPlan(targetWeekStart);
+
+  if (!rawEntries || rawEntries.length === 0) {
+    throw new Error("Rencana yang dibagikan belum memiliki menu masakan.");
+  }
+
+  const slotsToImport = rawEntries.map((e) => ({
+    day: e.day_of_week,
+    mealType: e.meal_type,
+    servings: e.servings,
+    recipe: {
+      id: e.recipe_id,
+      title: e.title,
+      imageUrl: e.image_url,
+      priceIdr: e.price_idr,
+      readyInMinutes: e.ready_in_minutes,
+      calories: e.calories,
+    },
+  }));
+
+  await setSlots(targetPlanId, slotsToImport);
+  return targetPlanId;
+}
+
 export { DAYS, MEAL_TYPES };
+

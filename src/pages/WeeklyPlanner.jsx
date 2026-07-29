@@ -8,6 +8,7 @@ import { PlannerSkeleton } from '../components/Skeleton.jsx';
 import { getWeekDates, getWeekStart, weekKeyToDate, formatWeekRange, isToday } from '../utils/week.js';
 import { RecipeDetailModal } from '../components/RecipeDetailModal.jsx';
 import { CookingModeModal } from '../components/CookingModeModal.jsx';
+import { PlanShareModal } from '../components/PlanShareModal.jsx';
 
 // Hari (key data) + label singkat untuk header kolom
 const DAYS = [
@@ -52,11 +53,27 @@ function WeeklyPlanner({
 }) {
   const {
     showToast, restoreSlot, clearAllSlots, loading: planLoading,
-    weekStart, isCurrentWeek, goToWeek, goToCurrentWeek,
+    weekStart, isCurrentWeek, goToWeek, goToCurrentWeek, getShareToken
   } = usePlan();
   const { isAuthenticated } = useAuth();
 
   const [confirmClear, setConfirmClear] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareToken, setShareToken] = useState('');
+
+  const handleOpenShareModal = async () => {
+    if (!isAuthenticated) {
+      showToast('Silakan masuk atau daftar untuk membagikan rencana mingguan Anda.', { variant: 'info' });
+      return;
+    }
+    try {
+      const token = await getShareToken();
+      setShareToken(token);
+      setShowShareModal(true);
+    } catch (err) {
+      showToast(err.message || 'Gagal memuat token share.', { variant: 'error' });
+    }
+  };
 
   // State untuk detail resep & mode masak
   const [selectedRecipeForDetail, setSelectedRecipeForDetail] = useState(null);
@@ -439,13 +456,24 @@ function WeeklyPlanner({
         <div className="flex flex-col lg:flex-row gap-6">
           {/* ---------------- Planner Grid ---------------- */}
           <div className="flex-1 min-w-0">
-            <div className="mb-6 md:mb-8">
-              <h1 className="font-headline-xl text-headline-lg md:text-headline-xl text-primary tracking-tight mb-2 leading-tight">
-                Rencana Masak Mingguan
-              </h1>
-              <p className="text-on-surface-variant text-body-lg">
-                Atur jadwal makanmu untuk hidup yang lebih sehat dan teratur.
-              </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 md:mb-8">
+              <div>
+                <h1 className="font-headline-xl text-headline-lg md:text-headline-xl text-primary tracking-tight mb-2 leading-tight">
+                  Rencana Masak Mingguan
+                </h1>
+                <p className="text-on-surface-variant text-body-lg">
+                  Atur jadwal makanmu untuk hidup yang lebih sehat dan teratur.
+                </p>
+              </div>
+              {stats.filled > 0 && (
+                <button
+                  onClick={handleOpenShareModal}
+                  className="hidden md:inline-flex px-5 py-2.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-full font-bold text-sm transition cursor-pointer items-center justify-center gap-2 shrink-0 self-start sm:self-center border border-primary/20"
+                >
+                  <span className="material-symbols-outlined text-lg">share</span>
+                  Bagikan Plan
+                </button>
+              )}
             </div>
 
             {/* CTA generate AI — hanya saat tidak loading & planner kosong
@@ -781,6 +809,22 @@ function WeeklyPlanner({
                     );
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* Bagikan Rencana Mingguan (Khusus Mobile) */}
+            {stats.filled > 0 && (
+              <div className="md:hidden border border-primary/30 rounded-panel p-4 bg-primary/5">
+                <p className="text-xs text-on-surface-variant mb-3">
+                  Bagikan menu makan mingguanmu ke teman, keluarga, atau media sosial.
+                </p>
+                <button
+                  onClick={handleOpenShareModal}
+                  className="w-full flex items-center justify-center gap-2 py-3 bg-primary text-white text-sm font-bold rounded-full hover:bg-primary-container transition active:scale-95 shadow-md cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-lg">share</span>
+                  Bagikan Rencana Mingguan
+                </button>
               </div>
             )}
 
@@ -1258,6 +1302,15 @@ function WeeklyPlanner({
             setActiveCookingRecipe(null);
             setCookingTarget(null);
           }}
+        />
+      )}
+      {/* Modal Share Plan */}
+      {showShareModal && shareToken && (
+        <PlanShareModal
+          shareToken={shareToken}
+          weeklyPlan={weeklyPlan}
+          onClose={() => setShowShareModal(false)}
+          showToast={showToast}
         />
       )}
     </div>
