@@ -50,12 +50,15 @@ export default function AuthCallback() {
               if (recipe) {
                 const currentWeekKey = getCurrentWeekStart();
                 const { planId } = await getCurrentPlan(currentWeekKey);
-                await setSlot(planId, recipe, "Senin", "breakfast", recipe.baseServings || 2);
+                const targetDay = actionData.day || "Senin";
+                const targetMeal = actionData.meal || "breakfast";
+                const targetServings = actionData.servings || recipe.baseServings || 2;
+                await setSlot(planId, recipe, targetDay, targetMeal, targetServings);
                 await refreshPlan(currentWeekKey);
-                showToast(`Resep ${recipe.title} berhasil ditambahkan ke jadwal kamu! 🎉`, { variant: "success" });
+                showToast(`Resep ${recipe.title} berhasil ditambahkan ke jadwal ${targetDay} kamu! 🎉`, { variant: "success" });
               }
             }
-            navigate("/planner", { replace: true });
+            navigate("/planner", { replace: true, state: { from: "/planner" } });
           } catch (err) {
             showToast(err?.message || "Gagal menambahkan resep ke jadwal.", { variant: "error" });
             navigate("/catalog", { replace: true });

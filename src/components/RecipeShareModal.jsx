@@ -421,7 +421,7 @@ export function RecipeShareModal({ recipe, onClose }) {
     // CTA Text inside bottom card (Opsional: Scan QR atau Cari Resep)
     ctx.fillStyle = "#8ED936";
     ctx.font = "bold 36px 'Plus Jakarta Sans', sans-serif";
-    ctx.fillText("Mau Lihat Langkah Selengkapnya?", 100, cardY + 70);
+    ctx.fillText("Mau Masak Resep Ini?", 100, cardY + 70);
 
     ctx.fillStyle = "#F7FAF2";
     ctx.font = "500 22px 'Inter', sans-serif";
@@ -429,7 +429,7 @@ export function RecipeShareModal({ recipe, onClose }) {
 
     ctx.fillStyle = "#AFBAA8";
     ctx.font = "500 22px 'Inter', sans-serif";
-    ctx.fillText("& langsung pasang di jadwal makan kamu!", 100, cardY + 160);
+    ctx.fillText("& lihat bahan-bahan serta langkah-langkah lengkapnya!", 100, cardY + 160);
 
     ctx.fillStyle = "#8ED936";
     ctx.font = "bold 22px 'Plus Jakarta Sans', sans-serif";
@@ -581,7 +581,7 @@ export function RecipeShareModal({ recipe, onClose }) {
               Scan QR Code Resep
             </h4>
             <p className="text-xs text-on-surface-variant leading-relaxed">
-              Arahkan kamera HP ke QR Code atau gunakan tombol <strong>Salin Tautan</strong> untuk membuka resep utuh & pasang di jadwal makan kamu!
+              Arahkan kamera HP ke QR Code atau gunakan tombol <strong>Salin Tautan</strong> untuk melihat resep & langkah-langkah lengkapnya!
             </p>
           </div>
         </div>

@@ -61,31 +61,39 @@ export function SharedRecipePage() {
   }, [recipeId]);
 
   const handleAddClick = () => {
-    if (!isFullUser) {
-      sessionStorage.setItem(
-        "pending_recipe_action",
-        JSON.stringify({ type: "add_to_plan", recipeId })
-      );
-      showToast(
-        "Silakan masuk atau buat akun gratis untuk menambahkan resep ini ke jadwal kamu!",
-        { variant: "info" }
-      );
-      navigate("/auth", { state: { from: `/share/recipe/${recipeId}` } });
-      return;
-    }
-
     setShowPickerModal(true);
   };
 
   const handleConfirmAddToPlan = async () => {
     if (!recipe) return;
+
+    if (!isFullUser) {
+      sessionStorage.setItem(
+        "pending_recipe_action",
+        JSON.stringify({
+          type: "add_to_plan",
+          recipeId: recipe.id || recipeId,
+          day: planDay,
+          meal: planMeal,
+          servings: planServings,
+        })
+      );
+      showToast(
+        `Silakan masuk atau buat akun gratis untuk menyimpan resep ini ke jadwal ${planDay} kamu!`,
+        { variant: "info" }
+      );
+      setShowPickerModal(false);
+      navigate("/auth", { state: { from: `/share/recipe/${recipeId}` } });
+      return;
+    }
+
     setSubmitting(true);
     try {
       const currentWeekKey = getCurrentWeekStart();
       const { planId } = await getCurrentPlan(currentWeekKey);
       await setSlot(planId, recipe, planDay, planMeal, planServings);
       await refreshPlan(currentWeekKey);
-      showToast(`Resep ${recipe.title} berhasil ditambahkan ke jadwal kamu! 🎉`, { variant: "success" });
+      showToast(`Resep ${recipe.title} berhasil ditambahkan ke jadwal ${planDay} kamu! 🎉`, { variant: "success" });
       setShowPickerModal(false);
       navigate("/planner");
     } catch (err) {
