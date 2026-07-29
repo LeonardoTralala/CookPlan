@@ -347,7 +347,7 @@ export function RecipeShareModal({ recipe, onClose }) {
 
     // 6. Ingredients Highlights Bar (dengan Vektor Ikon Daun #60A5FA)
     // 📌 LOKASI UBAH POSISI BAHAN UTAMA: ubah angka '+ 115' di bawah ini
-    const ingY = pillsY + 115;
+    const ingY = pillsY + 175;
     ctx.save();
     drawLeafIcon(ctx, 75, ingY - 7, 24, "#60A5FA");
     ctx.fillStyle = "#AFBAA8";
@@ -365,19 +365,28 @@ export function RecipeShareModal({ recipe, onClose }) {
     const nextYAfterIngredients = wrapCanvasText(ctx, ingText, 60, ingY + 40, 960, 38, 2);
     ctx.restore();
 
-    // 7. Langkah Memasak Teaser (Terpisah per Baris)
+    // 7. Langkah Memasak Teaser (Dengan Indikator Jumlah Total Langkah)
     // 📌 LOKASI UBAH POSISI LANGKAH MEMASAK: ubah angka '+ 85' di bawah ini
     const stepsY = nextYAfterIngredients + 85;
     ctx.save();
     ctx.fillStyle = "#AFBAA8";
     ctx.font = "600 22px 'Inter', sans-serif";
-    ctx.fillText("LANGKAH MEMASAK:", 60, stepsY);
+
+    const totalSteps = recipe.instructions?.length || 0;
+    const headerTitle = totalSteps > 2
+      ? `LANGKAH MEMASAK (CUPLIKAN 2 DARI ${totalSteps} LANGKAH):`
+      : "LANGKAH MEMASAK:";
+    ctx.fillText(headerTitle, 60, stepsY);
 
     const step1 = recipe.instructions?.[0];
     const step2 = recipe.instructions?.[1];
 
     const step1Str = typeof step1 === "string" ? step1 : step1?.text || step1?.step;
-    const step2Str = typeof step2 === "string" ? step2 : step2?.text || step2?.step;
+    let step2Str = typeof step2 === "string" ? step2 : step2?.text || step2?.step;
+
+    if (totalSteps > 2 && step2Str) {
+      step2Str += ` ... (+${totalSteps - 2} langkah lagi)`;
+    }
 
     ctx.fillStyle = "#F7FAF2";
     ctx.font = "500 24px 'Inter', sans-serif";
@@ -599,11 +608,10 @@ export function RecipeShareModal({ recipe, onClose }) {
             <button
               type="button"
               onClick={handleCopyLink}
-              className={`py-3 px-4 font-bold text-sm rounded-2xl transition cursor-pointer flex items-center justify-center gap-2 border active:scale-[0.98] ${
-                copied
-                  ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                  : "bg-surface-container-low hover:bg-surface-container-high border-outline-variant text-on-surface"
-              }`}
+              className={`py-3 px-4 font-bold text-sm rounded-2xl transition cursor-pointer flex items-center justify-center gap-2 border active:scale-[0.98] ${copied
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : "bg-surface-container-low hover:bg-surface-container-high border-outline-variant text-on-surface"
+                }`}
             >
               <span className="material-symbols-outlined text-lg">
                 {copied ? "check_circle" : "content_copy"}
