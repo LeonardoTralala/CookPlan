@@ -345,8 +345,8 @@ export function RecipeShareModal({ recipe, onClose }) {
     }
     ctx.restore();
 
-    // 6. Ingredients Highlights Bar (dengan Vektor Ikon Daun #60A5FA)
-    const ingY = pillsY + 90;
+    // 6. Ingredients Highlights Bar (dengan Vektor Ikon Daun #60A5FA) - Digeser lebih ke bawah
+    const ingY = pillsY + 115;
     ctx.save();
     drawLeafIcon(ctx, 75, ingY - 7, 24, "#60A5FA");
     ctx.fillStyle = "#AFBAA8";
@@ -364,33 +364,39 @@ export function RecipeShareModal({ recipe, onClose }) {
     const nextYAfterIngredients = wrapCanvasText(ctx, ingText, 60, ingY + 40, 960, 38, 2);
     ctx.restore();
 
-    // 7. Langkah Awal Memasak
-    const stepsY = nextYAfterIngredients + 70;
+    // 7. Langkah Memasak Teaser (2 Langkah Pertama) - Digeser lebih ke bawah
+    const stepsY = nextYAfterIngredients + 85;
     ctx.save();
     ctx.fillStyle = "#AFBAA8";
     ctx.font = "600 22px 'Inter', sans-serif";
-    ctx.fillText("LANGKAH AWAL MEMASAK:", 60, stepsY);
+    ctx.fillText("LANGKAH MEMASAK:", 60, stepsY);
 
-    const firstStepRaw = recipe.instructions?.[0];
-    const step1Text =
-      (typeof firstStepRaw === "string" ? firstStepRaw : firstStepRaw?.text || firstStepRaw?.step) ||
-      "Siapkan bahan dan bumbu pilihan...";
+    const step1 = recipe.instructions?.[0];
+    const step2 = recipe.instructions?.[1];
+
+    const step1Str = typeof step1 === "string" ? step1 : step1?.text || step1?.step;
+    const step2Str = typeof step2 === "string" ? step2 : step2?.text || step2?.step;
+
+    let stepsCombined = "";
+    if (step1Str) stepsCombined += `1. ${step1Str}`;
+    if (step2Str) stepsCombined += `   2. ${step2Str}`;
+    if (!stepsCombined) stepsCombined = "1. Siapkan bahan dan bumbu pilihan...";
 
     ctx.fillStyle = "#F7FAF2";
     ctx.font = "500 24px 'Inter', sans-serif";
     const nextYAfterSteps = wrapCanvasText(
       ctx,
-      `1. ${step1Text}`,
+      stepsCombined,
       60,
       stepsY + 40,
       960,
       36,
-      2
+      3
     );
     ctx.restore();
 
     // 8. Bottom Card dengan QR Code + Teks CTA
-    const cardY = Math.max(1480, nextYAfterSteps + 40);
+    const cardY = Math.max(1480, nextYAfterSteps + 45);
     const cardH = 260;
     const cardW = 960;
     ctx.save();
