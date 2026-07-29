@@ -21,14 +21,140 @@ function drawImageCover(ctx, img, x, y, w, h) {
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
+function drawServingIcon(ctx, cx, cy, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(2, size / 10);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const r = size / 2;
+
+  // Base plate line
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.75, cy + r * 0.4);
+  ctx.lineTo(cx + r * 0.75, cy + r * 0.4);
+  ctx.stroke();
+
+  // Cloche dome
+  ctx.beginPath();
+  ctx.arc(cx, cy + r * 0.4, r * 0.65, Math.PI, 0);
+  ctx.stroke();
+
+  // Handle knob
+  ctx.beginPath();
+  ctx.arc(cx, cy - r * 0.35, r * 0.15, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawTimerIcon(ctx, cx, cy, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(2, size / 10);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const r = size / 2;
+
+  // Top knob / button
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.25, cy - r * 0.8);
+  ctx.lineTo(cx + r * 0.25, cy - r * 0.8);
+  ctx.stroke();
+
+  // Clock face circle
+  ctx.beginPath();
+  ctx.arc(cx, cy + r * 0.05, r * 0.75, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Clock hands
+  ctx.beginPath();
+  ctx.moveTo(cx, cy + r * 0.05);
+  ctx.lineTo(cx, cy - r * 0.35);
+  ctx.moveTo(cx, cy + r * 0.05);
+  ctx.lineTo(cx + r * 0.35, cy + r * 0.05);
+  ctx.stroke();
+
+  // Center pivot dot
+  ctx.beginPath();
+  ctx.arc(cx, cy + r * 0.05, r * 0.12, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawLeafIcon(ctx, cx, cy, size, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(2, size / 10);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  const r = size / 2;
+
+  // Leaf shape
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.6, cy + r * 0.6);
+  ctx.quadraticCurveTo(cx - r * 0.7, cy - r * 0.4, cx + r * 0.6, cy - r * 0.6);
+  ctx.quadraticCurveTo(cx + r * 0.4, cy + r * 0.7, cx - r * 0.6, cy + r * 0.6);
+  ctx.stroke();
+
+  // Center vein
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.6, cy + r * 0.6);
+  ctx.lineTo(cx + r * 0.25, cy - r * 0.25);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 2) {
+  const words = (text || "").split(" ");
+  let line = "";
+  let currentY = y;
+  let linesCount = 1;
+
+  for (let n = 0; n < words.length; n++) {
+    const testLine = line + words[n] + " ";
+    const metrics = ctx.measureText(testLine);
+    if (metrics.width > maxWidth && n > 0) {
+      if (linesCount >= maxLines) {
+        ctx.fillText(line.trim() + "…", x, currentY);
+        return currentY;
+      }
+      ctx.fillText(line.trim(), x, currentY);
+      line = words[n] + " ";
+      currentY += lineHeight;
+      linesCount++;
+    } else {
+      line = testLine;
+    }
+  }
+  ctx.fillText(line.trim(), x, currentY);
+  return currentY;
+}
+
 export function RecipeShareModal({ recipe, onClose }) {
   const { showToast } = usePlan();
   const canvasRef = useRef(null);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [copied, setCopied] = useState(false);
   const [generatingCanvas, setGeneratingCanvas] = useState(false);
+  const [logoImg, setLogoImg] = useState(null);
 
   const shareUrl = `${window.location.origin}/share/recipe/${recipe.id}`;
+
+  // Preload logo CookPlan SVG resmi
+  useEffect(() => {
+    const img = new Image();
+    img.src = "/cookplan-logo.svg";
+    img.onload = () => setLogoImg(img);
+  }, []);
 
   // Generate QR Code untuk canvas & interactive UI
   useEffect(() => {
@@ -103,29 +229,58 @@ export function RecipeShareModal({ recipe, onClose }) {
     ctx.fillStyle = heroVignette;
     ctx.fillRect(0, 350, 1080, heroH - 350);
 
-    // 3. Floating CookPlan Brand Capsule (Top Left)
+    // 3. Floating CookPlan Brand Capsule (Top Left) - Pure White Capsule with SVG Logo
     ctx.save();
     const capX = 60;
     const capY = 90;
-    const capW = 420;
-    const capH = 72;
-    const capR = 36;
 
-    ctx.beginPath();
-    ctx.fillStyle = "rgba(27, 40, 19, 0.85)";
-    ctx.roundRect(capX, capY, capW, capH, capR);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(142, 217, 54, 0.6)";
-    ctx.lineWidth = 3;
-    ctx.stroke();
+    if (logoImg) {
+      const targetH = 48;
+      let logoWidth;
+      try {
+        const aspect =
+          logoImg.naturalWidth && logoImg.naturalHeight
+            ? logoImg.naturalWidth / logoImg.naturalHeight
+            : 1180 / 700;
+        logoWidth = Math.round(targetH * aspect);
+      } catch {
+        logoWidth = 81;
+      }
 
-    ctx.fillStyle = "#8ED936";
-    ctx.font = "bold 32px 'Plus Jakarta Sans', sans-serif";
-    ctx.fillText("CookPlan", capX + 32, capY + 46);
+      const padX = 24;
+      const padY = 12;
+      const capW = logoWidth + padX * 2;
+      const capH = targetH + padY * 2;
+      const capRadius = capH / 2;
 
-    ctx.fillStyle = "#F7FAF2";
-    ctx.font = "bold 26px 'Plus Jakarta Sans', sans-serif";
-    ctx.fillText("• Resep Spesial", capX + 180, capY + 46);
+      ctx.beginPath();
+      ctx.fillStyle = "#FFFFFF";
+      if (ctx.roundRect) {
+        ctx.roundRect(capX, capY, capW, capH, capRadius);
+      } else {
+        ctx.fillRect(capX, capY, capW, capH);
+      }
+      ctx.fill();
+
+      ctx.drawImage(logoImg, capX + padX, capY + padY, logoWidth, targetH);
+    } else {
+      const capW = 180;
+      const capH = 72;
+      const capRadius = capH / 2;
+
+      ctx.beginPath();
+      ctx.fillStyle = "#FFFFFF";
+      if (ctx.roundRect) {
+        ctx.roundRect(capX, capY, capW, capH, capRadius);
+      } else {
+        ctx.fillRect(capX, capY, capW, capH);
+      }
+      ctx.fill();
+
+      ctx.fillStyle = "#1B2813";
+      ctx.font = "bold 32px 'Plus Jakarta Sans', sans-serif";
+      ctx.fillText("CookPlan", capX + 24, capY + 48);
+    }
     ctx.restore();
 
     // 4. Recipe Title (Plus Jakarta Sans ExtraBold + Drop Shadow)
@@ -155,41 +310,50 @@ export function RecipeShareModal({ recipe, onClose }) {
     ctx.fillText(line.trim(), 60, lineY);
     ctx.restore();
 
-    // 5. Metadata Pills: Porsi, Waktu Masak, & Tag Bahan Utama
+    // 5. Metadata Pills: Porsi, Waktu Masak, & Tag Bahan Utama (menggunakan Ikon Vektor 2D)
     const pillsY = lineY + 38;
     ctx.save();
 
-    const drawPill = (x, y, w, h, text, textColor, borderColor = "rgba(255, 255, 255, 0.25)") => {
+    const drawPill = (x, y, w, h, text, color, iconFn) => {
       ctx.beginPath();
       ctx.fillStyle = "rgba(255, 255, 255, 0.12)";
       ctx.roundRect(x, y, w, h, h / 2);
       ctx.fill();
-      ctx.strokeStyle = borderColor;
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.25)";
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      ctx.fillStyle = textColor;
+      const iconSize = 26;
+      const iconX = x + 26;
+      const iconY = y + h / 2;
+      if (iconFn) {
+        iconFn(ctx, iconX, iconY, iconSize, color);
+      }
+
+      const textX = iconFn ? x + 48 : x + 24;
+      ctx.fillStyle = color;
       ctx.font = "bold 24px 'Plus Jakarta Sans', sans-serif";
-      ctx.fillText(text, x + 24, y + 36);
+      ctx.fillText(text, textX, y + 36);
     };
 
     // Pill 1: Porsi
-    drawPill(60, pillsY, 230, 56, `🍽️ ${recipe.baseServings || 2} Porsi`, "#8ED936");
+    drawPill(60, pillsY, 230, 56, `${recipe.baseServings || 2} Porsi`, "#8ED936", drawServingIcon);
 
     // Pill 2: Waktu Masak
     if (recipe.readyInMinutes) {
-      drawPill(310, pillsY, 250, 56, `⏱️ ${recipe.readyInMinutes} Menit`, "#F46B2A");
+      drawPill(310, pillsY, 250, 56, `${recipe.readyInMinutes} Menit`, "#F46B2A", drawTimerIcon);
     }
 
     // Pill 3: Tag Bahan Utama
     const tagX = recipe.readyInMinutes ? 580 : 310;
     const tagW = recipe.readyInMinutes ? 440 : 710;
-    const firstIng = recipe.ingredients?.[0]?.name;
+    const rawFirstIng = recipe.ingredients?.[0];
+    const firstIng = typeof rawFirstIng === "string" ? rawFirstIng : rawFirstIng?.name;
     const mainIng = firstIng
       ? (firstIng.length > 18 ? firstIng.slice(0, 18) + "…" : firstIng)
       : "Bahan Pilihan";
 
-    drawPill(tagX, pillsY, tagW, 56, `🥩 ${mainIng}`, "#60A5FA");
+    drawPill(tagX, pillsY, tagW, 56, mainIng, "#60A5FA", drawLeafIcon);
     ctx.restore();
 
     // 6. Ingredients Highlights Bar
@@ -199,15 +363,19 @@ export function RecipeShareModal({ recipe, onClose }) {
     ctx.font = "600 22px 'Inter', sans-serif";
     ctx.fillText("BAHAN-BAHAN UTAMA:", 60, ingY);
 
-    const ingList = (recipe.ingredients || []).slice(0, 5).map((i) => i.name).join(" • ");
+    const ingList = (recipe.ingredients || [])
+      .map((i) => (typeof i === "string" ? i : i?.name))
+      .filter(Boolean)
+      .join(" • ");
+    const ingText = ingList || "Bahan-bahan segar pilihan & bumbu dapur";
+
     ctx.fillStyle = "#F7FAF2";
     ctx.font = "500 26px 'Inter', sans-serif";
-    const displayIngList = ingList.length > 60 ? ingList.slice(0, 60) + "…" : ingList;
-    ctx.fillText(displayIngList || "Bahan-bahan segar pilihan & bumbu dapur", 60, ingY + 40);
+    const nextYAfterIngredients = wrapCanvasText(ctx, ingText, 60, ingY + 40, 960, 38, 2);
     ctx.restore();
 
     // 7. Bottom Card dengan QR Code + Teks CTA
-    const cardY = 1500;
+    const cardY = Math.max(1480, nextYAfterIngredients + 60);
     const cardH = 260;
     const cardW = 960;
     ctx.save();
@@ -227,15 +395,16 @@ export function RecipeShareModal({ recipe, onClose }) {
     ctx.fillText("Masak Resep Ini?", 100, cardY + 70);
 
     ctx.fillStyle = "#F7FAF2";
-    ctx.font = "500 24px 'Inter', sans-serif";
-    ctx.fillText("Scan QR Code untuk resep lengkap", 100, cardY + 120);
+    ctx.font = "500 22px 'Inter', sans-serif";
+    ctx.fillText("Scan QR Code untuk lihat langkah-langkah lengkap", 100, cardY + 120);
 
     ctx.fillStyle = "#AFBAA8";
-    ctx.fillText("& pesan bahan di CookPlan!", 100, cardY + 160);
+    ctx.font = "500 22px 'Inter', sans-serif";
+    ctx.fillText("& langsung pasang di jadwal CookPlan kamu!", 100, cardY + 160);
 
     ctx.fillStyle = "#8ED936";
     ctx.font = "bold 22px 'Plus Jakarta Sans', sans-serif";
-    ctx.fillText("cookplan.app", 100, cardY + 210);
+    ctx.fillText("CookPlan", 100, cardY + 210);
 
     // QR Code Container & Image on right side
     if (qrDataUrl) {
@@ -266,7 +435,7 @@ export function RecipeShareModal({ recipe, onClose }) {
     ctx.restore();
 
     setGeneratingCanvas(false);
-  }, [recipe, qrDataUrl]);
+  }, [recipe, qrDataUrl, logoImg]);
 
   useEffect(() => {
     drawCanvas();
@@ -301,8 +470,7 @@ export function RecipeShareModal({ recipe, onClose }) {
   };
 
   const handleWhatsAppShare = () => {
-    const timeText = recipe.readyInMinutes ?? 30;
-    const waText = `🍳 *${recipe.title}* di CookPlan!\n\nCobain resep lezat ini deh! Praktis banget, cuma butuh waktu ±${timeText} menit dan bahannya gampang dicari.\n\n💡 *Bisa langsung klik buat simpan resep + otomatis bikin daftar belanjaannya:*\n👉 ${shareUrl}\n\n(Dikirim via CookPlan - Perencana Menu & Masak Hemat)`;
+    const waText = `🍳 *${recipe.title}* di CookPlan!\n\nCobain resep lezat ini deh! Praktis banget dan bahannya gampang dicari.\n\n💡 *Bisa langsung klik buat lihat langkah-langkah lengkap & pasang di jadwal makan kamu:*\n👉 ${shareUrl}\n\n(Dikirim via CookPlan - Perencana Menu Mingguan)`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(waText)}`;
     window.open(waUrl, "_blank", "noopener,noreferrer");
   };
@@ -384,7 +552,7 @@ export function RecipeShareModal({ recipe, onClose }) {
               Scan QR Code Resep
             </h4>
             <p className="text-xs text-on-surface-variant leading-relaxed">
-              Arahkan kamera HP untuk membuka resep lengkap & pesan bahan di CookPlan secara instant!
+              Arahkan kamera HP untuk membuka resep lengkap & langsung pasang di jadwal makan kamu secara instan!
             </p>
           </div>
         </div>
