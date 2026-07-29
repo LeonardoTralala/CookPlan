@@ -364,8 +364,33 @@ export function RecipeShareModal({ recipe, onClose }) {
     const nextYAfterIngredients = wrapCanvasText(ctx, ingText, 60, ingY + 40, 960, 38, 2);
     ctx.restore();
 
-    // 7. Bottom Card dengan QR Code + Teks CTA
-    const cardY = Math.max(1480, nextYAfterIngredients + 60);
+    // 7. Langkah Awal Memasak
+    const stepsY = nextYAfterIngredients + 70;
+    ctx.save();
+    ctx.fillStyle = "#AFBAA8";
+    ctx.font = "600 22px 'Inter', sans-serif";
+    ctx.fillText("LANGKAH AWAL MEMASAK:", 60, stepsY);
+
+    const firstStepRaw = recipe.instructions?.[0];
+    const step1Text =
+      (typeof firstStepRaw === "string" ? firstStepRaw : firstStepRaw?.text || firstStepRaw?.step) ||
+      "Siapkan bahan dan bumbu pilihan...";
+
+    ctx.fillStyle = "#F7FAF2";
+    ctx.font = "500 24px 'Inter', sans-serif";
+    const nextYAfterSteps = wrapCanvasText(
+      ctx,
+      `1. ${step1Text}`,
+      60,
+      stepsY + 40,
+      960,
+      36,
+      2
+    );
+    ctx.restore();
+
+    // 8. Bottom Card dengan QR Code + Teks CTA
+    const cardY = Math.max(1480, nextYAfterSteps + 40);
     const cardH = 260;
     const cardW = 960;
     ctx.save();
@@ -382,11 +407,11 @@ export function RecipeShareModal({ recipe, onClose }) {
     // CTA Text inside bottom card
     ctx.fillStyle = "#8ED936";
     ctx.font = "bold 36px 'Plus Jakarta Sans', sans-serif";
-    ctx.fillText("Masak Resep Ini?", 100, cardY + 70);
+    ctx.fillText("Mau Lihat Langkah Selengkapnya?", 100, cardY + 70);
 
     ctx.fillStyle = "#F7FAF2";
     ctx.font = "500 22px 'Inter', sans-serif";
-    ctx.fillText("Scan QR Code untuk lihat langkah-langkah lengkap", 100, cardY + 120);
+    ctx.fillText("Scan QR Code untuk buka resep utuh", 100, cardY + 120);
 
     ctx.fillStyle = "#AFBAA8";
     ctx.font = "500 22px 'Inter', sans-serif";
@@ -460,7 +485,7 @@ export function RecipeShareModal({ recipe, onClose }) {
   };
 
   const handleWhatsAppShare = () => {
-    const waText = `🍳 *${recipe.title}* di CookPlan!\n\nCobain resep lezat ini deh! Praktis banget dan bahannya gampang dicari.\n\n💡 *Bisa langsung klik buat lihat langkah-langkah lengkap & pasang di jadwal makan kamu:*\n👉 ${shareUrl}\n\n(Dikirim via CookPlan - Perencana Menu Mingguan)`;
+    const waText = `🍳 *${recipe.title}* di CookPlan!\n\nCobain resep lezat ini deh! Praktis banget dan bahannya gampang dicari.\n\n💡 *Bisa langsung klik buat lihat langkah-langkah selengkapnya & pasang di jadwal makan kamu:*\n👉 ${shareUrl}\n\n(Dikirim via CookPlan - Perencana Menu Mingguan)`;
     const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(waText)}`;
     window.open(waUrl, "_blank", "noopener,noreferrer");
   };
@@ -542,7 +567,7 @@ export function RecipeShareModal({ recipe, onClose }) {
               Scan QR Code Resep
             </h4>
             <p className="text-xs text-on-surface-variant leading-relaxed">
-              Arahkan kamera HP untuk membuka resep lengkap & langsung pasang di jadwal makan kamu secara instan!
+              Arahkan kamera HP untuk membuka resep utuh & langsung pasang di jadwal makan kamu secara instan!
             </p>
           </div>
         </div>
