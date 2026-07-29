@@ -343,25 +343,15 @@ export function RecipeShareModal({ recipe, onClose }) {
     if (recipe.readyInMinutes) {
       drawPill(310, pillsY, 250, 56, `${recipe.readyInMinutes} Menit`, "#F46B2A", drawTimerIcon);
     }
-
-    // Pill 3: Tag Bahan Utama
-    const tagX = recipe.readyInMinutes ? 580 : 310;
-    const tagW = recipe.readyInMinutes ? 440 : 710;
-    const rawFirstIng = recipe.ingredients?.[0];
-    const firstIng = typeof rawFirstIng === "string" ? rawFirstIng : rawFirstIng?.name;
-    const mainIng = firstIng
-      ? (firstIng.length > 18 ? firstIng.slice(0, 18) + "…" : firstIng)
-      : "Bahan Pilihan";
-
-    drawPill(tagX, pillsY, tagW, 56, mainIng, "#60A5FA", drawLeafIcon);
     ctx.restore();
 
-    // 6. Ingredients Highlights Bar
-    const ingY = pillsY + 95;
+    // 6. Ingredients Highlights Bar (dengan Vektor Ikon Daun #60A5FA)
+    const ingY = pillsY + 90;
     ctx.save();
+    drawLeafIcon(ctx, 75, ingY - 7, 24, "#60A5FA");
     ctx.fillStyle = "#AFBAA8";
     ctx.font = "600 22px 'Inter', sans-serif";
-    ctx.fillText("BAHAN-BAHAN UTAMA:", 60, ingY);
+    ctx.fillText("BAHAN-BAHAN UTAMA:", 100, ingY);
 
     const ingList = (recipe.ingredients || [])
       .map((i) => (typeof i === "string" ? i : i?.name))
