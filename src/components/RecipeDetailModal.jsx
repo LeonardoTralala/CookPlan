@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { ModalSheet } from "./ModalSheet.jsx";
+import { RecipeShareModal } from "./RecipeShareModal.jsx";
 
 const formatRupiah = (val) => {
   if (!val) return "Rp 0";
@@ -47,6 +48,7 @@ export function RecipeDetailModal({
   const [activeTab, setActiveTab] = useState("stepper");
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
   const [prevRecipeId, setPrevRecipeId] = useState(recipe?.id);
+  const [isShareOpen, setIsShareOpen] = useState(false);
 
   if (recipe?.id !== prevRecipeId) {
     setPrevRecipeId(recipe?.id);
@@ -372,24 +374,7 @@ export function RecipeDetailModal({
       {/* Footer buttons */}
       <div className="p-4 bg-canvas-white border-t border-outline-variant flex items-center justify-end gap-3 shrink-0 flex-wrap">
         <button
-          onClick={async () => {
-            const shareUrl = `${window.location.origin}/catalog?recipe=${recipe.id}`;
-            if (navigator.share) {
-              try {
-                await navigator.share({
-                  title: `${recipe.title} - CookPlan`,
-                  text: `Cek resep lezat "${recipe.title}" di CookPlan!`,
-                  url: shareUrl,
-                });
-              } catch (err) {
-                if (err.name !== "AbortError") {
-                  navigator.clipboard.writeText(shareUrl);
-                }
-              }
-            } else {
-              navigator.clipboard.writeText(shareUrl);
-            }
-          }}
+          onClick={() => setIsShareOpen(true)}
           className="px-4 py-2.5 border border-outline-variant text-on-surface-variant hover:bg-secondary-container/20 rounded-full font-bold text-sm cursor-pointer flex items-center gap-1.5 transition-colors"
           title="Bagikan Resep"
         >
@@ -448,6 +433,13 @@ export function RecipeDetailModal({
           </button>
         )}
       </div>
+
+      {isShareOpen && (
+        <RecipeShareModal
+          recipe={recipe}
+          onClose={() => setIsShareOpen(false)}
+        />
+      )}
     </ModalSheet>
   );
 }

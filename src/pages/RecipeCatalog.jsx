@@ -53,7 +53,7 @@ function shuffle(arr) {
   return result;
 }
 
-function RecipeCatalog({ onAddToPlan }) {
+function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
   const { showToast, weeklyPlan } = usePlan();
 
   // Bank resep dari DB (Supabase) — menggantikan mockRecipes statis.
@@ -115,6 +115,20 @@ function RecipeCatalog({ onAddToPlan }) {
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, []);
+
+  // Deep-linking: Buka modal detail resep otomatis jika initialRecipeId cocok
+  useEffect(() => {
+    if (initialRecipeId && recipes.length > 0) {
+      const match = recipes.find((r) => String(r.id) === String(initialRecipeId));
+      if (match) {
+        const timer = setTimeout(() => {
+          setSelectedRecipeForDetail(match);
+          trackRecipeView(match.id, match.title);
+        }, 0);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [recipes, initialRecipeId]);
 
   // Muat daftar id resep tersimpan (gagal = diam, fitur simpan tetap bisa dipakai).
   useEffect(() => {

@@ -4,7 +4,8 @@ import { Logo } from "../components/Logo.jsx";
 import { Toast } from "../components/Toast.jsx";
 import { useAuth } from "../hooks/useAuth.js";
 import { usePlan } from "../hooks/usePlan.js";
-import { importSharedPlan } from "../services/planService.js";
+import { getRecipeById } from "../services/recipeService.js";
+import { importSharedPlan, getCurrentPlan, setSlot, getCurrentWeekStart } from "../services/planService.js";
 import { SESSION_EXPIRED_FLAG } from "../lib/session.js";
 import { trackSignUp, trackLogIn } from "../lib/posthog.js";
 
@@ -71,11 +72,13 @@ export default function AuthPage() {
     setMode("update");
   }
 
-  // Sudah punya AKUN PENUH? Langsung arahkan ke aplikasi — jika ada pending_import_token,
-  // jalankan impor rencana sebelum redirect ke /planner.
+  // Sudah punya AKUN PENUH? Langsung arahkan ke aplikasi — jika ada pending_import_token
+  // atau pending_recipe_action, jalankan aksi tsb sebelum redirect ke /planner.
   useEffect(() => {
     if (!authLoading && isFullUser && !isRecovery) {
       const pendingToken = sessionStorage.getItem("pending_import_token");
+      const pendingRecipeAction = sessionStorage.getItem("pending_recipe_action");
+
       if (pendingToken) {
         sessionStorage.removeItem("pending_import_token");
         importSharedPlan(pendingToken)
@@ -88,6 +91,27 @@ export default function AuthPage() {
             showToast(err?.message || "Gagal mengimpor rencana yang dibagikan.", { variant: "error" });
             navigate(redirectTo, { replace: true });
           });
+      } else if (pendingRecipeAction) {
+        sessionStorage.removeItem("pending_recipe_action");
+        (async () => {
+          try {
+            const actionData = JSON.parse(pendingRecipeAction);
+            if (actionData?.type === "add_to_plan" && actionData?.recipeId) {
+              const recipe = await getRecipeById(actionData.recipeId);
+              if (recipe) {
+                const currentWeekKey = getCurrentWeekStart();
+                const { planId } = await getCurrentPlan(currentWeekKey);
+                await setSlot(planId, recipe, "Senin", "breakfast", recipe.baseServings || 2);
+                await refreshPlan(currentWeekKey);
+                showToast(`Resep ${recipe.title} berhasil ditambahkan ke jadwal kamu! 🎉`, { variant: "success" });
+              }
+            }
+            navigate("/planner", { replace: true });
+          } catch (err) {
+            showToast(err?.message || "Gagal menambahkan resep ke jadwal.", { variant: "error" });
+            navigate(redirectTo, { replace: true });
+          }
+        })();
       } else {
         navigate(redirectTo, { replace: true });
       }
@@ -168,7 +192,10 @@ export default function AuthPage() {
         return;
       }
       showToast("Akun berhasil dibuat 🎉");
-      const hasPending = Boolean(sessionStorage.getItem("pending_import_token"));
+      const hasPending = Boolean(
+        sessionStorage.getItem("pending_import_token") ||
+        sessionStorage.getItem("pending_recipe_action")
+      );
       if (!hasPending) {
         navigate(redirectTo);
       }
@@ -182,7 +209,10 @@ export default function AuthPage() {
     if (err) return setError(friendlyError(err));
     trackLogIn('email');
     showToast("Berhasil masuk!");
-    const hasPending = Boolean(sessionStorage.getItem("pending_import_token"));
+    const hasPending = Boolean(
+      sessionStorage.getItem("pending_import_token") ||
+      sessionStorage.getItem("pending_recipe_action")
+    );
     if (!hasPending) {
       navigate(redirectTo);
     }

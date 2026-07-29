@@ -34,6 +34,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx').the
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders.jsx').then((m) => ({ default: m.AdminOrders })));
 const AdminFeedback = lazy(() => import('./pages/admin/AdminFeedback.jsx').then((m) => ({ default: m.AdminFeedback })));
 const SharedPlanPage = lazy(() => import('./pages/SharedPlanPage.jsx').then((m) => ({ default: m.SharedPlanPage })));
+const SharedRecipePage = lazy(() => import('./pages/SharedRecipePage.jsx').then((m) => ({ default: m.SharedRecipePage })));
 
 // Routing penuh CookPlan. Membuka aplikasi (root "/") langsung mengarahkan ke
 // /generate; pengguna yang belum login akan dilempar ke /auth oleh
@@ -61,6 +62,7 @@ function App() {
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/share/plan/:shareToken" element={<SharedPlanPage />} />
+          <Route path="/share/recipe/:recipeId" element={<SharedRecipePage />} />
 
           {/* Onboarding sekali: hanya akun penuh, TIDAK dibungkus OnboardingGate
               (mencegah redirect loop ke dirinya sendiri). */}

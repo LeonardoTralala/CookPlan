@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth.js";
 import { usePlan } from "../hooks/usePlan.js";
-import { importSharedPlan } from "../services/planService.js";
+import { getRecipeById } from "../services/recipeService.js";
+import { importSharedPlan, getCurrentPlan, setSlot, getCurrentWeekStart } from "../services/planService.js";
 
 // Halaman tujuan redirect setelah login OAuth (Google). Rute ini PUBLIK dan
 // sengaja TIDAK diproteksi: saat browser kembali dari Google, URL membawa
@@ -25,6 +26,8 @@ export default function AuthCallback() {
   useEffect(() => {
     if (!loading && isFullUser) {
       const pendingToken = sessionStorage.getItem("pending_import_token");
+      const pendingRecipeAction = sessionStorage.getItem("pending_recipe_action");
+
       if (pendingToken) {
         sessionStorage.removeItem("pending_import_token");
         importSharedPlan(pendingToken)
@@ -37,6 +40,27 @@ export default function AuthCallback() {
             showToast(err?.message || "Gagal mengimpor rencana yang dibagikan.", { variant: "error" });
             navigate("/catalog", { replace: true });
           });
+      } else if (pendingRecipeAction) {
+        sessionStorage.removeItem("pending_recipe_action");
+        (async () => {
+          try {
+            const actionData = JSON.parse(pendingRecipeAction);
+            if (actionData?.type === "add_to_plan" && actionData?.recipeId) {
+              const recipe = await getRecipeById(actionData.recipeId);
+              if (recipe) {
+                const currentWeekKey = getCurrentWeekStart();
+                const { planId } = await getCurrentPlan(currentWeekKey);
+                await setSlot(planId, recipe, "Senin", "breakfast", recipe.baseServings || 2);
+                await refreshPlan(currentWeekKey);
+                showToast(`Resep ${recipe.title} berhasil ditambahkan ke jadwal kamu! 🎉`, { variant: "success" });
+              }
+            }
+            navigate("/planner", { replace: true });
+          } catch (err) {
+            showToast(err?.message || "Gagal menambahkan resep ke jadwal.", { variant: "error" });
+            navigate("/catalog", { replace: true });
+          }
+        })();
       } else {
         navigate("/catalog", { replace: true });
       }
