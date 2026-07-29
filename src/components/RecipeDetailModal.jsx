@@ -44,6 +44,8 @@ export function RecipeDetailModal({
   onStartCooking,
   isCooked = false,
   onToggleCooked,
+  isLiked = false,
+  onToggleLike,
 }) {
   const [activeTab, setActiveTab] = useState("stepper");
   const [currentStepIdx, setCurrentStepIdx] = useState(0);
@@ -63,6 +65,9 @@ export function RecipeDetailModal({
   const currentStepText = instructions[currentStepIdx] ?? "";
   const currentStepIngredients = getIngredientsForStep(currentStepText, recipe.ingredients);
   const progressPercent = totalSteps > 0 ? Math.round(((currentStepIdx + 1) / totalSteps) * 100) : 0;
+  const hasUnlinkedIngredients = (recipe.ingredients ?? []).some(
+    (ing) => (ing.ingredientId ?? ing.ingredient_id) == null
+  );
 
   const handleNextStep = () => {
     if (currentStepIdx < totalSteps - 1) {
@@ -106,32 +111,52 @@ export function RecipeDetailModal({
             }}
             className="w-full h-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-          <div className="absolute bottom-6 left-6 text-white pr-10">
-            <div className="flex flex-wrap gap-1.5 mb-2">
-              {recipe.isVerified && (
-                <span className="px-2.5 py-0.5 rounded-full bg-white text-primary font-bold text-[9px] uppercase tracking-wider inline-flex items-center gap-0.5">
-                  <span className="material-symbols-outlined text-[12px]">
-                    verified
+          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+          <div className="absolute bottom-5 left-6 right-6 text-white flex items-end justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap gap-1.5 mb-2 items-center">
+                {/* Author Attribution */}
+                {recipe.userId ? (
+                  <span className="px-2.5 py-0.5 rounded-full bg-amber-500/90 text-white font-bold text-[10px] tracking-wide inline-flex items-center gap-1 shadow-xs">
+                    <span className="material-symbols-outlined text-[13px]">person</span>
+                    Oleh @{recipe.authorName || "Pengguna CookPlan"}
                   </span>
-                  Terverifikasi
-                </span>
-              )}
-              {(recipe.badges ?? []).map((badge, idx) => (
-                <span
-                  key={idx}
-                  className="px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary-container font-bold text-[9px] uppercase tracking-wider"
-                >
-                  {badge}
-                </span>
-              ))}
+                ) : (
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-600/90 text-white font-bold text-[10px] tracking-wide inline-flex items-center gap-1 shadow-xs">
+                    <span className="material-symbols-outlined text-[13px]">verified</span>
+                    CookPlan Official
+                  </span>
+                )}
+                {recipe.isVerified && (
+                  <span className="px-2.5 py-0.5 rounded-full bg-sky-500 text-white font-bold text-[9px] uppercase tracking-wider inline-flex items-center gap-0.5 shadow-xs">
+                    <span className="material-symbols-outlined text-[12px]">
+                      verified
+                    </span>
+                    Terverifikasi
+                  </span>
+                )}
+                {(recipe.badges ?? []).map((badge, idx) => (
+                  <span
+                    key={idx}
+                    className="px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary-container font-bold text-[9px] uppercase tracking-wider"
+                  >
+                    {badge}
+                  </span>
+                ))}
+              </div>
+              <h3
+                id="modal-recipe-title"
+                className="font-headline-lg text-headline-md md:text-headline-lg text-white"
+              >
+                {recipe.title}
+              </h3>
             </div>
-            <h3
-              id="modal-recipe-title"
-              className="font-headline-lg text-headline-md md:text-headline-lg text-white"
-            >
-              {recipe.title}
-            </h3>
+
+            {/* Likes count badge */}
+            <div className="bg-black/50 backdrop-blur-md px-3 py-1.5 rounded-full border border-white/20 flex items-center gap-1.5 shrink-0 text-white font-extrabold text-xs shadow-sm">
+              <span className="material-symbols-outlined text-rose-400 text-base">favorite</span>
+              <span>{recipe.likesCount ?? 0}</span>
+            </div>
           </div>
         </div>
 
@@ -167,6 +192,18 @@ export function RecipeDetailModal({
               </div>
             </div>
           </div>
+
+          {/* Warning Banner Unlinked Ingredients */}
+          {hasUnlinkedIngredients && (
+            <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-900 text-left">
+              <span className="material-symbols-outlined text-amber-600 text-lg shrink-0 mt-0.5" aria-hidden="true">
+                warning
+              </span>
+              <p className="text-xs font-medium leading-relaxed">
+                Estimasi harga belum tersedia untuk beberapa bahan (diketik manual oleh pembuat).
+              </p>
+            </div>
+          )}
 
           {/* Quick Info Grid */}
           <div className="grid grid-cols-1 gap-4 p-4 bg-secondary-container/20 rounded-2xl border border-outline-variant/60 text-center">
@@ -381,18 +418,35 @@ export function RecipeDetailModal({
           <span className="material-symbols-outlined text-lg">share</span>
           Bagikan
         </button>
+        {onToggleLike && (
+          <button
+            onClick={() => onToggleLike(recipe)}
+            className={`px-4 py-2.5 rounded-full font-bold text-sm cursor-pointer flex items-center gap-1.5 transition-colors border ${
+              isLiked
+                ? "bg-rose-50 border-rose-300 text-rose-600 hover:bg-rose-100"
+                : "border-outline-variant text-on-surface-variant hover:bg-secondary-container/20"
+            }`}
+            aria-pressed={isLiked}
+            title={isLiked ? "Batal Suka" : "Sukai Resep"}
+          >
+            <span className="material-symbols-outlined text-lg" aria-hidden="true">
+              {isLiked ? "favorite" : "favorite_border"}
+            </span>
+            <span>{recipe.likesCount ?? 0}</span>
+          </button>
+        )}
         {onToggleSave && (
           <button
             onClick={() => onToggleSave(recipe)}
-            className={`px-5 py-2.5 rounded-full font-bold text-sm cursor-pointer flex items-center gap-1.5 transition-colors border ${
+            className={`px-5 py-2.5 rounded-full font-bold text-sm cursor-pointer flex items-center gap-1.5 transition-all border ${
               isSaved
-                ? "bg-error/10 border-error/30 text-error hover:bg-error/20"
+                ? "bg-primary text-white border-primary shadow-xs"
                 : "border-outline-variant text-on-surface-variant hover:bg-secondary-container/20"
             }`}
             aria-pressed={isSaved}
           >
             <span className="material-symbols-outlined text-lg" aria-hidden="true">
-              {isSaved ? "favorite" : "favorite_border"}
+              {isSaved ? "bookmark" : "bookmark_border"}
             </span>
             {isSaved ? "Tersimpan" : "Simpan"}
           </button>

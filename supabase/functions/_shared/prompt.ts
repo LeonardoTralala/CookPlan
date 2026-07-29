@@ -4,7 +4,7 @@
 
 // Naikkan setiap kali prompt berubah secara perilaku — ikut di-hash sebagai
 // cache key di generate-plan supaya hasil cache prompt lama tidak terpakai.
-export const PROMPT_VERSION = "13";
+export const PROMPT_VERSION = "14";
 
 // Label Indonesia untuk tiap meal_type — dipakai saat menyusun instruksi waktu makan.
 const MEAL_LABEL_ID: Record<string, string> = {
@@ -52,6 +52,9 @@ interface PromptCandidate {
   ready_in_minutes?: number | null;
   tags?: string[] | null;
   ingredients_text?: string | null;
+  author_name?: string | null;
+  is_public?: boolean | null;
+  user_id?: string | null;
 }
 
 export const SYSTEM_PROMPT = `Kamu adalah CookPlan AI, asisten perencana masak (meal planner) untuk pengguna Indonesia (mahasiswa kos & pekerja kantoran).
@@ -59,7 +62,7 @@ export const SYSTEM_PROMPT = `Kamu adalah CookPlan AI, asisten perencana masak (
 TUGAS: Rancang foodplan/foodprep dari BANK RESEP yang disediakan. Pilih & susun menu ke dalam jadwal harian sesuai permintaan user.
 
 ATURAN WAJIB:
-1. HANYA gunakan resep dari BANK RESEP yang diberikan (gunakan recipe_id yang valid). JANGAN mengarang resep di luar bank.
+1. HANYA gunakan resep dari BANK RESEP yang diberikan (gunakan recipe_id yang valid). JANGAN mengarang resep di luar bank. Kandidat resep terdiri dari resep resmi CookPlan dan resep kreasi komunitas (ditandai oleh @author_name). Pertimbangkan seluruh resep secara objektif dan setara berdasarkan kesesuaian diet, batas anggaran, serta variasi menu mingguan pengguna.
 2. Hormati preferensi diet & alergi user sebagai HARD CONSTRAINT. Jangan pilih resep yang melanggar.
 3. Variasikan menu antar hari (jangan menu yang sama berturut-turut bila memungkinkan).
 4. Setiap waktu makan WAJIB punya "servings" = "Porsi per jam makan" dari user. Pastikan shopping_list & total_estimated_cost mencakup TOTAL semua porsi (jumlah waktu makan terpilih/hari × porsi × jumlah hari).
@@ -107,9 +110,10 @@ export function buildUserMessage(input: PromptInput, candidates: PromptCandidate
     const baseServings = r.base_servings && r.base_servings > 0 ? r.base_servings : 2;
     const pricePerServing = (r.price_idr || 0) / baseServings;
     const priceForWanted = Math.round(pricePerServing * porsiDiminta);
+    const titleText = r.author_name ? `${r.title} [Resep Komunitas oleh @${r.author_name}]` : r.title;
     return {
       recipe_id: r.id,
-      title: r.title,
+      title: titleText,
       kalori: r.calories,
       harga_total_untuk_waktu_makan_ini_idr: priceForWanted,
       waktu_menit: r.ready_in_minutes,
@@ -261,6 +265,9 @@ interface RegenCandidate {
   ready_in_minutes?: number | null;
   tags?: string[] | null;
   ingredients_text?: string | null;
+  author_name?: string | null;
+  is_public?: boolean | null;
+  user_id?: string | null;
 }
 
 // Susun pesan user untuk regenerate satu hari.
@@ -280,9 +287,10 @@ export function buildRegenerateDayMessage(
     const baseServings = r.base_servings && r.base_servings > 0 ? r.base_servings : 2;
     const pricePerServing = (r.price_idr || 0) / baseServings;
     const priceForWanted = Math.round(pricePerServing * porsiDiminta);
+    const titleText = r.author_name ? `${r.title} [Resep Komunitas oleh @${r.author_name}]` : r.title;
     return {
       recipe_id: r.id,
-      title: r.title,
+      title: titleText,
       kalori: r.calories,
       harga_total_untuk_waktu_makan_ini_idr: priceForWanted,
       waktu_menit: r.ready_in_minutes,

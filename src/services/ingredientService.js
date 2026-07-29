@@ -206,3 +206,60 @@ export async function deleteAlias(alias) {
   const { error } = await supabase.from("ingredient_aliases").delete().eq("alias", normAlias(alias));
   if (error) throw error;
 }
+
+// --- Antrean Bahan Bebas Pengguna (Unlinked Queue) ---------------------------
+
+export async function getUnlinkedIngredients() {
+  await requireUser();
+  const { data, error } = await supabase
+    .from("recipe_ingredients")
+    .select("name, recipes(title)")
+    .is("ingredient_id", null);
+
+  if (error) throw error;
+
+  const groupMap = new Map();
+  for (const row of data ?? []) {
+    const cleanName = row.name?.trim();
+    if (!cleanName) continue;
+    const key = cleanName.toLowerCase();
+
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        name: cleanName,
+        count: 0,
+        sampleTitlesSet: new Set(),
+      });
+    }
+
+    const item = groupMap.get(key);
+    item.count += 1;
+    if (row.recipes?.title) {
+      item.sampleTitlesSet.add(row.recipes.title);
+    }
+  }
+
+  const result = Array.from(groupMap.values()).map((item) => ({
+    name: item.name,
+    count: item.count,
+    sampleRecipeTitles: Array.from(item.sampleTitlesSet).slice(0, 3),
+  }));
+
+  result.sort((a, b) => b.count - a.count);
+  return result;
+}
+
+export async function linkUnlinkedIngredient(ingredientName, masterIngredientId) {
+  await requireUser();
+  if (!ingredientName || !masterIngredientId) {
+    throw new Error("Nama bahan dan master ingredient ID wajib diisi.");
+  }
+  const { error } = await supabase
+    .from("recipe_ingredients")
+    .update({ ingredient_id: masterIngredientId })
+    .is("ingredient_id", null)
+    .ilike("name", ingredientName.trim());
+
+  if (error) throw error;
+}
+

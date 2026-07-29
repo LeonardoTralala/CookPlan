@@ -13,6 +13,13 @@ const DIFFICULTIES = [
   { value: 'hard', label: 'Sulit' },
 ];
 
+const STATUS_TABS = [
+  { id: 'all', label: 'Semua' },
+  { id: 'official', label: 'Ofisial CookPlan' },
+  { id: 'community', label: 'Komunitas Publik' },
+  { id: 'inactive', label: 'Nonaktif / Spam' },
+];
+
 const EMPTY_RECIPE = {
   title: '', description: '', cuisine: '', difficulty: 'easy',
   readyInMinutes: '', calories: '', baseServings: 2,
@@ -230,8 +237,9 @@ export function RecipeManager() {
     const q = query.trim().toLowerCase();
     const list = recipes.filter((r) => {
       if (q && !r.title?.toLowerCase().includes(q)) return false;
-      if (status === 'active' && !r.isActive) return false;
-      if (status === 'hidden' && r.isActive) return false;
+      if (status === 'official' && r.userId != null) return false;
+      if (status === 'community' && (!r.userId || !r.isPublic || !r.isActive)) return false;
+      if (status === 'inactive' && r.isActive !== false) return false;
       if (verify === 'verified' && !r.isVerified) return false;
       if (verify === 'unverified' && r.isVerified) return false;
       if (onlyIncomplete) {
@@ -423,7 +431,7 @@ export function RecipeManager() {
         difficulty: editing.difficulty || null,
         readyInMinutes: numOrNull(editing.readyInMinutes),
         calories: numOrNull(editing.calories),
-        baseServings: Number(editing.baseServings) || 2,
+ baseServings: Number(editing.baseServings) || 2,
         // Teks mentah → array bersih HANYA saat simpan (jaga bentuk data DB sama spt dulu).
         badges: splitCsv(badgesRaw),
         tags: splitCsv(tagsRaw),
@@ -454,11 +462,21 @@ export function RecipeManager() {
     }
   };
 
+  const handleToggleActive = async (r, targetActive) => {
+    try {
+      await recipeAdmin.updateRecipe(r.id, { isActive: targetActive });
+      showToast(targetActive ? `Resep "${r.title}" diaktifkan.` : `Resep "${r.title}" dinonaktifkan.`);
+      refresh();
+    } catch (e) {
+      showToast(e.message, { variant: 'error' });
+    }
+  };
+
   const handleDelete = async (r) => {
-    if (!confirm(`Hapus resep "${r.title}"? Tindakan ini permanen.`)) return;
+    if (!confirm(`Hapus permanen resep "${r.title}"? Tindakan ini tidak dapat dibatalkan.`)) return;
     try {
       await recipeAdmin.deleteRecipe(r.id);
-      showToast('Resep dihapus.');
+      showToast('Resep dihapus permanen.');
       refresh();
     } catch (e) {
       showToast(e.message, { variant: 'error' });
@@ -491,6 +509,24 @@ export function RecipeManager() {
         </button>
       </div>
 
+      {/* Status Filter Tabs */}
+      <div className="flex items-center gap-1.5 border-b border-outline-variant pb-3 overflow-x-auto">
+        {STATUS_TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setStatus(tab.id)}
+            className={`px-4 py-2 rounded-full text-xs md:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap ${
+              status === tab.id
+                ? 'bg-primary text-on-primary shadow-xs'
+                : 'bg-surface-container-low text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <input
           value={query}
@@ -498,12 +534,6 @@ export function RecipeManager() {
           placeholder="Cari resep…"
           className="flex-1 min-w-[10rem] px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
         />
-        <select value={status} onChange={(e) => setStatus(e.target.value)} title="Filter status"
-          className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
-          <option value="all">Semua status</option>
-          <option value="active">Aktif</option>
-          <option value="hidden">Disembunyikan</option>
-        </select>
         <select value={verify} onChange={(e) => setVerify(e.target.value)} title="Filter verifikasi"
           className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
           <option value="all">Semua verifikasi</option>
@@ -534,24 +564,99 @@ export function RecipeManager() {
           {filtered.map((r) => {
             const cov = coverageOf(r);
             return (
-            <div key={r.id} className={`rounded-2xl border p-3 flex items-center gap-3 ${r.isActive ? 'border-outline-variant' : 'border-error/30 bg-error/5'}`}>
-              <div className="w-14 h-14 rounded-xl bg-surface-container-high overflow-hidden shrink-0">
-                {r.imageUrl && <img src={r.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-on-surface truncate">{r.title}</span>
-                  {r.isVerified && <span className="text-[10px] font-bold uppercase bg-primary/10 text-primary px-2 py-0.5 rounded-full inline-flex items-center gap-0.5"><span className="material-symbols-outlined text-[12px]">verified</span>Terverifikasi</span>}
-                  {!r.isActive && <span className="text-[10px] font-bold uppercase bg-error text-white px-2 py-0.5 rounded-full">Disembunyikan</span>}
+            <div key={r.id} className={`rounded-2xl border p-4 flex flex-col md:flex-row md:items-center justify-between gap-3 ${r.isActive ? 'border-outline-variant bg-white' : 'border-error/30 bg-error/5'}`}>
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-14 h-14 rounded-xl bg-surface-container-high overflow-hidden shrink-0">
+                  {r.imageUrl && <img src={r.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />}
                 </div>
-                <div className="flex items-center gap-2 mt-0.5">
-                  <p className="text-xs text-on-surface-variant">{formatRupiah(r.priceIdr)} · {cov.total} bahan</p>
-                  <CoverageBadge priced={cov.priced} total={cov.total} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-on-surface truncate text-base">{r.title}</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                    {/* Author badge */}
+                    {!r.userId ? (
+                      <span className="text-[11px] font-medium bg-emerald-50 text-emerald-700 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 border border-emerald-200/60">
+                        <span className="material-symbols-outlined text-[13px]">verified_user</span>
+                        CookPlan Official
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-medium bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1 border border-blue-200/60">
+                        <span className="material-symbols-outlined text-[13px]">person</span>
+                        {r.authorName ? (r.authorName.startsWith('@') ? r.authorName : `@${r.authorName}`) : '@komunitas'}
+                      </span>
+                    )}
+
+                    {/* UGC Status badge */}
+                    {!r.isActive ? (
+                      <span className="text-[11px] font-semibold bg-error/15 text-error px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">block</span>
+                        Nonaktif
+                      </span>
+                    ) : !r.isPublic ? (
+                      <span className="text-[11px] font-semibold bg-amber-100 text-amber-800 px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">lock</span>
+                        Draf
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-semibold bg-primary/10 text-primary px-2.5 py-0.5 rounded-full inline-flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[13px]">public</span>
+                        Publik
+                      </span>
+                    )}
+
+                    {/* Verified badge */}
+                    {r.isVerified && (
+                      <span className="text-[10px] font-bold uppercase bg-primary/10 text-primary px-2 py-0.5 rounded-full inline-flex items-center gap-0.5">
+                        <span className="material-symbols-outlined text-[12px]">verified</span>
+                        Terverifikasi
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <p className="text-xs text-on-surface-variant">{formatRupiah(r.priceIdr)} · {cov.total} bahan</p>
+                    <CoverageBadge priced={cov.priced} total={cov.total} />
+                  </div>
                 </div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => openEdit(r)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container-low cursor-pointer">Edit</button>
-                <button onClick={() => handleDelete(r)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-error/40 text-error hover:bg-error/10 cursor-pointer">Hapus</button>
+
+              {/* Moderation Actions */}
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+                <button
+                  onClick={() => openEdit(r)}
+                  className="text-xs font-semibold px-3 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container-low cursor-pointer transition-colors"
+                >
+                  Edit
+                </button>
+                {r.isActive ? (
+                  <button
+                    onClick={() => handleToggleActive(r, false)}
+                    title="Nonaktifkan resep (sembunyikan dari katalog & komunitas)"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full border border-amber-500/40 text-amber-700 hover:bg-amber-50 cursor-pointer inline-flex items-center gap-1 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">visibility_off</span>
+                    Nonaktifkan
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleToggleActive(r, true)}
+                    title="Aktifkan resep kembali"
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full border border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 cursor-pointer inline-flex items-center gap-1 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">visibility</span>
+                    Aktifkan
+                  </button>
+                )}
+                <button
+                  onClick={() => handleDelete(r)}
+                  title="Hapus permanen resep ini"
+                  className="text-xs font-semibold px-3 py-1.5 rounded-full border border-error/40 text-error hover:bg-error/10 cursor-pointer inline-flex items-center gap-1 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[14px]">delete_forever</span>
+                  Hapus Permanen
+                </button>
               </div>
             </div>
             );
