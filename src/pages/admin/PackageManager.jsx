@@ -249,10 +249,13 @@ export function PackageManager() {
         <div className="space-y-3">
           {filtered.length === 0 && <p className="text-center text-sm text-on-surface-variant py-8">Belum ada paket.</p>}
           {filtered.map((p) => {
-            const hpp = packageCost(p);
-            const price = p.priceIdr > 0 ? p.priceIdr : hpp;
+            const rawHpp = packageCost(p);
+            const pkgCost = numOrZero(p.packagingCost ?? 10000);
+            const totalHpp = rawHpp + pkgCost;
+            const price = p.priceIdr > 0 ? p.priceIdr : totalHpp;
             const hasManualPrice = p.priceIdr > 0;
-            const margin = hasManualPrice && price > 0 ? Math.round(((price - hpp) / price) * 100) : null;
+            const grossProfit = price - totalHpp;
+            const margin = hasManualPrice && price > 0 ? Math.round((grossProfit / price) * 100) : null;
             return (
               <div key={p.id} className={`rounded-2xl border p-3.5 flex items-center gap-3.5 ${p.isActive ? 'border-outline-variant' : 'border-error/30 bg-error/5'}`}>
                 <div className="w-14 h-14 rounded-xl bg-surface-container-high overflow-hidden shrink-0 flex items-center justify-center">
@@ -273,10 +276,10 @@ export function PackageManager() {
                   </p>
                   <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
                     <span className="font-bold text-primary">
-                      {hasManualPrice ? formatRupiah(p.priceIdr) : `${formatRupiah(hpp)} (Otomatis)`}
+                      {hasManualPrice ? formatRupiah(p.priceIdr) : `${formatRupiah(totalHpp)} (Otomatis)`}
                     </span>
                     <span className="text-on-surface-variant text-[11px]">
-                      (HPP Bahan: {formatRupiah(hpp)})
+                      (HPP Total: {formatRupiah(totalHpp)})
                     </span>
                     {margin !== null && (
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${margin >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
@@ -331,12 +334,15 @@ export function PackageManager() {
                 <TextInput value={badgesRaw} onChange={setBadgesRaw} placeholder="Hemat, Populer" />
               </Field>
 
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Urutan tampil (sort)">
+              <div className="grid grid-cols-3 gap-3">
+                <Field label="Urutan (sort)">
                   <TextInput type="number" value={editing.sortOrder} onChange={(v) => setField('sortOrder', v)} />
                 </Field>
+                <Field label="Biaya Kemasan (Rp)">
+                  <TextInput type="number" value={editing.packagingCost ?? 10000} onChange={(v) => setField('packagingCost', v)} placeholder="Default: 10000" />
+                </Field>
                 <Field label="Harga Jual Paket (Rp)">
-                  <TextInput type="number" value={editing.priceIdr} onChange={(v) => setField('priceIdr', v)} placeholder="Misal: 150000 (0 = pakai HPP bahan)" />
+                  <TextInput type="number" value={editing.priceIdr} onChange={(v) => setField('priceIdr', v)} placeholder="Misal: 150000" />
                 </Field>
               </div>
 
@@ -349,28 +355,45 @@ export function PackageManager() {
               )}
 
               {/* Kalkulator live HPP vs Harga Jual */}
-              <div className="rounded-2xl bg-surface-container-low border border-outline-variant p-4 space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-on-surface-variant">HPP Bahan Baku Otomatis ({editing.baseServings ?? 2} porsi):</span>
-                  <span className="font-semibold text-on-surface">{formatRupiah(previewCost)}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-on-surface-variant font-medium">Harga Jual Paket (Manual):</span>
-                  <span className="font-bold text-primary text-sm">
-                    {numOrZero(editing.priceIdr) > 0 
-                      ? formatRupiah(editing.priceIdr) 
-                      : `${formatRupiah(previewCost)} (Otomatis)`}
-                  </span>
-                </div>
-                {numOrZero(editing.priceIdr) > 0 && (
-                  <div className="flex items-center justify-between text-xs pt-2 border-t border-outline-variant/60">
-                    <span className="text-on-surface-variant font-medium">Estimasi Gross Margin:</span>
-                    <span className={`font-bold ${editing.priceIdr >= previewCost ? 'text-emerald-700' : 'text-rose-600'}`}>
-                      {formatRupiah(editing.priceIdr - previewCost)} ({Math.round(((editing.priceIdr - previewCost) / editing.priceIdr) * 100)}%)
-                    </span>
+              {(() => {
+                const pkgCost = numOrZero(editing.packagingCost ?? 10000);
+                const totalHpp = previewCost + pkgCost;
+                const price = numOrZero(editing.priceIdr);
+                const hasManualPrice = price > 0;
+                const grossProfit = price - totalHpp;
+                const grossMargin = hasManualPrice && price > 0 ? Math.round((grossProfit / price) * 100) : 0;
+
+                return (
+                  <div className="rounded-2xl bg-surface-container-low border border-outline-variant p-4 space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-on-surface-variant">HPP Bahan Baku Otomatis ({editing.baseServings ?? 2} porsi):</span>
+                      <span className="font-semibold text-on-surface">{formatRupiah(previewCost)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-on-surface-variant">Estimasi Biaya Kemasan & Packaging:</span>
+                      <span className="font-semibold text-on-surface">+{formatRupiah(pkgCost)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-outline-variant/40 font-semibold">
+                      <span className="text-on-surface">Total HPP Paket (Bahan + Kemasan):</span>
+                      <span className="text-on-surface">{formatRupiah(totalHpp)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-outline-variant/60">
+                      <span className="text-on-surface-variant font-medium">Harga Jual Paket (Manual):</span>
+                      <span className="font-bold text-primary text-sm">
+                        {hasManualPrice ? formatRupiah(price) : `${formatRupiah(totalHpp)} (Otomatis)`}
+                      </span>
+                    </div>
+                    {hasManualPrice && (
+                      <div className="flex items-center justify-between text-xs pt-2 border-t border-outline-variant/60">
+                        <span className="text-on-surface-variant font-medium">Estimasi Gross Profit Murni:</span>
+                        <span className={`font-bold ${grossProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {formatRupiah(grossProfit)} ({grossMargin}%)
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+                );
+              })()}
 
               {/* Menu fiks: grid hari × waktu makan, pilih resep tiap slot */}
               <div className="pt-1">
