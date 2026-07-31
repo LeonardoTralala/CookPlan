@@ -248,31 +248,50 @@ export function PackageManager() {
       ) : (
         <div className="space-y-3">
           {filtered.length === 0 && <p className="text-center text-sm text-on-surface-variant py-8">Belum ada paket.</p>}
-          {filtered.map((p) => (
-            <div key={p.id} className={`rounded-2xl border p-3 flex items-center gap-3 ${p.isActive ? 'border-outline-variant' : 'border-error/30 bg-error/5'}`}>
-              <div className="w-14 h-14 rounded-xl bg-surface-container-high overflow-hidden shrink-0 flex items-center justify-center">
-                {p.imageUrl
-                  ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
-                  : <span className="material-symbols-outlined text-on-surface-variant">shopping_bag</span>}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-on-surface truncate">{p.name}</span>
-                  {!p.isActive && <span className="text-[10px] font-bold uppercase bg-error text-white px-2 py-0.5 rounded-full">Disembunyikan</span>}
-                  {(p.badges ?? []).map((b) => (
-                    <span key={b} className="text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">{b}</span>
-                  ))}
+          {filtered.map((p) => {
+            const hpp = packageCost(p);
+            const price = p.priceIdr > 0 ? p.priceIdr : hpp;
+            const hasManualPrice = p.priceIdr > 0;
+            const margin = hasManualPrice && price > 0 ? Math.round(((price - hpp) / price) * 100) : null;
+            return (
+              <div key={p.id} className={`rounded-2xl border p-3.5 flex items-center gap-3.5 ${p.isActive ? 'border-outline-variant' : 'border-error/30 bg-error/5'}`}>
+                <div className="w-14 h-14 rounded-xl bg-surface-container-high overflow-hidden shrink-0 flex items-center justify-center">
+                  {p.imageUrl
+                    ? <img src={p.imageUrl} alt="" className="w-full h-full object-cover" loading="lazy" />
+                    : <span className="material-symbols-outlined text-on-surface-variant">shopping_bag</span>}
                 </div>
-                <p className="text-xs text-on-surface-variant mt-0.5">
-                  {p.periodeDays} hari · {p.mealsPerDay}× makan/hari · {p.meals?.length ?? 0} menu · ~{formatRupiah(packageCost(p))}
-                </p>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-on-surface truncate">{p.name}</span>
+                    {!p.isActive && <span className="text-[10px] font-bold uppercase bg-error text-white px-2 py-0.5 rounded-full">Disembunyikan</span>}
+                    {(p.badges ?? []).map((b) => (
+                      <span key={b} className="text-[10px] font-bold uppercase tracking-wide bg-primary/10 text-primary px-2 py-0.5 rounded-full">{b}</span>
+                    ))}
+                  </div>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    {p.periodeDays} hari · {p.mealsPerDay}× makan/hari · {p.meals?.length ?? 0} menu
+                  </p>
+                  <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
+                    <span className="font-bold text-primary">
+                      {hasManualPrice ? formatRupiah(p.priceIdr) : `${formatRupiah(hpp)} (Otomatis)`}
+                    </span>
+                    <span className="text-on-surface-variant text-[11px]">
+                      (HPP Bahan: {formatRupiah(hpp)})
+                    </span>
+                    {margin !== null && (
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${margin >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                        Margin {margin}%
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => openEdit(p)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container-low cursor-pointer">Edit</button>
+                  <button onClick={() => handleDelete(p)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-error/40 text-error hover:bg-error/10 cursor-pointer">Hapus</button>
+                </div>
               </div>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => openEdit(p)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-outline-variant text-on-surface-variant hover:bg-surface-container-low cursor-pointer">Edit</button>
-                <button onClick={() => handleDelete(p)} className="text-xs font-semibold px-3 py-1.5 rounded-full border border-error/40 text-error hover:bg-error/10 cursor-pointer">Hapus</button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
@@ -316,8 +335,8 @@ export function PackageManager() {
                 <Field label="Urutan tampil (sort)">
                   <TextInput type="number" value={editing.sortOrder} onChange={(v) => setField('sortOrder', v)} />
                 </Field>
-                <Field label="Harga tampilan (opsional)">
-                  <TextInput type="number" value={editing.priceIdr} onChange={(v) => setField('priceIdr', v)} placeholder="0 = pakai harga otomatis" />
+                <Field label="Harga Jual Paket (Rp)">
+                  <TextInput type="number" value={editing.priceIdr} onChange={(v) => setField('priceIdr', v)} placeholder="Misal: 150000 (0 = pakai HPP bahan)" />
                 </Field>
               </div>
 
@@ -329,10 +348,28 @@ export function PackageManager() {
                 <p className="text-[11px] text-on-surface-variant">Slug (key permanen): <code className="text-on-surface">{editing.slug}</code></p>
               )}
 
-              {/* Harga terhitung otomatis dari bahan resep menu */}
-              <div className="flex items-center justify-between rounded-xl bg-surface-container-low border border-outline-variant px-4 py-2.5">
-                <span className="text-xs font-semibold text-on-surface">Perkiraan harga (otomatis dari bahan menu)</span>
-                <span className="font-bold text-primary">{formatRupiah(previewCost)}</span>
+              {/* Kalkulator live HPP vs Harga Jual */}
+              <div className="rounded-2xl bg-surface-container-low border border-outline-variant p-4 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-on-surface-variant">HPP Bahan Baku Otomatis ({editing.baseServings ?? 2} porsi):</span>
+                  <span className="font-semibold text-on-surface">{formatRupiah(previewCost)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-on-surface-variant font-medium">Harga Jual Paket (Manual):</span>
+                  <span className="font-bold text-primary text-sm">
+                    {numOrZero(editing.priceIdr) > 0 
+                      ? formatRupiah(editing.priceIdr) 
+                      : `${formatRupiah(previewCost)} (Otomatis)`}
+                  </span>
+                </div>
+                {numOrZero(editing.priceIdr) > 0 && (
+                  <div className="flex items-center justify-between text-xs pt-2 border-t border-outline-variant/60">
+                    <span className="text-on-surface-variant font-medium">Estimasi Gross Margin:</span>
+                    <span className={`font-bold ${editing.priceIdr >= previewCost ? 'text-emerald-700' : 'text-rose-600'}`}>
+                      {formatRupiah(editing.priceIdr - previewCost)} ({Math.round(((editing.priceIdr - previewCost) / editing.priceIdr) * 100)}%)
+                    </span>
+                  </div>
+                )}
               </div>
 
               {/* Menu fiks: grid hari × waktu makan, pilih resep tiap slot */}

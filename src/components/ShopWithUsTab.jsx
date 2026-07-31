@@ -133,7 +133,18 @@ export function ShopWithUsTab({ onSave }) {
     });
   };
 
-  const total = estimatedCost + addonsTotal + (totalItems > 0 ? DELIVERY_FEE : 0);
+  // Hitung harga paket: jika admin menginput priceIdr manual (>0), pakai & skalakan berdasarkan porsi request / baseServings.
+  // Jika priceIdr 0/null, fallback ke estimatedCost (agregasi bahan resep).
+  const packageSellingPrice = useMemo(() => {
+    if (!selected) return 0;
+    const baseServings = selected.baseServings && selected.baseServings > 0 ? selected.baseServings : 2;
+    if (selected.priceIdr && selected.priceIdr > 0) {
+      return Math.round((selected.priceIdr * servings) / baseServings);
+    }
+    return estimatedCost;
+  }, [selected, servings, estimatedCost]);
+
+  const total = packageSellingPrice + addonsTotal + (totalItems > 0 ? DELIVERY_FEE : 0);
 
   const handleOrder = () => {
     if (!selected || totalItems === 0) return;
@@ -147,7 +158,7 @@ export function ShopWithUsTab({ onSave }) {
     navigate('/order/package', {
       state: {
         items,
-        subtotal: estimatedCost + addonsTotal,
+        subtotal: packageSellingPrice + addonsTotal,
         notes: `Paket: ${selected.name} (${servings} porsi/menu, ${selected.periodeDays} hari)`,
       }
     });
@@ -160,7 +171,7 @@ export function ShopWithUsTab({ onSave }) {
       sourceType: 'package',
       sourceRef: String(selected.id),
       items: [...flattenSections(sections), ...addonItems],
-      totalIdr: estimatedCost + addonsTotal,
+      totalIdr: packageSellingPrice + addonsTotal,
     });
   };
 
@@ -235,7 +246,12 @@ export function ShopWithUsTab({ onSave }) {
             </div>
             <p className="font-bold text-on-surface text-sm">{p.name}</p>
             <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">{p.description}</p>
-            <p className="text-xs text-primary font-semibold mt-2">{p.periodeDays} hari · {p.mealsPerDay}× makan/hari</p>
+            <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-outline-variant/40">
+              <span className="text-[11px] text-primary font-semibold">{p.periodeDays} hari · {p.mealsPerDay}× makan</span>
+              <span className="font-bold text-primary text-xs">
+                {formatRupiah(p.priceIdr > 0 ? p.priceIdr : buildShoppingListFromSlots(slotsFromPackageMeals(p.meals, p.baseServings || 2)).estimatedCost)}
+              </span>
+            </div>
           </button>
         ))}
       </div>
@@ -404,8 +420,8 @@ export function ShopWithUsTab({ onSave }) {
           {/* Ringkasan + aksi - disembunyikan di mobile (lihat sticky bar di bawah) */}
           <div className="hidden sm:block bg-surface-cream rounded-2xl p-5 space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-on-surface-variant">Total Bahan ({totalItems} item)</span>
-              <span className="font-semibold text-on-surface">{formatRupiah(estimatedCost)}</span>
+              <span className="text-on-surface-variant font-medium">Paket {selected.name} ({servings} porsi)</span>
+              <span className="font-semibold text-on-surface">{formatRupiah(packageSellingPrice)}</span>
             </div>
             {addonsTotal > 0 && (
               <div className="flex justify-between text-sm">
