@@ -646,6 +646,26 @@ export function GenerateResult() {
                       />
                     </div>
 
+                    {/* Quick-jump Step Pills */}
+                    {totalSteps > 1 && (
+                      <div className="flex flex-wrap gap-1.5 py-1">
+                        {instructions.map((_, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => setGenRecipeStepIdx(idx)}
+                            className={`w-7 h-7 rounded-full text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                              idx === genRecipeStepIdx
+                                ? "bg-primary text-white shadow-xs"
+                                : "bg-surface-container text-on-surface-variant hover:bg-surface-container-high"
+                            }`}
+                          >
+                            {idx + 1}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
                     {/* Big Step text card */}
                     <div className="relative overflow-hidden bg-primary/5 border border-primary/20 rounded-2xl p-4.5 shadow-inner min-h-[90px] flex flex-col justify-center transition-all duration-300">
                       {/* Decorative background icon */}

@@ -125,6 +125,23 @@ export function GeneratePlan() {
     return () => { active = false; };
   }, [isAnonymous]);
 
+  // Sinkronisasi otomatis saat Onboarding Tour berpindah langkah
+  useEffect(() => {
+    const handleOnboardingStep = (e) => {
+      const { targetSelector } = e.detail || {};
+      if (targetSelector === '#generate-periode-field') {
+        setStep(1);
+      } else if (targetSelector === '#generate-pantry-field') {
+        setStep(2);
+      } else if (targetSelector === '#generate-submit-btn') {
+        setStep(3);
+      }
+    };
+
+    window.addEventListener('onboarding-step-changed', handleOnboardingStep);
+    return () => window.removeEventListener('onboarding-step-changed', handleOnboardingStep);
+  }, []);
+
   // Sisa percobaan gratis untuk tamu; habis → arahkan ke login/daftar.
   const guestRemaining = Math.max(0, GUEST_LIMIT - (usageCount ?? 0));
   const guestExhausted = isAnonymous && usageCount != null && guestRemaining === 0;
@@ -286,12 +303,38 @@ export function GeneratePlan() {
             </p>
           )
         )}
-        <div className="flex items-center gap-2">
-          {[1, 2, 3].map((s) => (
-            <div key={s} className="flex-1">
-              <div className={`h-1.5 rounded-full transition-colors ${s <= step ? 'bg-primary' : 'bg-surface-container-high'}`} />
-            </div>
-          ))}
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            {[
+              { s: 1, label: '1. Menu & Porsi' },
+              { s: 2, label: '2. Diet & Budget' },
+              { s: 3, label: '3. Ringkasan & AI' },
+            ].map(({ s, label }) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStep(s)}
+                className={`text-xs font-bold transition-colors cursor-pointer ${
+                  step === s ? 'text-primary' : 'text-on-surface-variant/70 hover:text-on-surface'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-2">
+            {[1, 2, 3].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setStep(s)}
+                aria-label={`Ke Langkah ${s}`}
+                className="flex-1 py-1 cursor-pointer group"
+              >
+                <div className={`h-2 rounded-full transition-all ${s <= step ? 'bg-primary' : 'bg-surface-container-high group-hover:bg-primary/40'}`} />
+              </button>
+            ))}
+          </div>
         </div>
         <p className="text-xs text-on-surface-variant mt-2">Langkah {step} dari 3</p>
       </div>
