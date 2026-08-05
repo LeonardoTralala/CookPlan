@@ -61,3 +61,6 @@ AGENTS.md
 mcp_payload.json
 
 database resep.xlsx
+
+# Export files
+preregistrations_export.*

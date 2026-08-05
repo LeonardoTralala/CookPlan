@@ -104,8 +104,8 @@ export function AppShell({ children }) {
   const [triggerTour, setTriggerTour] = useState(false);
   const steps = ONBOARDING_STEPS[pathname];
 
-  // Tamu (anonymous): hanya tab Generate yang relevan; tab lain butuh akun penuh.
-  const navItems = isAnonymous ? NAV_ITEMS.filter((i) => i.to === '/generate') : NAV_ITEMS;
+  // Navigasi selalu 5 tab (termasuk tamu).
+  const navItems = NAV_ITEMS;
 
   // Entry point Admin di header — hanya tampil untuk admin (gerbang asli RLS).
   const [isAdmin, setIsAdmin] = useState(false);
@@ -124,9 +124,6 @@ export function AppShell({ children }) {
       setConfirmOpen(false);
       navigate('/');
     } catch (err) {
-      // Biarkan user tetap di halaman saat ini bila signOut gagal — supaya
-      // session yang masih aktif tidak ke-redirect ke landing dengan keadaan
-      // tergantung. Console untuk debug, tombol auto-pulih via finally.
       console.error('Sign out gagal:', err);
     } finally {
       setSigningOut(false);
@@ -137,6 +134,33 @@ export function AppShell({ children }) {
 
   return (
     <div className="min-h-dvh flex flex-col bg-canvas-white text-on-surface antialiased">
+      {/* Banner Teaser Mode Tamu Utama */}
+      {isAnonymous && (
+        <div className="relative z-50 bg-gradient-to-r from-surface-cream via-primary/5 to-surface-cream border-b border-outline-variant/40 px-margin-mobile md:px-margin-desktop py-2.5 shadow-2xs">
+          <div className="max-w-container-max mx-auto flex items-center justify-between gap-2 sm:gap-3 text-xs">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary font-bold text-[10px] uppercase tracking-wider shrink-0 shadow-2xs">
+                <span className="material-symbols-outlined text-[13px] text-primary" aria-hidden="true">auto_awesome</span>
+                Mode Tamu
+              </span>
+              <p className="text-on-surface-variant font-medium truncate hidden sm:block">
+                Susun rencana makan AI &amp; eksplorasi katalog resep sehat sepuasnya tanpa mendaftar!
+              </p>
+              <p className="text-on-surface-variant font-medium truncate sm:hidden">
+                Coba AI &amp; Katalog
+              </p>
+            </div>
+            <Link
+              to="/auth"
+              className="group inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-1.5 rounded-full bg-primary text-on-primary font-bold text-xs shadow-xs hover:shadow-md hover:bg-primary-container active:scale-95 transition-all duration-200 cursor-pointer shrink-0"
+            >
+              <span>Daftar / Masuk</span>
+              <span className="material-symbols-outlined text-[15px] group-hover:translate-x-0.5 transition-transform" aria-hidden="true">arrow_forward</span>
+            </Link>
+          </div>
+        </div>
+      )}
+
       {/* Top nav (desktop) */}
       <header className="sticky top-0 z-40 border-b border-outline-variant/30 bg-canvas-white/95 backdrop-blur-md">
         <nav className="max-w-container-max mx-auto flex items-center justify-between px-margin-mobile md:px-margin-desktop py-3">
@@ -146,25 +170,32 @@ export function AppShell({ children }) {
 
           {/* Desktop links */}
           <div className="hidden md:flex items-center gap-1">
-            {navItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={`relative inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
-                  isActive(item.to)
-                    ? 'bg-primary text-on-primary'
-                    : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{item.icon}</span>
-                {item.label}
-                {item.to === '/shopping' && plannedCount > 0 && (
-                  <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold">
-                    {plannedCount}
-                  </span>
-                )}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const requiresAuth = isAnonymous && (item.to === '/planner' || item.to === '/shopping' || item.to === '/profile');
+              const destination = requiresAuth ? '/auth' : item.to;
+              const linkState = requiresAuth ? { from: item.to } : undefined;
+
+              return (
+                <Link
+                  key={item.to}
+                  to={destination}
+                  state={linkState}
+                  className={`relative inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-semibold transition-colors ${
+                    isActive(item.to)
+                      ? 'bg-primary text-on-primary'
+                      : 'text-on-surface-variant hover:bg-surface-container-low hover:text-primary'
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-[20px]" aria-hidden="true">{item.icon}</span>
+                  {item.label}
+                  {item.to === '/shopping' && plannedCount > 0 && (
+                    <span className="ml-1 inline-flex items-center justify-center min-w-5 h-5 px-1 rounded-full bg-error text-white text-[10px] font-bold">
+                      {plannedCount}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -191,16 +222,7 @@ export function AppShell({ children }) {
               </button>
             )}
 
-            {isAnonymous ? (
-              // Tamu: arahkan untuk daftar / masuk alih-alih keluar.
-              <Link
-                to="/auth"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-on-primary text-sm font-semibold hover:shadow-md active:scale-95 transition-colors cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">person_add</span>
-                Daftar / Masuk
-              </Link>
-            ) : (
+            {!isAnonymous && (
               <div className="flex items-center gap-1">
                 {/* Admin: pintu masuk panel (desktop pill, mobile ikon) */}
                 {isAdmin && (
@@ -248,44 +270,49 @@ export function AppShell({ children }) {
         </nav>
       </header>
 
-      <main id="main-content" tabIndex={-1} className={`flex-grow outline-none ${isAnonymous ? '' : 'pb-20 md:pb-0'}`}>
+      <main id="main-content" tabIndex={-1} className="flex-grow outline-none pb-20 md:pb-0">
         <Suspense fallback={<RouteFallback variant="content" />}>
           {children}
         </Suspense>
       </main>
 
-      {/* Bottom nav (mobile) — tamu hanya punya Generate, jadi disembunyikan. */}
-      {!isAnonymous && (
+      {/* Bottom nav (mobile) — tampil untuk semua pengguna */}
       <nav
         className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-canvas-white/95 backdrop-blur-md border-t border-outline-variant/30 pb-safe-2"
         aria-label="Navigasi utama"
       >
         <div className="grid grid-cols-5">
-          {navItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-14 transition-colors ${
-                isActive(item.to) ? 'text-primary' : 'text-on-surface-variant'
-              }`}
-            >
-              <span
-                className={`material-symbols-outlined text-[22px] ${isActive(item.to) ? 'fill' : ''}`}
-                aria-hidden="true"
+          {navItems.map((item) => {
+            const requiresAuth = isAnonymous && (item.to === '/planner' || item.to === '/shopping' || item.to === '/profile');
+            const destination = requiresAuth ? '/auth' : item.to;
+            const linkState = requiresAuth ? { from: item.to } : undefined;
+
+            return (
+              <Link
+                key={item.to}
+                to={destination}
+                state={linkState}
+                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-14 transition-colors ${
+                  isActive(item.to) ? 'text-primary' : 'text-on-surface-variant'
+                }`}
               >
-                {item.icon}
-              </span>
-              <span className="text-[10px] font-semibold">{item.label}</span>
-              {item.to === '/shopping' && plannedCount > 0 && (
-                <span className="absolute top-1 right-[22%] inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-error text-white text-[9px] font-bold">
-                  {plannedCount}
+                <span
+                  className={`material-symbols-outlined text-[22px] ${isActive(item.to) ? 'fill' : ''}`}
+                  aria-hidden="true"
+                >
+                  {item.icon}
                 </span>
-              )}
-            </Link>
-          ))}
+                <span className="text-[10px] font-semibold">{item.label}</span>
+                {item.to === '/shopping' && plannedCount > 0 && (
+                  <span className="absolute top-1 right-[22%] inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full bg-error text-white text-[9px] font-bold">
+                    {plannedCount}
+                  </span>
+                )}
+              </Link>
+            );
+          })}
         </div>
       </nav>
-      )}
 
       {/* Konfirmasi keluar */}
       <Modal isOpen={confirmOpen} onClose={() => !signingOut && setConfirmOpen(false)}>

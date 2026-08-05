@@ -67,7 +67,125 @@ function shuffle(arr) {
 function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
   const navigate = useNavigate();
   const { showToast, weeklyPlan } = usePlan();
-  const { user } = useAuth();
+  const { user, isAnonymous } = useAuth();
+
+  // State untuk Auth Modal Soft-Gated Tamu
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authModalMessage, setAuthModalMessage] = useState({ icon: 'lock', title: '', description: '', from: '/catalog' });
+
+  const triggerAuthModal = (title, description, icon = 'lock', from = '/catalog') => {
+    setAuthModalMessage({ icon, title, description, from });
+    setAuthModalOpen(true);
+  };
+
+  const handleCreateRecipeClick = (e) => {
+    if (isAnonymous) {
+      e.preventDefault();
+      triggerAuthModal(
+        'Buat & Bagikan Resep',
+        'Daftar akun gratis dalam 10 detik untuk menulis dan membagikan resep kreasimu ke komunitas CookPlan.',
+        'edit_note',
+        '/recipes/create'
+      );
+    }
+  };
+
+  // Toggle simpan/hapus resep (optimistic + rollback bila gagal).
+  const handleToggleSaved = async (recipe) => {
+    if (isAnonymous) {
+      triggerAuthModal(
+        'Simpan Resep Favoritmu',
+        'Daftar akun gratis dalam 10 detik untuk menyimpan resep favoritmu ke koleksi pribadi!',
+        'bookmark'
+      );
+      return;
+    }
+    const id = recipe.id;
+    const wasSaved = savedIds.has(id);
+    setSavedIds((prev) => {
+      const next = new Set(prev);
+      if (wasSaved) next.delete(id); else next.add(id);
+      return next;
+    });
+    try {
+      if (wasSaved) await unsaveRecipe(id); else await saveRecipe(id);
+      showToast(wasSaved ? 'Resep dihapus dari tersimpan.' : `"${recipe.title}" disimpan.`);
+    } catch (err) {
+      setSavedIds((prev) => { // rollback
+        const next = new Set(prev);
+        if (wasSaved) next.add(id); else next.delete(id);
+        return next;
+      });
+      showToast(err.message || 'Gagal memperbarui resep tersimpan.');
+    }
+  };
+
+  // Toggle like resep (optimistic + rollback bila gagal).
+  const handleToggleLike = async (recipe, e) => {
+    if (e) e.stopPropagation();
+    if (isAnonymous) {
+      triggerAuthModal(
+        'Sukai Resep',
+        'Daftar akun gratis dalam 10 detik untuk menyukai masakan favoritmu!',
+        'favorite'
+      );
+      return;
+    }
+    const id = recipe.id;
+    const isLiked = likedIds.has(id);
+
+    setLikedIds((prev) => {
+      const next = new Set(prev);
+      if (isLiked) next.delete(id); else next.add(id);
+      return next;
+    });
+
+    setRecipes((prevRecipes) =>
+      prevRecipes.map((r) => {
+        if (r.id === id) {
+          const count = r.likesCount ?? 0;
+          return { ...r, likesCount: isLiked ? Math.max(0, count - 1) : count + 1 };
+        }
+        return r;
+      })
+    );
+
+    if (selectedRecipeForDetail?.id === id) {
+      setSelectedRecipeForDetail((prev) => {
+        if (!prev) return null;
+        const count = prev.likesCount ?? 0;
+        return { ...prev, likesCount: isLiked ? Math.max(0, count - 1) : count + 1 };
+      });
+    }
+
+    try {
+      await toggleLikeRecipe(id, !isLiked);
+      showToast(isLiked ? 'Menyukai resep dibatalkan.' : `Menyukai "${recipe.title}"!`);
+    } catch (err) {
+      setLikedIds((prev) => {
+        const next = new Set(prev);
+        if (isLiked) next.add(id); else next.delete(id);
+        return next;
+      });
+      setRecipes((prevRecipes) =>
+        prevRecipes.map((r) => {
+          if (r.id === id) {
+            const count = r.likesCount ?? 0;
+            return { ...r, likesCount: isLiked ? count + 1 : Math.max(0, count - 1) };
+          }
+          return r;
+        })
+      );
+      if (selectedRecipeForDetail?.id === id) {
+        setSelectedRecipeForDetail((prev) => {
+          if (!prev) return null;
+          const count = prev.likesCount ?? 0;
+          return { ...prev, likesCount: isLiked ? count + 1 : Math.max(0, count - 1) };
+        });
+      }
+      showToast(err.message || 'Gagal memperbarui Like.');
+    }
+  };
 
   // Bank resep dari DB (Supabase) — menggantikan mockRecipes statis.
   const [recipes, setRecipes] = useState([]);
@@ -218,86 +336,7 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
   // Tampilkan kombinasi preferensi diet acak lain (yang sedang dipilih tetap muncul).
   const reshuffleDiet = () => setDietSample(sampleDietTags(dietPool, 8, activeFilters));
 
-  // Toggle simpan/hapus resep (optimistic + rollback bila gagal).
-  const handleToggleSaved = async (recipe) => {
-    const id = recipe.id;
-    const wasSaved = savedIds.has(id);
-    setSavedIds((prev) => {
-      const next = new Set(prev);
-      if (wasSaved) next.delete(id); else next.add(id);
-      return next;
-    });
-    try {
-      if (wasSaved) await unsaveRecipe(id); else await saveRecipe(id);
-      showToast(wasSaved ? 'Resep dihapus dari tersimpan.' : `"${recipe.title}" disimpan.`);
-    } catch (err) {
-      setSavedIds((prev) => { // rollback
-        const next = new Set(prev);
-        if (wasSaved) next.add(id); else next.delete(id);
-        return next;
-      });
-      showToast(err.message || 'Gagal memperbarui resep tersimpan.');
-    }
-  };
 
-  // Toggle like resep (optimistic + rollback bila gagal).
-  const handleToggleLike = async (recipe, e) => {
-    if (e) e.stopPropagation();
-    const id = recipe.id;
-    const isLiked = likedIds.has(id);
-
-    setLikedIds((prev) => {
-      const next = new Set(prev);
-      if (isLiked) next.delete(id); else next.add(id);
-      return next;
-    });
-
-    setRecipes((prevRecipes) =>
-      prevRecipes.map((r) => {
-        if (r.id === id) {
-          const count = r.likesCount ?? 0;
-          return { ...r, likesCount: isLiked ? Math.max(0, count - 1) : count + 1 };
-        }
-        return r;
-      })
-    );
-
-    if (selectedRecipeForDetail?.id === id) {
-      setSelectedRecipeForDetail((prev) => {
-        if (!prev) return null;
-        const count = prev.likesCount ?? 0;
-        return { ...prev, likesCount: isLiked ? Math.max(0, count - 1) : count + 1 };
-      });
-    }
-
-    try {
-      await toggleLikeRecipe(id, !isLiked);
-      showToast(isLiked ? 'Menyukai resep dibatalkan.' : `Menyukai "${recipe.title}"! ❤️`);
-    } catch (err) {
-      setLikedIds((prev) => {
-        const next = new Set(prev);
-        if (isLiked) next.add(id); else next.delete(id);
-        return next;
-      });
-      setRecipes((prevRecipes) =>
-        prevRecipes.map((r) => {
-          if (r.id === id) {
-            const count = r.likesCount ?? 0;
-            return { ...r, likesCount: isLiked ? count + 1 : Math.max(0, count - 1) };
-          }
-          return r;
-        })
-      );
-      if (selectedRecipeForDetail?.id === id) {
-        setSelectedRecipeForDetail((prev) => {
-          if (!prev) return null;
-          const count = prev.likesCount ?? 0;
-          return { ...prev, likesCount: isLiked ? count + 1 : Math.max(0, count - 1) };
-        });
-      }
-      showToast(err.message || 'Gagal memperbarui Like.');
-    }
-  };
 
   // Toggle quick filter tag
   const handleToggleFilter = (filterName) => {
@@ -362,6 +401,7 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
 
       return true;
     });
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization
   }, [recipes, activeTab, myRecipesFilter, savedIds, searchQuery, activeFilters, maxTime, priceCategory, onlyVerified, dietLabelOf, user]);
 
   // Sort recipes based on sortBy selector ('newest' vs 'popular')
@@ -687,6 +727,7 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
 
             <Link
               to="/recipes/create"
+              onClick={handleCreateRecipeClick}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full bg-primary text-white font-bold text-xs hover:bg-primary-container transition-all shadow-xs shrink-0 cursor-pointer w-full sm:w-auto justify-center"
             >
               <span className="material-symbols-outlined text-base">add</span>
@@ -719,6 +760,7 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
             {activeTab === 'resep-saya' ? (
               <Link
                 to="/recipes/create"
+                onClick={handleCreateRecipeClick}
                 className="mt-6 inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-white font-bold rounded-full hover:bg-primary-container transition-all cursor-pointer shadow-md"
               >
                 <span className="material-symbols-outlined text-lg">add</span>
@@ -1071,9 +1113,39 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
         </div>
       </Modal>
 
+      {/* Modal Soft-Gated Auth Tamu (Tanpa emoji) */}
+      <Modal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)}>
+        <div className="w-full max-w-sm bg-canvas-white rounded-3xl p-6 shadow-xl text-center">
+          <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-3xl" aria-hidden="true">{authModalMessage.icon || 'lock'}</span>
+          </div>
+          <h2 className="text-lg font-bold text-on-surface mb-2">{authModalMessage.title}</h2>
+          <p className="text-sm text-on-surface-variant mb-6 leading-relaxed">
+            {authModalMessage.description}
+          </p>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={() => setAuthModalOpen(false)}
+              className="flex-1 min-h-11 rounded-full text-sm font-semibold text-on-surface-variant bg-surface-container-low hover:bg-surface-container transition-colors cursor-pointer"
+            >
+              Nanti Saja
+            </button>
+            <Link
+              to="/auth"
+              state={{ from: authModalMessage.from || '/catalog' }}
+              className="flex-1 min-h-11 rounded-full text-sm font-semibold text-on-primary bg-primary hover:shadow-md active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden="true">person_add</span>
+              Daftar / Masuk
+            </Link>
+          </div>
+        </div>
+      </Modal>
+
       {/* Floating Action Button (FAB) "+ Buat Resep" */}
       <Link
         to="/recipes/create"
+        onClick={handleCreateRecipeClick}
         className="fixed bottom-20 md:bottom-8 right-6 z-30 inline-flex items-center gap-2 px-5 py-3.5 rounded-full bg-primary text-white font-extrabold text-sm shadow-xl hover:bg-primary-container hover:scale-105 active:scale-95 transition-all cursor-pointer border border-white/20"
         title="Buat Resep Baru"
         aria-label="Buat Resep Baru"
