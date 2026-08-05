@@ -68,6 +68,16 @@ export function PageOnboarding({ steps, pageKey, triggerRun, onComplete }) {
   useEffect(() => {
     if (!isVisible || !step) return;
 
+    // Kirim sinyal event ke komponen halaman (misal GeneratePlan) untuk sinkronisasi step wizard
+    window.dispatchEvent(new CustomEvent('onboarding-step-changed', {
+      detail: {
+        pageKey,
+        currentStep,
+        targetSelector: step.targetSelector,
+        stepTitle: step.title,
+      }
+    }));
+
     const updatePosition = () => {
       const el = document.querySelector(step.targetSelector);
       if (el) {
@@ -99,7 +109,7 @@ export function PageOnboarding({ steps, pageKey, triggerRun, onComplete }) {
       window.removeEventListener('resize', updatePosition);
       window.removeEventListener('scroll', updatePosition);
     };
-  }, [currentStep, step, isVisible]);
+  }, [currentStep, step, isVisible, pageKey]);
 
   if (!isVisible || !step) return null;
 
