@@ -245,7 +245,7 @@ export function GenerateResult() {
 
       setNoteOpenIndex(null);
       setNoteDraft('');
-      showToast(`Menu ${appliedDay?.day || `hari ${dayIndex + 1}`} berhasil diganti! 🍳`);
+      showToast(`Menu ${appliedDay?.day || `hari ${dayIndex + 1}`} berhasil diganti!`);
     } catch (e) {
       showToast(e.message || 'Gagal mengganti menu hari ini.', { variant: 'error' });
     } finally {
@@ -509,15 +509,21 @@ export function GenerateResult() {
           <span className="material-symbols-outlined text-[20px]">refresh</span>
           Buat Ulang Rencana
         </button>
-        {!isAnonymous && (
-          <button
-            onClick={() => (applied ? navigate('/planner') : setConfirmApply(true))}
-            className="flex-1 px-6 py-3 border border-primary text-primary rounded-full font-semibold text-sm hover:bg-primary/5 active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-outlined text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
-            {applied ? 'Lihat Rencana Mingguan' : 'Terapkan ke Planner'}
-          </button>
-        )}
+        <button
+          onClick={() => {
+            if (isAnonymous) {
+              navigate('/auth', { state: { from: `/generate/${planId}` } });
+            } else if (applied) {
+              navigate('/planner');
+            } else {
+              setConfirmApply(true);
+            }
+          }}
+          className="flex-1 px-6 py-3 bg-primary text-on-primary rounded-full font-semibold text-sm hover:shadow-lg active:scale-95 transition cursor-pointer inline-flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-outlined text-[20px]">{applied ? 'event_available' : 'calendar_month'}</span>
+          {isAnonymous ? 'Simpan Rencana ke Planner' : applied ? 'Lihat Rencana Mingguan' : 'Terapkan ke Planner'}
+        </button>
       </div>
 
       {applied && (
