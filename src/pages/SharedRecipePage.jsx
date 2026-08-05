@@ -6,6 +6,7 @@ import { useAuth } from "../hooks/useAuth.js";
 import { usePlan } from "../hooks/usePlan.js";
 import { AppShell } from "../components/AppShell.jsx";
 import { ModalSheet } from "../components/ModalSheet.jsx";
+import { SEOHead } from "../components/SEOHead.jsx";
 
 const formatRupiah = (val) => {
   if (!val) return "Rp 0";
@@ -113,8 +114,35 @@ export function SharedRecipePage() {
     ? Math.round((recipe.priceIdr || 0) / (recipe.baseServings || 1))
     : 0;
 
+  const recipeSchema = recipe ? {
+    '@context': 'https://schema.org',
+    '@type': 'Recipe',
+    name: recipe.title,
+    image: recipe.imageUrl ? [recipe.imageUrl] : ['https://cookplan.id/hero-poster.jpg'],
+    description: recipe.description || `Resep ${recipe.title} di CookPlan`,
+    recipeYield: `${recipe.baseServings || 2} porsi`,
+    recipeIngredient: (recipe.ingredients || []).map(ing => `${ing.name} ${ing.amount || ''} ${ing.unit || ''}`.trim()),
+    recipeInstructions: (recipe.instructions || []).map((step, idx) => ({
+      '@type': 'HowToStep',
+      position: idx + 1,
+      text: step,
+    })),
+    offers: recipe.priceIdr ? {
+      '@type': 'Offer',
+      price: recipe.priceIdr,
+      priceCurrency: 'IDR',
+    } : undefined,
+  } : null;
+
   return (
     <AppShell>
+      <SEOHead
+        title={recipe ? `${recipe.title} — Resep & Estimasi Biaya | CookPlan` : 'Resep Masakan — CookPlan'}
+        description={recipe ? (recipe.description || `Resep masakan ${recipe.title} lengkap dengan bahan-bahan, porsi, dan estimasi biaya per porsi di CookPlan.`) : 'Resep masakan CookPlan'}
+        canonicalUrl={`https://cookplan.id/share/recipe/${recipeId}`}
+        ogImage={recipe?.imageUrl || 'https://cookplan.id/hero-poster.jpg'}
+        jsonLd={recipeSchema}
+      />
       <div className="bg-canvas-white min-h-dvh font-sans text-on-surface pb-24">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-24">

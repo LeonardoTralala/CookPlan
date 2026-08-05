@@ -4,6 +4,7 @@ import { getSharedPlanByToken, importSharedPlan, getCurrentWeekStart } from "../
 import { useAuth } from "../hooks/useAuth.js";
 import { usePlan } from "../hooks/usePlan.js";
 import { AppShell } from "../components/AppShell.jsx";
+import { SEOHead } from "../components/SEOHead.jsx";
 
 const DAYS = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 const MEAL_LABELS = { breakfast: "Sarapan", lunch: "Makan Siang", dinner: "Makan Malam" };
@@ -100,6 +101,11 @@ export function SharedPlanPage() {
 
   return (
     <AppShell>
+      <SEOHead
+        title={sharedData ? `Rencana Menu Masak Mingguan (${totalMeals} Menu) — CookPlan` : 'Rencana Menu Masak Mingguan — CookPlan'}
+        description="Lihat rekomendasi rencana menu makan harian & mingguan yang dibagikan dari CookPlan. Lengkap dengan daftar masakan dan porsi."
+        canonicalUrl={`https://cookplan.id/share/plan/${shareToken}`}
+      />
       <div className="bg-canvas-white min-h-dvh font-sans text-on-surface pb-24">
         {/* Header Hero */}
         <section className="pt-8 pb-6 px-4 max-w-4xl mx-auto text-center">

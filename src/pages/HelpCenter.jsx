@@ -3,6 +3,7 @@ import { Navbar } from "../components/Navbar.jsx";
 import { Footer } from "../components/Footer.jsx";
 import { Toast } from "../components/Toast.jsx";
 import { useAuth } from "../hooks/useAuth.js";
+import { SEOHead } from "../components/SEOHead.jsx";
 
 const FAQ_ITEMS = [
   {
@@ -43,8 +44,27 @@ export function HelpCenter({ onNavigate }) {
     }));
   };
 
+  const faqSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    mainEntity: FAQ_ITEMS.map((item) => ({
+      '@type': 'Question',
+      name: item.question,
+      acceptedAnswer: {
+        '@type': 'Answer',
+        text: item.answer,
+      },
+    })),
+  };
+
   return (
     <div className="font-body-md text-on-surface bg-canvas-white min-h-dvh flex flex-col antialiased">
+      <SEOHead
+        title="Pusat Bantuan & FAQ | CookPlan"
+        description="Panduan lengkap penggunaan CookPlan, pertanyaan umum seputar rencana menu harian, belanja bahan otomatis, serta layanan pengiriman."
+        canonicalUrl="https://cookplan.id/help"
+        jsonLd={faqSchema}
+      />
       <Navbar onNavigate={onNavigate} />
       <main className="flex-grow hero-gradient pt-24 pb-16">
         <div className="max-w-4xl mx-auto px-margin-mobile md:px-margin-desktop space-y-12">

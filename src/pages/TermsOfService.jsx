@@ -1,10 +1,16 @@
 import { Navbar } from "../components/Navbar.jsx";
 import { Footer } from "../components/Footer.jsx";
 import { Toast } from "../components/Toast.jsx";
+import { SEOHead } from "../components/SEOHead.jsx";
 
 export function TermsOfService({ onNavigate }) {
   return (
     <div className="font-body-md text-on-surface bg-canvas-white min-h-dvh flex flex-col antialiased">
+      <SEOHead
+        title="Syarat & Ketentuan | CookPlan"
+        description="Syarat & Ketentuan penggunaan platform CookPlan, layanan rencana menu masakan harian, dan pembelian paket bahan."
+        canonicalUrl="https://cookplan.id/terms"
+      />
       <Navbar onNavigate={onNavigate} />
       <main className="flex-grow hero-gradient pt-24 pb-16">
         <div className="max-w-4xl mx-auto px-margin-mobile md:px-margin-desktop">
