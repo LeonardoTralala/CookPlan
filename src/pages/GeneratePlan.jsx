@@ -8,6 +8,7 @@ import { Modal } from '../components/Modal.jsx';
 import { useAuth } from '../hooks/useAuth.js';
 import { GenerateLoading } from '../components/GenerateLoading.jsx';
 import { trackPlanGenerationStart, trackPlanGenerationError } from '../lib/posthog.js';
+import { SEOHead } from '../components/SEOHead.jsx';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
 // Step 1: periode + porsi + waktu makan
@@ -274,7 +275,13 @@ export function GeneratePlan() {
   }).format(n);
 
   return (
-    <div className="max-w-2xl mx-auto px-5 md:px-10 py-8 md:py-12">
+    <>
+      <SEOHead
+        title="Generator Rencana Menu Masak Mingguan AI | CookPlan"
+        description="Buat rencana menu makan harian & mingguan otomatis bertenaga AI. Hemat budget belanja, sesuaikan diet keluarga, dan cegah limbah bahan makanan."
+        canonicalUrl="https://cookplan.id/generate"
+      />
+      <div className="max-w-2xl mx-auto px-5 md:px-10 py-8 md:py-12">
       {/* Header + progress */}
       <div className="mb-8">
         <h1 className="font-headline-lg text-headline-lg text-primary mb-2 flex items-center gap-2">
@@ -737,6 +744,7 @@ export function GeneratePlan() {
       {/* Layar loading interaktif saat memproses generate plan */}
       {loading && <GenerateLoading />}
     </div>
+    </>
   );
 }
 

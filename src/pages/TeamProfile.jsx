@@ -1,6 +1,7 @@
 import { Navbar } from "../components/Navbar.jsx";
 import { Footer } from "../components/Footer.jsx";
 import { Toast } from "../components/Toast.jsx";
+import { SEOHead } from "../components/SEOHead.jsx";
 
 // Data anggota tim — placeholder, mudah diganti dengan data asli nanti.
 // Setiap kartu pakai lg:col-span-2 agar membentuk grid bento di 6 kolom.
@@ -48,6 +49,11 @@ const ADVISOR = {
 export function TeamProfile({ onNavigate }) {
   return (
     <div className="bg-canvas-white text-on-surface min-h-dvh flex flex-col antialiased">
+      <SEOHead
+        title="Tentang Kami & Tim CookPlan PKM-K 2026 | CookPlan"
+        description="Mengenal tim di balik CookPlan - platform rencana menu masakan cerdas dan otomatisasi daftar belanja untuk keluarga & mahasiswa Indonesia."
+        canonicalUrl="https://cookplan.id/about"
+      />
       <Navbar onNavigate={onNavigate} />
       <main className="flex-grow pt-24 pb-16">
         {/* ---------------- Hero ---------------- */}

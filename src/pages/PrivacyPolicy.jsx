@@ -1,10 +1,16 @@
 import { Navbar } from "../components/Navbar.jsx";
 import { Footer } from "../components/Footer.jsx";
 import { Toast } from "../components/Toast.jsx";
+import { SEOHead } from "../components/SEOHead.jsx";
 
 export function PrivacyPolicy({ onNavigate }) {
   return (
     <div className="font-body-md text-on-surface bg-canvas-white min-h-dvh flex flex-col antialiased">
+      <SEOHead
+        title="Kebijakan Privasi | CookPlan"
+        description="Kebijakan Privasi CookPlan menjelaskan bagaimana kami melindungi data pribadi pengguna saat menggunakan layanan perencanaan menu dan belanja bahan."
+        canonicalUrl="https://cookplan.id/privacy"
+      />
       <Navbar onNavigate={onNavigate} />
       <main className="flex-grow hero-gradient pt-24 pb-16">
         <div className="max-w-4xl mx-auto px-margin-mobile md:px-margin-desktop">
