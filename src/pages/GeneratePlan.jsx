@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { generatePlan, getGeneratedHistory, getTodayUsageCount, getGuestUsageCount, deleteGeneratedPlan } from '../services/aiService.js';
 import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { getProfile } from '../services/profileService.js';
@@ -62,6 +62,8 @@ export function GeneratePlan() {
   const { isAnonymous } = useAuth();
   const { subscription } = useSubscription();
 
+  const [usageCount, setUsageCount] = useState(null);
+
   const MONTHLY_LIMIT = subscription?.status === 'active' ? 30 : 10;
   const EFFECTIVE_LIMIT = isAnonymous ? GUEST_LIMIT : MONTHLY_LIMIT;
 
@@ -93,7 +95,6 @@ export function GeneratePlan() {
   // form generate tidak ikut tergeser/hilang saat user mau lihat hasil lama.
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
-  const [usageCount, setUsageCount] = useState(null);
   // dietPool = semua preferensi (dari diet_tags). dietSample = subset acak yang
   // ditampilkan di chip (notulen #6/#7: pilihan variatif & segar, tidak hardcode).
   const [dietPool, setDietPool] = useState(DEFAULT_DIET_OPTIONS);
@@ -291,22 +292,39 @@ export function GeneratePlan() {
           Biarkan AI menyusun menu dan daftar belanja mingguanmu secara otomatis.
         </p>
         {usageCount != null && isAnonymous && (
-          <p className="text-xs text-on-surface-variant/80 mb-5 flex items-center gap-1">
-            <span className="material-symbols-outlined text-[16px]">bolt</span>
-            Sisa percobaan gratis: <strong>{guestRemaining}</strong> dari {GUEST_LIMIT} kali pembuatan
-          </p>
+          <div className="mb-5 flex items-center justify-between gap-3 p-3 bg-surface-container-low border border-outline-variant/40 rounded-2xl">
+            <p className="text-xs text-on-surface-variant font-medium flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[18px] text-amber-500">bolt</span>
+              Sisa percobaan gratis: <strong>{guestRemaining}</strong> dari {GUEST_LIMIT} kali pembuatan
+            </p>
+            <Link to="/subscription" className="shrink-0 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+              <span>Langganan</span>
+            </Link>
+          </div>
         )}
         {usageCount != null && !isAnonymous && (
           quotaExhausted ? (
-            <div className="mb-5 flex items-start gap-2 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
-              <span className="material-symbols-outlined text-[20px] shrink-0">hourglass_empty</span>
-              <span>Kuota pembuatan bulan ini ({MONTHLY_LIMIT}/bulan) sudah habis. Upgrade ke CookPass Lite/Pro untuk menambah kuota.</span>
+            <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-error/10 border border-error/20 p-3.5 text-sm text-error">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] shrink-0">hourglass_empty</span>
+                <span>Kuota pembuatan bulan ini ({MONTHLY_LIMIT}/bulan) sudah habis.</span>
+              </div>
+              <Link to="/subscription" className="shrink-0 px-3.5 py-1.5 bg-primary text-on-primary text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 shadow-sm">
+                Upgrade 👑
+              </Link>
             </div>
           ) : (
-            <p className="text-xs text-on-surface-variant mb-5 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px]">bolt</span>
-              Sisa kuota bulan ini: <strong>{quotaLeft}</strong> dari {MONTHLY_LIMIT} generate
-            </p>
+            <div className="mb-5 flex items-center justify-between gap-3 p-3 bg-emerald-50/80 border border-emerald-200/60 rounded-2xl">
+              <p className="text-xs text-emerald-800 font-medium flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[18px] text-emerald-600">bolt</span>
+                Sisa kuota bulan ini: <strong>{quotaLeft}</strong> dari {MONTHLY_LIMIT} generate
+              </p>
+              <Link to="/subscription" className="shrink-0 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                <span>Upgrade 30x AI</span>
+              </Link>
+            </div>
           )
         )}
         <div className="space-y-2">

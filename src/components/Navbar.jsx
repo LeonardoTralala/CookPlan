@@ -15,12 +15,22 @@ export function Navbar() {
           <Logo className="h-11 w-auto" />
         </Link>
 
-        <Link
-          to={isLoggedIn ? "/planner" : "/generate"}
-          className="inline-flex items-center min-h-11 px-5 py-2.5 rounded-full bg-primary text-on-primary text-sm font-semibold hover:bg-surface-tint active:scale-95 transition cursor-pointer"
-        >
-          {isLoggedIn ? "Ke Aplikasi" : "Mulai Sekarang"}
-        </Link>
+        <div className="flex items-center gap-2 sm:gap-3">
+          <Link
+            to="/subscription"
+            className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-on-surface-variant hover:text-primary transition px-3 py-2 rounded-full hover:bg-surface-container-low"
+          >
+            <span className="material-symbols-outlined text-[18px] text-amber-500">workspace_premium</span>
+            <span>Paket &amp; Harga</span>
+          </Link>
+
+          <Link
+            to={isLoggedIn ? "/planner" : "/generate"}
+            className="inline-flex items-center min-h-11 px-5 py-2.5 rounded-full bg-primary text-on-primary text-sm font-semibold hover:bg-surface-tint active:scale-95 transition cursor-pointer"
+          >
+            {isLoggedIn ? "Ke Aplikasi" : "Mulai Sekarang"}
+          </Link>
+        </div>
       </nav>
     </header>
   );

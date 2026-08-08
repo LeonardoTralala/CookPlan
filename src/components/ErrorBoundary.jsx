@@ -6,20 +6,24 @@ import { Component } from 'react';
 export class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false };
+    this.state = { hasError: false, error: null };
   }
 
-  static getDerivedStateFromError() {
-    return { hasError: true };
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
   }
 
   componentDidCatch(error, info) {
-    // Titik kait untuk error tracking (mis. Sentry) di masa depan.
+    // Titik kait untuk error tracking di masa depan.
     console.error('ErrorBoundary menangkap error:', error, info?.componentStack);
   }
 
   handleReload = () => {
     window.location.assign('/');
+  };
+
+  handleReset = () => {
+    this.setState({ hasError: false, error: null });
   };
 
   render() {
@@ -30,19 +34,34 @@ export class ErrorBoundary extends Component {
         <span className="material-symbols-outlined text-error text-[44px]" aria-hidden="true">
           sentiment_dissatisfied
         </span>
-        <div className="space-y-1">
+        <div className="space-y-2 max-w-md">
           <h1 className="text-xl font-bold">Ups, terjadi kesalahan</h1>
-          <p className="text-sm text-on-surface-variant max-w-xs">
+          <p className="text-sm text-on-surface-variant leading-relaxed">
             Maaf, ada yang tidak beres. Coba muat ulang halaman — datamu aman tersimpan.
           </p>
+          {this.state.error?.message && (
+            <div className="mt-3 p-3.5 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 text-left font-mono break-words shadow-sm">
+              <strong className="block mb-1 text-rose-800">Detail Error:</strong>
+              {this.state.error.message}
+            </div>
+          )}
         </div>
-        <button
-          onClick={this.handleReload}
-          className="min-h-11 px-6 rounded-full text-sm font-semibold text-on-primary bg-primary hover:opacity-90 transition-opacity cursor-pointer"
-        >
-          Muat ulang
-        </button>
+        <div className="flex flex-wrap justify-center gap-3 pt-2">
+          <button
+            onClick={this.handleReset}
+            className="min-h-11 px-5 rounded-full text-sm font-semibold text-primary border border-primary/40 hover:bg-primary/5 active:scale-95 transition cursor-pointer"
+          >
+            Coba Lagi
+          </button>
+          <button
+            onClick={this.handleReload}
+            className="min-h-11 px-6 rounded-full text-sm font-semibold text-on-primary bg-primary hover:opacity-90 active:scale-95 transition cursor-pointer"
+          >
+            Muat ulang
+          </button>
+        </div>
       </div>
     );
   }
 }
+
