@@ -62,6 +62,22 @@ export async function getFreeShippingStatus() {
 export async function createSubscription(tier) {
   const user = await requireUser();
   
+  // Pastikan profile user ada (upsert jika belum ada)
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  if (!profile) {
+    await supabase.from("profiles").upsert({
+      id: user.id,
+      email: user.email,
+      username: user.user_metadata?.username || user.email?.split('@')[0] || 'User',
+      full_name: user.user_metadata?.full_name || user.user_metadata?.username || 'User'
+    });
+  }
+
   // Cek apakah ada langganan yang masih pending
   const { data: existing } = await supabase
     .from("subscriptions")
@@ -75,12 +91,16 @@ export async function createSubscription(tier) {
     await supabase.from("subscriptions").delete().eq("id", existing.id);
   }
 
+  const todayStr = new Date().toISOString().split('T')[0];
+
   const { data, error } = await supabase
     .from("subscriptions")
     .insert({
       user_id: user.id,
       tier: tier, // 'lite' or 'pro'
-      status: 'pending'
+      status: 'pending',
+      start_date: todayStr,
+      end_date: todayStr
     })
     .select("id")
     .single();
@@ -88,7 +108,7 @@ export async function createSubscription(tier) {
   if (error) throw error;
 
   const harga = tier === 'lite' ? 'Rp 11.000' : 'Rp 29.000';
-  const paket = tier === 'lite' ? 'CookPlan Lite' : 'CookPlan Pro';
+  const paket = tier === 'lite' ? 'CookPass Lite' : 'CookPass Pro';
   
   const message = `Halo Admin CookPlan,\n\nSaya ingin berlangganan paket *${paket}* seharga *${harga}* per bulan.\n\nMohon informasi instruksi pembayarannya. Terima kasih!\n\n(Kode Subs: SUB-${data.id})`;
   const waUrl = buildSimpleWhatsappUrl(message);
