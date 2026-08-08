@@ -472,6 +472,10 @@ function UserProfile() {
       navigate('/my-recipes');
       return;
     }
+    if (id === 'subscription') {
+      navigate('/subscription');
+      return;
+    }
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set('tab', id);

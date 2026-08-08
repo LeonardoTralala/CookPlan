@@ -10,6 +10,7 @@ const ADMIN_TABS = [
   { to: '/admin/packages', icon: 'shopping_bag', label: 'Paket' },
   { to: '/admin/orders', icon: 'receipt_long', label: 'Pesanan' },
   { to: '/admin/feedback', icon: 'feedback', label: 'Masukan' },
+  { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Langganan' },
   { to: '/admin/ai', icon: 'settings_suggest', label: 'Provider AI' },
 ];
 

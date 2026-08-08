@@ -33,10 +33,12 @@ const PackageManager = lazy(() => import('./pages/admin/PackageManager.jsx').the
 const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx').then((m) => ({ default: m.AdminDashboard })));
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders.jsx').then((m) => ({ default: m.AdminOrders })));
 const AdminFeedback = lazy(() => import('./pages/admin/AdminFeedback.jsx').then((m) => ({ default: m.AdminFeedback })));
+const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions.jsx').then((m) => ({ default: m.AdminSubscriptions })));
 const SharedPlanPage = lazy(() => import('./pages/SharedPlanPage.jsx').then((m) => ({ default: m.SharedPlanPage })));
 const SharedRecipePage = lazy(() => import('./pages/SharedRecipePage.jsx').then((m) => ({ default: m.SharedRecipePage })));
 const RecipeFormPage = lazy(() => import('./pages/RecipeFormPage.jsx'));
 const MyRecipesPage = lazy(() => import('./pages/MyRecipesPage.jsx'));
+const SubscriptionPage = lazy(() => import('./pages/SubscriptionPage.jsx').then(m => ({ default: m.SubscriptionPage })));
 
 // Routing penuh CookPlan. Membuka aplikasi (root "/") langsung mengarahkan ke
 // /generate; pengguna yang belum login akan dilempar ke /auth oleh
@@ -91,6 +93,7 @@ function App() {
               <Route path="/planner" element={<AppShell><PlannerPage /></AppShell>} />
               <Route path="/shopping" element={<AppShell><ShoppingPage /></AppShell>} />
               <Route path="/profile" element={<AppShell><UserProfile /></AppShell>} />
+              <Route path="/subscription" element={<AppShell><SubscriptionPage /></AppShell>} />
               <Route path="/my-recipes" element={<AppShell><MyRecipesPage /></AppShell>} />
               <Route path="/recipes/create" element={<AppShell><RecipeFormPage /></AppShell>} />
               <Route path="/recipes/:id/edit" element={<AppShell><RecipeFormPage /></AppShell>} />
@@ -101,6 +104,7 @@ function App() {
               <Route path="/admin/packages" element={<AppShell><AdminLayout><PackageManager /></AdminLayout></AppShell>} />
               <Route path="/admin/orders" element={<AppShell><AdminLayout><AdminOrders /></AdminLayout></AppShell>} />
               <Route path="/admin/feedback" element={<AppShell><AdminLayout><AdminFeedback /></AdminLayout></AppShell>} />
+              <Route path="/admin/subscriptions" element={<AppShell><AdminLayout><AdminSubscriptions /></AdminLayout></AppShell>} />
             </Route>
           </Route>
 

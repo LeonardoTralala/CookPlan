@@ -75,15 +75,23 @@ Deno.serve(async (req) => {
   }
 
   // 2. Rate limit (window UTC, berbagi kuota dengan generate-plan)
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
+  const startOfMonth = new Date();
+  startOfMonth.setUTCDate(1);
+  startOfMonth.setUTCHours(0, 0, 0, 0);
   const { count: usageCount } = await admin
     .from("ai_usage_log")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .gte("created_at", startOfDay.toISOString());
-  if ((usageCount ?? 0) >= RATE_LIMIT_PER_DAY) {
-    return json({ error: `Batas ${RATE_LIMIT_PER_DAY} generate per hari tercapai. Coba lagi besok.` }, 429);
+    .gte("created_at", startOfMonth.toISOString());
+  const { data: sub } = await admin
+    .from('subscriptions')
+    .select('status, tier')
+    .eq('user_id', userId)
+    .single();
+  const limit = (sub?.status === 'active') ? 30 : 10;
+  
+  if ((usageCount ?? 0) >= limit) {
+    return json({ error: `Batas ${limit} generate per bulan tercapai. Upgrade ke CookPass Lite/Pro untuk menambah kuota.` }, 429);
   }
 
   // 3. Parse & validasi body

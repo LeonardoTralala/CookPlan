@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { getCurrentSubscription } from "./subscriptionService.js";
 
 // Service layer untuk bank resep (Ofisial & Kreasi Pengguna/UGC).
 // Kolom DB (snake_case) di-alias ke camelCase agar konsisten di seluruh UI.
@@ -369,6 +370,21 @@ export async function getSavedRecipeIds() {
 
 export async function saveRecipe(recipeId) {
   const user = await requireUser();
+  
+  // Cek jumlah resep yang sudah disimpan
+  const { count } = await supabase
+    .from("saved_recipes")
+    .select("recipe_id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+    
+  if (count >= 10) {
+    // Cek apakah punya langganan aktif
+    const sub = await getCurrentSubscription();
+    if (!sub || sub.status !== 'active') {
+      throw new Error("Kuota gratis (10 resep) habis. Berlangganan CookPlan Lite/Pro untuk menyimpan tanpa batas.");
+    }
+  }
+
   const { error } = await supabase
     .from("saved_recipes")
     .upsert(

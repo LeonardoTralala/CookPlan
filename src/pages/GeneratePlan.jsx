@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { generatePlan, getGeneratedHistory, getTodayUsageCount, getGuestUsageCount, deleteGeneratedPlan } from '../services/aiService.js';
 import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth.js';
 import { GenerateLoading } from '../components/GenerateLoading.jsx';
 import { trackPlanGenerationStart, trackPlanGenerationError } from '../lib/posthog.js';
 import { SEOHead } from '../components/SEOHead.jsx';
+import { useSubscription } from '../hooks/useSubscription.js';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
 // Step 1: periode + porsi + waktu makan
@@ -51,8 +52,6 @@ const BUDGET_PRESETS = [100000, 200000, 350000, 500000];
 // Batas catatan khusus — selaras NOTES_MAX di validateInput (Edge Function).
 const NOTES_MAX = 300;
 
-// Selaras dengan RATE_LIMIT_PER_DAY di Edge Function generate-plan.
-const DAILY_LIMIT = 20;
 // Selaras dengan GUEST_LIMIT di Edge Function generate-plan: tamu (anonymous)
 // boleh mencoba generate sebanyak ini secara total sebelum harus daftar.
 const GUEST_LIMIT = 2;
@@ -61,6 +60,17 @@ export function GeneratePlan() {
   const navigate = useNavigate();
   const { showToast } = usePlan();
   const { isAnonymous } = useAuth();
+  const { subscription } = useSubscription();
+
+  const MONTHLY_LIMIT = subscription?.status === 'active' ? 30 : 10;
+  const EFFECTIVE_LIMIT = isAnonymous ? GUEST_LIMIT : MONTHLY_LIMIT;
+
+  // Kuota bulanan: server reset di awal bulan UTC.
+  const quotaLeft = usageCount == null ? null : Math.max(0, EFFECTIVE_LIMIT - usageCount);
+  const quotaExhausted = quotaLeft === 0;
+  const quotaMessage = isAnonymous
+    ? `Batas ${GUEST_LIMIT} percobaan gratis sudah habis. Silakan daftar akun gratis CookPlan untuk melanjutkan.`
+    : `Kuota generate bulan ini (${MONTHLY_LIMIT}/bulan) sudah habis. Upgrade ke CookPass Lite/Pro untuk menambah kuota.`;
 
   const [step, setStep] = useState(1);
   const [periode, setPeriode] = useState(7);
@@ -155,18 +165,7 @@ export function GeneratePlan() {
     }
   }, [guestExhausted, navigate]);
 
-  // Kuota harian: server reset di tengah malam UTC (lihat getTodayUsageCount).
-  // quotaLeft null = belum termuat. Tampilkan waktu reset dalam zona lokal user.
-  const quotaLeft = usageCount == null ? null : Math.max(0, DAILY_LIMIT - usageCount);
-  const quotaExhausted = quotaLeft === 0;
-  const quotaResetText = useMemo(() => {
-    const reset = new Date();
-    reset.setUTCHours(24, 0, 0, 0); // tengah malam UTC berikutnya
-    return new Intl.DateTimeFormat('id-ID', {
-      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-    }).format(reset);
-  }, []);
-  const quotaMessage = `Kuota generate harian (${DAILY_LIMIT}/hari) sudah habis. Bisa generate lagi mulai ${quotaResetText}.`;
+
 
   // Tampilkan kombinasi preferensi diet acak lain (yang sedang dipilih tetap muncul).
   const reshuffleDiet = () => setDietSample(sampleDietTags(dietPool, 8, diet));
@@ -256,7 +255,7 @@ export function GeneratePlan() {
       // Server menolak karena rate limit harian → samakan tampilannya & tandai habis.
       const lower = msg.toLowerCase();
       if (e.status === 429 || lower.includes('kuota') || lower.includes('limit') || /\brate\b/.test(lower)) {
-        setUsageCount(DAILY_LIMIT);
+        setUsageCount(MONTHLY_LIMIT);
         setError(quotaMessage);
       } else {
         setError(msg);
@@ -301,12 +300,12 @@ export function GeneratePlan() {
           quotaExhausted ? (
             <div className="mb-5 flex items-start gap-2 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
               <span className="material-symbols-outlined text-[20px] shrink-0">hourglass_empty</span>
-              <span>Kuota pembuatan harian habis ({DAILY_LIMIT}/hari). Bisa menyusun rencana lagi mulai <strong>{quotaResetText}</strong>.</span>
+              <span>Kuota pembuatan bulan ini ({MONTHLY_LIMIT}/bulan) sudah habis. Upgrade ke CookPass Lite/Pro untuk menambah kuota.</span>
             </div>
           ) : (
             <p className="text-xs text-on-surface-variant mb-5 flex items-center gap-1">
               <span className="material-symbols-outlined text-[16px]">bolt</span>
-              Sisa kuota hari ini: <strong>{quotaLeft}</strong> dari {DAILY_LIMIT} generate
+              Sisa kuota bulan ini: <strong>{quotaLeft}</strong> dari {MONTHLY_LIMIT} generate
             </p>
           )
         )}
