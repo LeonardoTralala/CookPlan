@@ -6,6 +6,9 @@ import { usePlan } from '../hooks/usePlan.js';
 import { trackOrderCreated } from '../lib/posthog.js';
 import { getProfile, updateProfile } from '../services/profileService.js';
 
+import { useSubscription } from '../hooks/useSubscription.js';
+import { getFreeShippingStatus } from '../services/subscriptionService.js';
+
 // Fitur 3: Menu Order via WhatsApp. Ambil hasil generate (foodprep/full) → form
 // alamat & kontak → buat order (ID CP-...) → buka WhatsApp dengan teks terformat.
 
@@ -14,12 +17,22 @@ export function OrderPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { showToast } = usePlan();
+  const { subscription } = useSubscription();
   const isPackage = planId === 'package';
 
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [freeShippingUsed, setFreeShippingUsed] = useState(0);
+
+  useEffect(() => {
+    if (subscription?.status === 'active' && subscription?.tier === 'pro') {
+      getFreeShippingStatus()
+        .then((count) => setFreeShippingUsed(count))
+        .catch(() => setFreeShippingUsed(0));
+    }
+  }, [subscription]);
 
   const [form, setForm] = useState({
     name: '',
@@ -102,7 +115,10 @@ export function OrderPage() {
   })) ?? [];
 
   const subtotal = plan?.total_estimated_cost ?? 0;
-  const deliveryFee = 15000;
+
+  const isProActive = subscription?.status === 'active' && subscription?.tier === 'pro';
+  const hasFreeShippingVoucher = isProActive && freeShippingUsed < 6;
+  const deliveryFee = hasFreeShippingVoucher ? 0 : 15000;
   const total = subtotal + deliveryFee;
 
   const validate = () => {
@@ -208,15 +224,42 @@ export function OrderPage() {
       </div>
 
       {/* Ringkasan biaya */}
-      <div className="bg-surface-cream rounded-2xl p-5 space-y-2">
+      <div className="bg-surface-cream rounded-2xl p-5 space-y-2.5">
         <div className="flex justify-between text-sm">
           <span className="text-on-surface-variant">Total Bahan ({items.length} item)</span>
           <span className="font-semibold text-on-surface">{formatRupiah(subtotal)}</span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-on-surface-variant">Biaya Pengantaran</span>
-          <span className="font-semibold text-on-surface">{formatRupiah(deliveryFee)}</span>
+        <div className="flex justify-between text-sm items-center">
+          <span className="text-on-surface-variant flex items-center gap-1.5">
+            Biaya Pengantaran
+            {hasFreeShippingVoucher && (
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                PRO FREE ONGKIR
+              </span>
+            )}
+          </span>
+          <span className={`font-semibold ${hasFreeShippingVoucher ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
+            {hasFreeShippingVoucher ? (
+              <span className="flex items-center gap-1">
+                <span className="line-through text-xs text-on-surface-variant/60 font-normal">{formatRupiah(15000)}</span>
+                <span>Rp 0</span>
+              </span>
+            ) : formatRupiah(deliveryFee)}
+          </span>
         </div>
+
+        {hasFreeShippingVoucher && (
+          <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200/60">
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px] text-emerald-600">verified</span>
+              Voucher Gratis Ongkir CookPass Pro Terpakai
+            </span>
+            <span className="bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full text-[11px]">
+              Sisa {6 - freeShippingUsed}/6 bln ini
+            </span>
+          </div>
+        )}
+
         <div className="flex justify-between pt-2 border-t border-outline/20">
           <span className="font-bold text-primary">Total</span>
           <span className="font-bold text-primary text-lg">{formatRupiah(total)}</span>

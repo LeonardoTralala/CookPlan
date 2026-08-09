@@ -17,14 +17,19 @@ function formatRupiah(num) {
   }).format(num || 0);
 }
 
+async function requireUser() {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) throw new Error("Belum login.");
+  return user;
+}
+
 // Buat order baru. payload:
 //   { planId?, outputType, items:[{name,amount,unit,category,priceIdr}],
 //     totalPrice, deliveryFee, address, name, phone, paymentMethod?, notes? }
 // Return order row (termasuk id CP-...).
 export async function createOrder(payload) {
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (!user) throw new Error("Belum login.");
+  const user = await requireUser();
 
   const { data: order, error } = await supabase
     .from("orders")
@@ -133,6 +138,7 @@ export async function getOrderById(orderId) {
 // menimpa status lanjutan yang mungkin sudah diubah admin). Best-effort: kegagalan
 // tidak boleh memblok pembukaan WhatsApp.
 export async function confirmOrderSent(orderId) {
+  await requireUser();
   const { error } = await supabase
     .from("orders")
     .update({ order_status: "received" })
@@ -199,7 +205,7 @@ export function buildWhatsappText(order) {
   if (jenis) lines.push(`Jenis: ${jenis}`);
   if (pkg?.detail) lines.push(`Porsi: ${pkg.detail}`);
   lines.push(`Subtotal: ${formatRupiah(subtotal)}`);
-  lines.push(`Ongkir: ${formatRupiah(deliveryFee)}`);
+  lines.push(`Ongkir: ${deliveryFee === 0 ? "Rp 0 (Gratis Ongkir CookPass Pro 🚚)" : formatRupiah(deliveryFee)}`);
   lines.push(`Total: ${formatRupiah(total)}`);
   lines.push("");
   lines.push("Mohon diproses ya, terima kasih.");
@@ -427,7 +433,7 @@ export async function renderReceiptImage(order, items = []) {
     y += emphasis ? 40 : LINE_H;
   };
   costRow("Subtotal", formatRupiah(subtotal), false);
-  costRow("Ongkir", formatRupiah(deliveryFee), false);
+  costRow("Ongkir", deliveryFee === 0 ? "Rp 0 (Gratis Ongkir Pro)" : formatRupiah(deliveryFee), false);
   costRow("TOTAL", formatRupiah(total), true);
 
   // Footer.

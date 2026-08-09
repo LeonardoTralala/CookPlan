@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe, saveRecipe, getRecipes } from '../services/recipeService.js';
 import { getMyOrders, formatRupiah } from '../services/orderService.js';
 import { ORDER_STATUS_META, PAYMENT_STATUS_META, STATUS_TONE_CLS } from '../utils/orderStatus.js';
@@ -8,6 +8,7 @@ import { getActiveDietTags } from '../services/dietService.js';
 import { checkIsAdmin } from '../services/adminService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { useSubscription } from '../hooks/useSubscription.js';
 import { AVATAR_URL } from '../utils/userConfig.js';
 import { PERSONA_OPTIONS, personaLabel } from '../utils/persona.js';
 import { setCachedPersona } from '../utils/personaCache.js';
@@ -121,8 +122,17 @@ function OrderHistoryPanel() {
                           </div>
                         ))}
                         <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream">
-                          <span className="text-on-surface-variant">Ongkir</span>
-                          <span className="font-semibold text-on-surface">{formatRupiah(o.delivery_fee ?? 0)}</span>
+                          <span className="text-on-surface-variant flex items-center gap-1.5">
+                            Ongkir
+                            {(o.delivery_fee ?? 0) === 0 && (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                PRO FREE ONGKIR
+                              </span>
+                            )}
+                          </span>
+                          <span className={`font-semibold ${(o.delivery_fee ?? 0) === 0 ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
+                            {(o.delivery_fee ?? 0) === 0 ? 'Rp 0 (Gratis Ongkir)' : formatRupiah(o.delivery_fee ?? 0)}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between px-3 py-2.5">
                           <span className="font-bold text-primary">Total</span>
@@ -458,7 +468,8 @@ function AddressPanel({ profile, onUpdate }) {
 
 function UserProfile() {
   const { showToast } = usePlan();
-  const { user, updatePassword, signOut, resendVerification } = useAuth();
+  const { user, updatePassword, signOut, resendVerification, isAnonymous } = useAuth();
+  const { subscription } = useSubscription();
   const navigate = useNavigate();
   const soon = (fitur) => showToast(`Fitur ${fitur} sedang dikembangkan oleh Tim Pengembang CookPlan.`);
 
@@ -470,6 +481,10 @@ function UserProfile() {
   const setActiveNav = (id) => {
     if (id === 'my-recipes') {
       navigate('/my-recipes');
+      return;
+    }
+    if (id === 'subscription') {
+      navigate('/subscription');
       return;
     }
     setSearchParams((prev) => {
@@ -750,7 +765,16 @@ function UserProfile() {
         showToast('Resep berhasil disimpan.');
       } catch (err) {
         setSavedRecipes(prev);
-        showToast(err.message || 'Gagal menyimpan resep.');
+        const msg = err.message || 'Gagal menyimpan resep.';
+        showToast(msg, { variant: 'error' });
+        if (err.code === 'QUOTA_EXHAUSTED' || /kuota|10 resep|berlangganan/i.test(msg)) {
+          navigate('/subscription', {
+            state: {
+              reason: 'quota_exhausted',
+              message: 'Kuota simpan resep gratis (10 resep) telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk menyimpan resep tanpa batas.'
+            }
+          });
+        }
       }
     }
   };
@@ -880,6 +904,34 @@ function UserProfile() {
                 </button>
               </div>
             </div>
+
+            {!isAnonymous && (
+              subscription?.status === 'active' ? (
+                <div className="flex items-center justify-between gap-3 p-3 bg-emerald-50/80 border border-emerald-200/60 rounded-2xl">
+                  <p className="text-xs text-emerald-800 font-medium flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[18px] text-emerald-600">verified</span>
+                    Status Berlangganan Aktif: Simpan resep <strong>Unlimited</strong> ({savedRecipes.length} resep tersimpan)
+                  </p>
+                  <Link to="/subscription" className="shrink-0 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                    <span>Detail Paket</span>
+                  </Link>
+                </div>
+              ) : (
+                <div className="flex items-center justify-between gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-900">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-[20px] text-amber-600 shrink-0">bookmark</span>
+                    <span className="text-xs font-medium">
+                      Kuota Simpan Resep Gratis: <strong>{savedRecipes.length}</strong> dari 10 resep ({Math.max(0, 10 - savedRecipes.length) === 0 ? 'Kuota Habis' : `Sisa ${Math.max(0, 10 - savedRecipes.length)}`})
+                    </span>
+                  </div>
+                  <Link to="/subscription" className="shrink-0 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 shadow-sm flex items-center gap-1">
+                    <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                    <span>Simpan Unlimited 👑</span>
+                  </Link>
+                </div>
+              )
+            )}
 
             <FeedbackCard question="Apakah fitur Resep Tersimpan membantu mengelola masakan favoritmu?" category="saran" cooldownKey="saved" />
 

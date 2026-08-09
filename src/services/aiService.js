@@ -135,13 +135,14 @@ export async function getTodayUsageCount() {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;
   if (!user) return 0;
-  const startOfDay = new Date();
-  startOfDay.setUTCHours(0, 0, 0, 0);
+  const startOfMonth = new Date();
+  startOfMonth.setUTCDate(1);
+  startOfMonth.setUTCHours(0, 0, 0, 0);
   const { count, error } = await supabase
     .from("ai_usage_log")
     .select("id", { count: "exact", head: true })
     .eq("user_id", user.id)
-    .gte("created_at", startOfDay.toISOString());
+    .gte("created_at", startOfMonth.toISOString());
   if (error) throw error;
   return count ?? 0;
 }

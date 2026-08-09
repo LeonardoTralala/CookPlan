@@ -199,6 +199,20 @@ export function AppShell({ children }) {
           </div>
 
           <div className="flex items-center gap-1.5">
+            {/* Tombol Akses Cepat Langganan CookPass */}
+            <Link
+              to="/subscription"
+              title="Paket Langganan CookPass Premium"
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-black transition-all cursor-pointer shadow-xs active:scale-95 ${
+                pathname === '/subscription'
+                  ? 'bg-gradient-to-r from-emerald-700 via-teal-700 to-emerald-800 text-white ring-2 ring-emerald-400/50 shadow-md'
+                  : 'bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white hover:shadow-md hover:scale-105'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px] sm:text-[18px] text-amber-300 animate-pulse" aria-hidden="true">workspace_premium</span>
+              <span>CookPass</span>
+            </Link>
+
             {/* Tombol Panduan (Help Tour) */}
             {steps && (
               <button

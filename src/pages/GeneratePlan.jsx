@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { generatePlan, getGeneratedHistory, getTodayUsageCount, getGuestUsageCount, deleteGeneratedPlan } from '../services/aiService.js';
 import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { getProfile } from '../services/profileService.js';
@@ -9,6 +9,7 @@ import { useAuth } from '../hooks/useAuth.js';
 import { GenerateLoading } from '../components/GenerateLoading.jsx';
 import { trackPlanGenerationStart, trackPlanGenerationError } from '../lib/posthog.js';
 import { SEOHead } from '../components/SEOHead.jsx';
+import { useSubscription } from '../hooks/useSubscription.js';
 
 // Fitur 1: Generate Foodplan & Foodprep. Wizard 3 langkah (mobile-first).
 // Step 1: periode + porsi + waktu makan
@@ -51,8 +52,6 @@ const BUDGET_PRESETS = [100000, 200000, 350000, 500000];
 // Batas catatan khusus — selaras NOTES_MAX di validateInput (Edge Function).
 const NOTES_MAX = 300;
 
-// Selaras dengan RATE_LIMIT_PER_DAY di Edge Function generate-plan.
-const DAILY_LIMIT = 20;
 // Selaras dengan GUEST_LIMIT di Edge Function generate-plan: tamu (anonymous)
 // boleh mencoba generate sebanyak ini secara total sebelum harus daftar.
 const GUEST_LIMIT = 2;
@@ -61,6 +60,19 @@ export function GeneratePlan() {
   const navigate = useNavigate();
   const { showToast } = usePlan();
   const { isAnonymous } = useAuth();
+  const { subscription, loading: subLoading } = useSubscription() || {};
+
+  const [usageCount, setUsageCount] = useState(null);
+
+  const MONTHLY_LIMIT = subscription?.status === 'active' ? 30 : 10;
+  const EFFECTIVE_LIMIT = isAnonymous ? GUEST_LIMIT : MONTHLY_LIMIT;
+
+  // Kuota bulanan: server reset di awal bulan UTC. Jangan nyatakan exhausted saat subscription masih loading.
+  const quotaLeft = (usageCount == null || subLoading) ? null : Math.max(0, EFFECTIVE_LIMIT - usageCount);
+  const quotaExhausted = !subLoading && quotaLeft === 0;
+  const quotaMessage = isAnonymous
+    ? `Batas ${GUEST_LIMIT} percobaan gratis sudah habis. Silakan daftar akun gratis CookPlan untuk melanjutkan.`
+    : `Kuota generate bulan ini (${MONTHLY_LIMIT}/bulan) sudah habis. Upgrade ke CookPass Lite/Pro untuk menambah kuota.`;
 
   const [step, setStep] = useState(1);
   const [periode, setPeriode] = useState(7);
@@ -83,7 +95,6 @@ export function GeneratePlan() {
   // form generate tidak ikut tergeser/hilang saat user mau lihat hasil lama.
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
-  const [usageCount, setUsageCount] = useState(null);
   // dietPool = semua preferensi (dari diet_tags). dietSample = subset acak yang
   // ditampilkan di chip (notulen #6/#7: pilihan variatif & segar, tidak hardcode).
   const [dietPool, setDietPool] = useState(DEFAULT_DIET_OPTIONS);
@@ -155,18 +166,10 @@ export function GeneratePlan() {
     }
   }, [guestExhausted, navigate]);
 
-  // Kuota harian: server reset di tengah malam UTC (lihat getTodayUsageCount).
-  // quotaLeft null = belum termuat. Tampilkan waktu reset dalam zona lokal user.
-  const quotaLeft = usageCount == null ? null : Math.max(0, DAILY_LIMIT - usageCount);
-  const quotaExhausted = quotaLeft === 0;
-  const quotaResetText = useMemo(() => {
-    const reset = new Date();
-    reset.setUTCHours(24, 0, 0, 0); // tengah malam UTC berikutnya
-    return new Intl.DateTimeFormat('id-ID', {
-      day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-    }).format(reset);
-  }, []);
-  const quotaMessage = `Kuota generate harian (${DAILY_LIMIT}/hari) sudah habis. Bisa generate lagi mulai ${quotaResetText}.`;
+  // User terdaftar tanpa langganan aktif yang kuota 10x gratisnya sudah habis
+  const userQuotaExhausted = !isAnonymous && subscription?.status !== 'active' && usageCount != null && usageCount >= 10;
+
+
 
   // Tampilkan kombinasi preferensi diet acak lain (yang sedang dipilih tetap muncul).
   const reshuffleDiet = () => setDietSample(sampleDietTags(dietPool, 8, diet));
@@ -217,8 +220,18 @@ export function GeneratePlan() {
   };
 
   const handleGenerate = async () => {
-    // Guarded click: kuota habis → jelaskan langsung, JANGAN buang request +
-    // loading panjang yang berujung error (alternatif dari men-disable tombol).
+    // Guarded click: kuota habis → jelaskan langsung & redirect ke langganan jika belum berlangganan
+    if (userQuotaExhausted) {
+      showToast('Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital atau Paket Komplet.', { variant: 'warning' });
+      navigate('/subscription', {
+        replace: true,
+        state: {
+          reason: 'quota_exhausted',
+          message: 'Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk melanjutkan.'
+        }
+      });
+      return;
+    }
     if (quotaExhausted) {
       setError(quotaMessage);
       return;
@@ -253,10 +266,21 @@ export function GeneratePlan() {
         navigate('/auth', { replace: true, state: { from: '/generate' } });
         return;
       }
-      // Server menolak karena rate limit harian → samakan tampilannya & tandai habis.
+      // Server menolak karena rate limit harian/bulanan → samakan tampilannya & tandai habis.
       const lower = msg.toLowerCase();
       if (e.status === 429 || lower.includes('kuota') || lower.includes('limit') || /\brate\b/.test(lower)) {
-        setUsageCount(DAILY_LIMIT);
+        setUsageCount(MONTHLY_LIMIT);
+        if (!isAnonymous && subscription?.status !== 'active') {
+          showToast('Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital atau Paket Komplet.', { variant: 'warning' });
+          navigate('/subscription', {
+            replace: true,
+            state: {
+              reason: 'quota_exhausted',
+              message: 'Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk melanjutkan.'
+            }
+          });
+          return;
+        }
         setError(quotaMessage);
       } else {
         setError(msg);
@@ -292,22 +316,40 @@ export function GeneratePlan() {
           Biarkan AI menyusun menu dan daftar belanja mingguanmu secara otomatis.
         </p>
         {usageCount != null && isAnonymous && (
-          <p className="text-xs text-on-surface-variant/80 mb-5 flex items-center gap-1">
-            <span className="material-symbols-outlined text-[16px]">bolt</span>
-            Sisa percobaan gratis: <strong>{guestRemaining}</strong> dari {GUEST_LIMIT} kali pembuatan
-          </p>
+          <div className="mb-5 flex items-center justify-between gap-3 p-3 bg-surface-container-low border border-outline-variant/40 rounded-2xl">
+            <p className="text-xs text-on-surface-variant font-medium flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[18px] text-amber-500">bolt</span>
+              Sisa percobaan gratis: <strong>{guestRemaining}</strong> dari {GUEST_LIMIT} kali pembuatan
+            </p>
+            <Link to="/subscription" className="shrink-0 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 flex items-center gap-1">
+              <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+              <span>Langganan</span>
+            </Link>
+          </div>
         )}
         {usageCount != null && !isAnonymous && (
-          quotaExhausted ? (
-            <div className="mb-5 flex items-start gap-2 rounded-2xl bg-error/10 px-4 py-3 text-sm text-error">
-              <span className="material-symbols-outlined text-[20px] shrink-0">hourglass_empty</span>
-              <span>Kuota pembuatan harian habis ({DAILY_LIMIT}/hari). Bisa menyusun rencana lagi mulai <strong>{quotaResetText}</strong>.</span>
+          subscription?.status === 'active' ? (
+            <div className="mb-5 flex items-center justify-between gap-3 p-3 bg-emerald-50/80 border border-emerald-200/60 rounded-2xl">
+              <p className="text-xs text-emerald-800 font-medium flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[18px] text-emerald-600">verified</span>
+                Status Berlangganan Aktif ({subscription?.tier === 'lite' ? 'Paket Digital' : 'Paket Komplet'}): Sisa <strong>{quotaLeft}</strong> dari {MONTHLY_LIMIT} generate
+              </p>
+              <Link to="/subscription" className="shrink-0 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                <span>Detail Paket</span>
+              </Link>
             </div>
           ) : (
-            <p className="text-xs text-on-surface-variant mb-5 flex items-center gap-1">
-              <span className="material-symbols-outlined text-[16px]">bolt</span>
-              Sisa kuota hari ini: <strong>{quotaLeft}</strong> dari {DAILY_LIMIT} generate
-            </p>
+            <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-900">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-amber-600 shrink-0">bolt</span>
+                <span className="text-xs font-medium">Sisa kuota AI gratis bulan ini: <strong>{quotaLeft}</strong> dari 10 generate</span>
+              </div>
+              <Link to="/subscription" className="shrink-0 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 shadow-sm flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                <span>Berlangganan 👑</span>
+              </Link>
+            </div>
           )
         )}
         <div className="space-y-2">

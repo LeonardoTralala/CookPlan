@@ -66,12 +66,24 @@ Deno.serve(async (req) => {
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId);
   if (!isAnon) {
-    const startOfDay = new Date();
-    startOfDay.setUTCHours(0, 0, 0, 0);
-    usageQuery = usageQuery.gte("created_at", startOfDay.toISOString());
+    const startOfMonth = new Date();
+    startOfMonth.setUTCDate(1);
+    startOfMonth.setUTCHours(0, 0, 0, 0);
+    usageQuery = usageQuery.gte("created_at", startOfMonth.toISOString());
   }
   const { count: usageCount } = await usageQuery;
-  const limit = isAnon ? GUEST_LIMIT : RATE_LIMIT_PER_DAY;
+  let limit = GUEST_LIMIT;
+  if (!isAnon) {
+    const { data: sub } = await admin
+      .from('subscriptions')
+      .select('status, tier')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    limit = (sub?.status === 'active') ? 30 : 10;
+  }
+  
   if ((usageCount ?? 0) >= limit) {
     if (isAnon) {
       return json({
@@ -80,7 +92,11 @@ Deno.serve(async (req) => {
         guest: true,
       }, 429);
     }
-    return json({ error: `Batas ${RATE_LIMIT_PER_DAY} generate per hari tercapai. Coba lagi besok.` }, 429);
+    return json({
+      error: `Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk melanjutkan.`,
+      limitReached: true,
+      subscriptionRequired: true,
+    }, 429);
   }
 
   // 3. Validate input

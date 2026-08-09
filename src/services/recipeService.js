@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase.js";
+import { getCurrentSubscription } from "./subscriptionService.js";
 
 // Service layer untuk bank resep (Ofisial & Kreasi Pengguna/UGC).
 // Kolom DB (snake_case) di-alias ke camelCase agar konsisten di seluruh UI.
@@ -28,8 +29,19 @@ async function requireUser() {
   return data.user;
 }
 
+function normalizeIngredientUnit(rawUnit) {
+  if (!rawUnit) return "secukupnya";
+  const u = rawUnit.trim().toLowerCase();
+  if (u === "gr" || u === "gram" || u === "grams") return "g";
+  if (u === "gelas" || u === "cangkir") return "ml";
+  if (u === "buah" || u === "biji" || u === "biji/buah") return "buah";
+  if (u === "pcs" || u === "pc" || u === "piece") return "pcs";
+  return u;
+}
+
 // Ambil semua resep aktif (resep ofisial + resep komunitas publik + resep sendiri).
 export async function getRecipes() {
+  await requireUser();
   const { data, error } = await supabase
     .from("recipes")
     .select(RECIPE_SELECT)
@@ -55,6 +67,7 @@ export async function getMyRecipes() {
 
 // Ambil resep komunitas publik (resep buatan user yang is_public = true).
 export async function getCommunityRecipes(options = {}) {
+  await requireUser();
   const { search, tags, page, limit, sortBy = "newest" } = options;
 
   let query = supabase
@@ -92,6 +105,7 @@ export async function getCommunityRecipes(options = {}) {
 
 // Ambil satu resep berdasarkan id.
 export async function getRecipeById(id) {
+  await requireUser();
   const { data, error } = await supabase
     .from("recipes")
     .select(RECIPE_SELECT)
@@ -104,6 +118,7 @@ export async function getRecipeById(id) {
 
 // Ambil beberapa resep sekaligus by id.
 export async function getRecipesByIds(ids) {
+  await requireUser();
   if (!ids || ids.length === 0) return [];
   const { data, error } = await supabase
     .from("recipes")
@@ -116,6 +131,7 @@ export async function getRecipesByIds(ids) {
 
 // Search master ingredients untuk autocomplete di form resep
 export async function searchIngredients(query = "") {
+  await requireUser();
   let q = supabase
     .from("ingredients")
     .select("id, name, category, baseUnit:base_unit")
@@ -201,7 +217,7 @@ export async function createRecipe(recipeData) {
         ingredient_id: ing.ingredientId ?? ing.ingredient_id ?? null,
         name: ing.name.trim(),
         amount: ing.amount != null && ing.amount !== "" ? Number(ing.amount) : null,
-        unit: ing.unit ? ing.unit.trim().toLowerCase() : "secukupnya",
+        unit: normalizeIngredientUnit(ing.unit),
         category: ing.category || null,
       }));
 
@@ -274,7 +290,7 @@ export async function updateRecipe(recipeId, recipeData) {
         ingredient_id: ing.ingredientId ?? ing.ingredient_id ?? null,
         name: ing.name.trim(),
         amount: ing.amount != null && ing.amount !== "" ? Number(ing.amount) : null,
-        unit: ing.unit ? ing.unit.trim().toLowerCase() : "secukupnya",
+        unit: normalizeIngredientUnit(ing.unit),
         category: ing.category || null,
       }));
 
@@ -369,6 +385,23 @@ export async function getSavedRecipeIds() {
 
 export async function saveRecipe(recipeId) {
   const user = await requireUser();
+  
+  // Cek jumlah resep yang sudah disimpan
+  const { count } = await supabase
+    .from("saved_recipes")
+    .select("recipe_id", { count: "exact", head: true })
+    .eq("user_id", user.id);
+    
+  if ((count ?? 0) >= 10) {
+    // Cek apakah punya langganan aktif
+    const sub = await getCurrentSubscription();
+    if (!sub || sub.status !== 'active') {
+      const err = new Error("Kuota simpan resep gratis (10 resep) telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk menyimpan resep tanpa batas.");
+      err.code = "QUOTA_EXHAUSTED";
+      throw err;
+    }
+  }
+
   const { error } = await supabase
     .from("saved_recipes")
     .upsert(

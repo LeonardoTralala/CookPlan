@@ -13,6 +13,7 @@ import { getActiveDietTags, sampleDietTags } from '../services/dietService.js';
 import { getProfile } from '../services/profileService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { useAuth } from '../hooks/useAuth.js';
+import { useSubscription } from '../hooks/useSubscription.js';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 import { Modal } from '../components/Modal.jsx';
 import { CatalogGridSkeleton } from '../components/Skeleton.jsx';
@@ -68,6 +69,9 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
   const navigate = useNavigate();
   const { showToast, weeklyPlan } = usePlan();
   const { user, isAnonymous } = useAuth();
+  const { subscription } = useSubscription();
+
+  const isSubscribed = subscription?.status === 'active';
 
   // State untuk Auth Modal Soft-Gated Tamu
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -116,7 +120,16 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
         if (wasSaved) next.add(id); else next.delete(id);
         return next;
       });
-      showToast(err.message || 'Gagal memperbarui resep tersimpan.');
+      const msg = err.message || 'Gagal memperbarui resep tersimpan.';
+      showToast(msg, { variant: 'error' });
+      if (err.code === 'QUOTA_EXHAUSTED' || /kuota|10 resep|berlangganan/i.test(msg)) {
+        navigate('/subscription', {
+          state: {
+            reason: 'quota_exhausted',
+            message: 'Kuota simpan resep gratis (10 resep) telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk menyimpan resep tanpa batas.'
+          }
+        });
+      }
     }
   };
 
@@ -260,6 +273,9 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
 
   // Set id resep yang sudah disimpan user (untuk menandai status bookmark).
   const [savedIds, setSavedIds] = useState(() => new Set());
+  const savedCount = savedIds?.size ?? 0;
+  const SAVED_LIMIT = 10;
+  const savedLeft = Math.max(0, SAVED_LIMIT - savedCount);
   // Set id resep yang disukai user (like).
   const [likedIds, setLikedIds] = useState(() => new Set());
 
@@ -463,6 +479,34 @@ function RecipeCatalog({ onAddToPlan, initialRecipeId }) {
         <h2 className="font-headline-md text-headline-md text-primary tracking-tight mb-4">
           Inspirasi Masakan Hari Ini
         </h2>
+
+        {!isAnonymous && (
+          isSubscribed ? (
+            <div className="max-w-2xl mx-auto mb-5 flex items-center justify-between gap-3 p-3 bg-emerald-50/80 border border-emerald-200/60 rounded-2xl text-left">
+              <p className="text-xs text-emerald-800 font-medium flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[18px] text-emerald-600">verified</span>
+                Status Berlangganan Aktif: Simpan resep <strong>Unlimited</strong> ({savedCount} resep tersimpan)
+              </p>
+              <Link to="/subscription" className="shrink-0 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                <span>Detail Paket</span>
+              </Link>
+            </div>
+          ) : (
+            <div className="max-w-2xl mx-auto mb-5 flex items-center justify-between gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-900 text-left">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-amber-600 shrink-0">bookmark</span>
+                <span className="text-xs font-medium">
+                  Kuota Simpan Resep Gratis: <strong>{savedCount}</strong> dari {SAVED_LIMIT} resep ({savedLeft === 0 ? 'Kuota Habis' : `Sisa ${savedLeft}`})
+                </span>
+              </div>
+              <Link to="/subscription" className="shrink-0 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 shadow-sm flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                <span>Simpan Unlimited 👑</span>
+              </Link>
+            </div>
+          )
+        )}
 
         {/* Unified Search & Control Bar */}
         <div className="max-w-4xl mx-auto space-y-4 mb-6">

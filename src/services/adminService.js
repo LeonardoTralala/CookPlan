@@ -69,12 +69,21 @@ export async function getAdminStats() {
       .in("order_status", ["received", "processed", "shipped"]);
     return error ? 0 : count ?? 0;
   };
-  const [recipes, ingredients, packages, ordersActive, feedback] = await Promise.all([
+  // Langganan pending yang perlu disetujui
+  const tallyPendingSubs = async () => {
+    const { count, error } = await supabase
+      .from("subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending");
+    return error ? 0 : count ?? 0;
+  };
+  const [recipes, ingredients, packages, ordersActive, feedback, subscriptionsPending] = await Promise.all([
     tally("recipes"),
     tally("ingredients"),
     tally("packages"),
     tallyActiveOrders(),
     tally("feedback"),
+    tallyPendingSubs(),
   ]);
-  return { recipes, ingredients, packages, ordersActive, feedback };
+  return { recipes, ingredients, packages, ordersActive, feedback, subscriptionsPending };
 }
