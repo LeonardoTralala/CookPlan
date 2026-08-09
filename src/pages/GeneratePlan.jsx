@@ -60,16 +60,16 @@ export function GeneratePlan() {
   const navigate = useNavigate();
   const { showToast } = usePlan();
   const { isAnonymous } = useAuth();
-  const { subscription } = useSubscription();
+  const { subscription, loading: subLoading } = useSubscription() || {};
 
   const [usageCount, setUsageCount] = useState(null);
 
   const MONTHLY_LIMIT = subscription?.status === 'active' ? 30 : 10;
   const EFFECTIVE_LIMIT = isAnonymous ? GUEST_LIMIT : MONTHLY_LIMIT;
 
-  // Kuota bulanan: server reset di awal bulan UTC.
-  const quotaLeft = usageCount == null ? null : Math.max(0, EFFECTIVE_LIMIT - usageCount);
-  const quotaExhausted = quotaLeft === 0;
+  // Kuota bulanan: server reset di awal bulan UTC. Jangan nyatakan exhausted saat subscription masih loading.
+  const quotaLeft = (usageCount == null || subLoading) ? null : Math.max(0, EFFECTIVE_LIMIT - usageCount);
+  const quotaExhausted = !subLoading && quotaLeft === 0;
   const quotaMessage = isAnonymous
     ? `Batas ${GUEST_LIMIT} percobaan gratis sudah habis. Silakan daftar akun gratis CookPlan untuk melanjutkan.`
     : `Kuota generate bulan ini (${MONTHLY_LIMIT}/bulan) sudah habis. Upgrade ke CookPass Lite/Pro untuk menambah kuota.`;

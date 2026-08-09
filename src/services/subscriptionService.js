@@ -118,14 +118,14 @@ export async function createSubscription(tier) {
 
 // Khusus Admin: Ambil semua langganan
 export async function getAdminSubscriptions() {
+  await requireUser();
   const { data, error } = await supabase
     .from("subscriptions")
     .select(`
       *,
       user:profiles (
         full_name,
-        username,
-        email
+        username
       )
     `)
     .order("created_at", { ascending: false });
@@ -136,6 +136,7 @@ export async function getAdminSubscriptions() {
 
 // Khusus Admin: Update status
 export async function updateSubscriptionStatus(id, updates) {
+  await requireUser();
   const { error } = await supabase
     .from("subscriptions")
     .update(updates)

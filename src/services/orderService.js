@@ -17,14 +17,19 @@ function formatRupiah(num) {
   }).format(num || 0);
 }
 
+async function requireUser() {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData?.user;
+  if (!user) throw new Error("Belum login.");
+  return user;
+}
+
 // Buat order baru. payload:
 //   { planId?, outputType, items:[{name,amount,unit,category,priceIdr}],
 //     totalPrice, deliveryFee, address, name, phone, paymentMethod?, notes? }
 // Return order row (termasuk id CP-...).
 export async function createOrder(payload) {
-  const { data: userData } = await supabase.auth.getUser();
-  const user = userData?.user;
-  if (!user) throw new Error("Belum login.");
+  const user = await requireUser();
 
   const { data: order, error } = await supabase
     .from("orders")
@@ -133,6 +138,7 @@ export async function getOrderById(orderId) {
 // menimpa status lanjutan yang mungkin sudah diubah admin). Best-effort: kegagalan
 // tidak boleh memblok pembukaan WhatsApp.
 export async function confirmOrderSent(orderId) {
+  await requireUser();
   const { error } = await supabase
     .from("orders")
     .update({ order_status: "received" })

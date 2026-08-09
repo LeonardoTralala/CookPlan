@@ -38,7 +38,8 @@ export function OrderSuccess() {
       .catch((e) => { if (active) setError(e.message || 'Pesanan tidak ditemukan.'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [order, orderId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderId]);
 
 
   const itemList = useMemo(() => items ?? [], [items]);

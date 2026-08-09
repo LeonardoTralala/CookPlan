@@ -78,7 +78,9 @@ Deno.serve(async (req) => {
       .from('subscriptions')
       .select('status, tier')
       .eq('user_id', userId)
-      .single();
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     limit = (sub?.status === 'active') ? 30 : 10;
   }
   

@@ -59,13 +59,14 @@ export function GenerateResult() {
   const [detailRecipe, setDetailRecipe] = useState(null);
   const [genRecipeActiveTab, setGenRecipeActiveTab] = useState("stepper");
   const [genRecipeStepIdx, setGenRecipeStepIdx] = useState(0);
-  const [prevGenRecipeId, setPrevGenRecipeId] = useState(detailRecipe?.id);
 
-  if (detailRecipe?.id !== prevGenRecipeId) {
-    setPrevGenRecipeId(detailRecipe?.id);
-    setGenRecipeStepIdx(0);
-    setGenRecipeActiveTab("stepper");
-  }
+  const openRecipeDetail = (recipe) => {
+    if (recipe) {
+      setDetailRecipe(recipe);
+      setGenRecipeStepIdx(0);
+      setGenRecipeActiveTab("stepper");
+    }
+  };
 
   const instructions = detailRecipe?.instructions ?? [];
   const totalSteps = instructions.length;
@@ -425,7 +426,7 @@ export function GenerateResult() {
                 return (
                   <button
                     key={mi}
-                    onClick={() => recipe && setDetailRecipe(recipe)}
+                    onClick={() => openRecipeDetail(recipe)}
                     className="w-full flex items-center gap-3 p-3 rounded-xl bg-white border border-outline-variant/60 hover:border-primary/50 transition-colors text-left cursor-pointer"
                   >
                     {recipe?.imageUrl && (

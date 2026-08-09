@@ -4,6 +4,7 @@ import { useSubscription } from '../hooks/useSubscription.js';
 import { createSubscription } from '../services/subscriptionService.js';
 import { useAuth } from '../hooks/useAuth.js';
 import { buildSimpleWhatsappUrl } from '../services/orderService.js';
+import { ModalSheet } from '../components/ModalSheet.jsx';
 
 const formatDate = (dateIso) => {
   if (!dateIso) return '—';
@@ -17,7 +18,7 @@ const formatDate = (dateIso) => {
 };
 
 export function SubscriptionPage() {
-  const { subscription = null, refreshSubscription = () => {}, setShowCelebrationModal } = useSubscription() || {};
+  const { subscription = null, refreshSubscription = () => { }, setShowCelebrationModal } = useSubscription() || {};
   const { isAnonymous = false, user = null } = useAuth() || {};
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,10 +27,13 @@ export function SubscriptionPage() {
   const [error, setError] = useState('');
   const [openFaq, setOpenFaq] = useState(null);
   const [billingCycle, setBillingCycle] = useState('monthly');
+  const [checkoutSub, setCheckoutSub] = useState(null);
   const isActive = subscription?.status === 'active';
   const activeTier = isActive ? subscription.tier : null;
-  const [selectedTier, setSelectedTier] = useState(() => activeTier || 'pro');
   const isPending = subscription?.status === 'pending';
+  const [userSelectedTier, setUserSelectedTier] = useState(null);
+  const selectedTier = userSelectedTier ?? activeTier ?? 'pro';
+  const setSelectedTier = setUserSelectedTier;
 
   const handleCheckStatus = async () => {
     setCheckingStatus(true);
@@ -110,7 +114,15 @@ export function SubscriptionPage() {
 
       const message = `Halo Admin CookPlan,\n\nSaya ingin berlangganan paket *${baseName}* dengan durasi *${cycleText}* seharga *Rp ${pricing.total.toLocaleString('id-ID')}*.\n\nMohon informasi instruksi pembayarannya. Terima kasih!\n\n(Kode Subs: SUB-${id})`;
       const waUrl = buildSimpleWhatsappUrl(message);
-      window.location.href = waUrl;
+
+      setCheckoutSub({
+        id,
+        tier,
+        baseName,
+        cycleText,
+        totalPrice: pricing.total,
+        waUrl
+      });
     } catch (err) {
       setError(err.message || 'Terjadi kesalahan saat memproses langganan.');
     } finally {
@@ -137,7 +149,7 @@ export function SubscriptionPage() {
         <div className="relative z-10 text-center space-y-5">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-emerald-300 text-xs font-bold uppercase tracking-wider">
             <span className="material-symbols-outlined text-[16px] animate-pulse">workspace_premium</span>
-            CookPass Premium · PKM-K 2026
+            CookPass Premium
           </div>
 
           <h1 className="font-headline-xl text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight leading-tight">
@@ -289,19 +301,17 @@ export function SubscriptionPage() {
               key={opt.id}
               type="button"
               onClick={() => setBillingCycle(opt.id)}
-              className={`relative px-5 py-3 sm:px-6 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex flex-col items-center justify-center gap-1 z-10 min-w-[90px] sm:min-w-[110px] ${
-                billingCycle === opt.id
-                  ? 'text-on-primary bg-primary shadow-md'
-                  : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
-              }`}
+              className={`relative px-5 py-3 sm:px-6 rounded-2xl text-xs sm:text-sm font-black transition-all cursor-pointer flex flex-col items-center justify-center gap-1 z-10 min-w-[90px] sm:min-w-[110px] ${billingCycle === opt.id
+                ? 'text-on-primary bg-primary shadow-md'
+                : 'text-on-surface-variant hover:text-on-surface hover:bg-surface-container-low'
+                }`}
             >
               <span>{opt.label}</span>
               {opt.badge && (
-                <span className={`text-[8px] tracking-wider px-1.5 py-0.5 rounded-full font-black ${
-                  billingCycle === opt.id 
-                    ? 'bg-white/20 text-white' 
-                    : 'bg-emerald-600/10 text-emerald-800'
-                }`}>
+                <span className={`text-[8px] tracking-wider px-1.5 py-0.5 rounded-full font-black ${billingCycle === opt.id
+                  ? 'bg-white/20 text-white'
+                  : 'bg-emerald-600/10 text-emerald-800'
+                  }`}>
                   {opt.badge}
                 </span>
               )}
@@ -325,7 +335,7 @@ export function SubscriptionPage() {
           </h3>
           <p className="text-on-surface-variant text-xs sm:text-sm max-w-xl leading-relaxed">
             Ongkir normal belanja di Malang Rp 10.000 x 6 kali pesan/bln = <strong>Rp 60.000/bln</strong>.
-            Dengan Paket Pro <strong>{savings.label}</strong>, pengeluaranmu berkurang menjadi Rp {Math.round(savings.pro / (billingCycle === '3months' ? 3 : billingCycle === '6months' ? 6 : 1)).toLocaleString('id-ID')}/bln. 
+            Dengan Paket Pro <strong>{savings.label}</strong>, pengeluaranmu berkurang menjadi Rp {Math.round(savings.pro / (billingCycle === '3months' ? 3 : billingCycle === '6months' ? 6 : 1)).toLocaleString('id-ID')}/bln.
             Total hemat sebesar <strong className="text-emerald-700">Rp {savings.saved.toLocaleString('id-ID')}</strong>!
           </p>
         </div>
@@ -354,11 +364,10 @@ export function SubscriptionPage() {
         {/* LITE PLAN CARD */}
         <div
           onClick={() => setSelectedTier('lite')}
-          className={`relative flex flex-col justify-between p-7 sm:p-9 rounded-[32px] transition-all duration-300 cursor-pointer ${
-            selectedTier === 'lite'
-              ? 'border-[3.5px] border-emerald-600 ring-8 ring-emerald-600/15 bg-white shadow-2xl scale-[1.01] opacity-100 z-10'
-              : 'border-2 border-slate-300/70 bg-white/60 opacity-60 hover:opacity-100 hover:border-emerald-500/50 hover:shadow-lg'
-          }`}
+          className={`relative flex flex-col justify-between p-7 sm:p-9 rounded-[32px] transition-all duration-300 cursor-pointer ${selectedTier === 'lite'
+            ? 'border-[3.5px] border-emerald-600 ring-8 ring-emerald-600/15 bg-white shadow-2xl scale-[1.01] opacity-100 z-10'
+            : 'border-2 border-slate-300/70 bg-white/60 opacity-60 hover:opacity-100 hover:border-emerald-500/50 hover:shadow-lg'
+            }`}
         >
           <div>
             <div className="flex justify-between items-start mb-4">
@@ -368,9 +377,8 @@ export function SubscriptionPage() {
                 </span>
                 <h3 className="text-2xl font-black text-on-surface tracking-tight">CookPass Lite</h3>
               </div>
-              <span className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
-                selectedTier === 'lite' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-500'
-              }`}>
+              <span className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${selectedTier === 'lite' ? 'bg-emerald-600 text-white shadow-md' : 'bg-slate-100 text-slate-500'
+                }`}>
                 <span className="material-symbols-outlined text-2xl">menu_book</span>
               </span>
             </div>
@@ -415,13 +423,12 @@ export function SubscriptionPage() {
               handleSubscribe('lite');
             }}
             disabled={loadingTier === 'lite' || activeTier === 'lite'}
-            className={`w-full py-4 rounded-full font-bold text-sm transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
-              activeTier === 'lite'
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default shadow-none'
-                : selectedTier === 'lite'
+            className={`w-full py-4 rounded-full font-bold text-sm transition-all shadow-md active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${activeTier === 'lite'
+              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default shadow-none'
+              : selectedTier === 'lite'
                 ? 'bg-emerald-600 text-white hover:bg-emerald-700 font-black shadow-xl'
                 : 'bg-surface-container-high text-on-surface-variant hover:bg-emerald-600 hover:text-white'
-            }`}
+              }`}
           >
             {loadingTier === 'lite' ? (
               <>
@@ -435,7 +442,7 @@ export function SubscriptionPage() {
               </>
             ) : (
               <>
-                Pilih Lite via WhatsApp
+                Langganan CookPass Lite
                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
               </>
             )}
@@ -445,11 +452,10 @@ export function SubscriptionPage() {
         {/* PRO PLAN CARD (HIGHLIGHTED) */}
         <div
           onClick={() => setSelectedTier('pro')}
-          className={`relative flex flex-col justify-between p-7 sm:p-9 rounded-[32px] transition-all duration-300 overflow-hidden cursor-pointer ${
-            selectedTier === 'pro'
-              ? 'border-[3.5px] border-emerald-600 ring-8 ring-emerald-600/15 bg-white shadow-2xl scale-[1.01] opacity-100 z-10'
-              : 'border-2 border-slate-300/70 bg-white/60 opacity-60 hover:opacity-100 hover:border-emerald-500/50 hover:shadow-lg'
-          }`}
+          className={`relative flex flex-col justify-between p-7 sm:p-9 rounded-[32px] transition-all duration-300 overflow-hidden cursor-pointer ${selectedTier === 'pro'
+            ? 'border-[3.5px] border-emerald-600 ring-8 ring-emerald-600/15 bg-white shadow-2xl scale-[1.01] opacity-100 z-10'
+            : 'border-2 border-slate-300/70 bg-white/60 opacity-60 hover:opacity-100 hover:border-emerald-500/50 hover:shadow-lg'
+            }`}
         >
           {/* Floating Tag */}
           <div className="absolute -top-4 right-8 bg-gradient-to-r from-primary to-emerald-600 text-on-primary px-4 py-1.5 rounded-full text-xs font-black tracking-wider uppercase shadow-md flex items-center gap-1 z-10 animate-pulse">
@@ -468,9 +474,8 @@ export function SubscriptionPage() {
                 </span>
                 <h3 className="text-2xl font-black text-on-surface tracking-tight">CookPass Pro</h3>
               </div>
-              <span className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md transition-colors ${
-                selectedTier === 'pro' ? 'bg-primary text-on-primary' : 'bg-slate-100 text-slate-500'
-              }`}>
+              <span className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md transition-colors ${selectedTier === 'pro' ? 'bg-primary text-on-primary' : 'bg-slate-100 text-slate-500'
+                }`}>
                 <span className="material-symbols-outlined text-2xl">local_shipping</span>
               </span>
             </div>
@@ -515,13 +520,12 @@ export function SubscriptionPage() {
               handleSubscribe('pro');
             }}
             disabled={loadingTier === 'pro' || activeTier === 'pro'}
-            className={`w-full py-4 rounded-full font-bold text-sm transition-all shadow-lg active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${
-              activeTier === 'pro'
-                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default shadow-none'
-                : selectedTier === 'pro'
+            className={`w-full py-4 rounded-full font-bold text-sm transition-all shadow-lg active:scale-95 cursor-pointer flex items-center justify-center gap-2 ${activeTier === 'pro'
+              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 cursor-default shadow-none'
+              : selectedTier === 'pro'
                 ? 'bg-primary text-on-primary hover:bg-primary/95 hover:shadow-xl shimmer-glow'
                 : 'bg-surface-container-high text-on-surface-variant hover:bg-primary hover:text-on-primary'
-            }`}
+              }`}
           >
             {loadingTier === 'pro' ? (
               <>
@@ -535,7 +539,7 @@ export function SubscriptionPage() {
               </>
             ) : (
               <>
-                Pilih Pro via WhatsApp
+                Langganan CookPass Pro
                 <span className="material-symbols-outlined text-[20px]">arrow_forward</span>
               </>
             )}
@@ -637,6 +641,86 @@ export function SubscriptionPage() {
           })}
         </div>
       </div>
+
+      {/* IN-APP CHECKOUT CONFIRMATION MODAL */}
+      {checkoutSub && (
+        <ModalSheet onClose={() => setCheckoutSub(null)} labelledBy="checkout-modal-title" panelClassName="max-w-lg">
+          <div className="p-6 sm:p-8 space-y-6 text-on-surface">
+            {/* Header */}
+            <div className="text-center space-y-2">
+              <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto shadow-inner">
+                <span className="material-symbols-outlined text-3xl">receipt_long</span>
+              </div>
+              <span className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 text-[11px] font-black rounded-full uppercase tracking-wider">
+                Pesanan Berhasil Dicatat
+              </span>
+              <h2 id="checkout-modal-title" className="text-2xl font-black text-on-surface tracking-tight">
+                Konfirmasi Langganan
+              </h2>
+              <p className="text-xs sm:text-sm text-on-surface-variant">
+                Pesanan langgananmu telah tersimpan. Selesaikan konfirmasi ke Admin untuk mengaktifkan paket.
+              </p>
+            </div>
+
+            {/* Summary Card */}
+            <div className="bg-surface-container-low border border-outline-variant/60 rounded-2xl p-5 space-y-3">
+              <div className="flex justify-between items-center text-xs pb-3 border-b border-outline-variant/40">
+                <span className="text-on-surface-variant font-medium">Kode Transaksi</span>
+                <span className="font-mono font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                  SUB-{checkoutSub.id}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-on-surface-variant">Paket Pilihan</span>
+                <span className="font-extrabold text-on-surface">{checkoutSub.baseName}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-on-surface-variant">Siklus Berlangganan</span>
+                <span className="font-bold text-on-surface">{checkoutSub.cycleText}</span>
+              </div>
+              <div className="flex justify-between items-center text-base pt-3 border-t border-outline-variant/40">
+                <span className="font-extrabold text-on-surface">Total Tagihan</span>
+                <span className="text-xl font-black text-emerald-700">
+                  Rp {checkoutSub.totalPrice.toLocaleString('id-ID')}
+                </span>
+              </div>
+            </div>
+
+            {/* Notice / Instruction */}
+            <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 text-xs space-y-1">
+              <div className="font-bold flex items-center gap-1.5 text-amber-950">
+                <span className="material-symbols-outlined text-[18px] text-amber-600">info</span>
+                Instruksi Pembayaran:
+              </div>
+              <p className="text-amber-800/90 leading-relaxed">
+                Tekan tombol di bawah untuk membuka WhatsApp resmi CookPlan. Admin akan memberikan instruksi transfer / QRIS untuk pengaktifan akun secara instan.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="space-y-3 pt-2">
+              <a
+                href={checkoutSub.waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setCheckoutSub(null)}
+                className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full font-black text-sm text-center flex items-center justify-center gap-2 shadow-lg transition-all cursor-pointer active:scale-95"
+              >
+                <span className="material-symbols-outlined text-[20px]">chat</span>
+                Lanjut Konfirmasi via WhatsApp
+              </a>
+
+              <button
+                type="button"
+                onClick={() => setCheckoutSub(null)}
+                className="w-full py-3 bg-surface-container-high hover:bg-surface-container text-on-surface-variant font-bold text-xs rounded-full transition-colors cursor-pointer"
+              >
+                Selesai & Cek Status Nanti
+              </button>
+            </div>
+          </div>
+        </ModalSheet>
+      )}
     </div>
   );
 }
