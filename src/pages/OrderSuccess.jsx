@@ -127,9 +127,23 @@ export function OrderSuccess() {
           <span className="text-on-surface-variant">Total Bahan ({itemList.length} item)</span>
           <span className="font-semibold text-on-surface">{formatRupiah(subtotal)}</span>
         </div>
-        <div className="flex justify-between text-sm">
-          <span className="text-on-surface-variant">Biaya Pengantaran</span>
-          <span className="font-semibold text-on-surface">{formatRupiah(deliveryFee)}</span>
+        <div className="flex justify-between text-sm items-center">
+          <span className="text-on-surface-variant flex items-center gap-1.5">
+            Biaya Pengantaran
+            {deliveryFee === 0 && (
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                PRO FREE ONGKIR
+              </span>
+            )}
+          </span>
+          <span className={`font-semibold ${deliveryFee === 0 ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
+            {deliveryFee === 0 ? (
+              <span className="flex items-center gap-1">
+                <span className="line-through text-xs text-on-surface-variant/60 font-normal">{formatRupiah(15000)}</span>
+                <span>Rp 0</span>
+              </span>
+            ) : formatRupiah(deliveryFee)}
+          </span>
         </div>
         <div className="flex justify-between pt-2 border-t border-outline/20">
           <span className="font-bold text-primary">Total</span>

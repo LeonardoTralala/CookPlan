@@ -255,8 +255,17 @@ export function AdminOrders() {
                           </div>
                         ))}
                         <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream">
-                          <span className="text-on-surface-variant">Ongkir</span>
-                          <span className="font-semibold text-on-surface">{formatRupiah(o.delivery_fee ?? 0)}</span>
+                          <span className="text-on-surface-variant flex items-center gap-1.5">
+                            Ongkir
+                            {(o.delivery_fee ?? 0) === 0 && (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                PRO FREE ONGKIR
+                              </span>
+                            )}
+                          </span>
+                          <span className={`font-semibold ${(o.delivery_fee ?? 0) === 0 ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
+                            {(o.delivery_fee ?? 0) === 0 ? 'Rp 0 (Gratis Ongkir)' : formatRupiah(o.delivery_fee ?? 0)}
+                          </span>
                         </div>
                         <div className="flex items-center justify-between px-3 py-2.5">
                           <span className="font-bold text-primary">Total</span>

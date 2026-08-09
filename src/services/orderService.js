@@ -199,7 +199,7 @@ export function buildWhatsappText(order) {
   if (jenis) lines.push(`Jenis: ${jenis}`);
   if (pkg?.detail) lines.push(`Porsi: ${pkg.detail}`);
   lines.push(`Subtotal: ${formatRupiah(subtotal)}`);
-  lines.push(`Ongkir: ${formatRupiah(deliveryFee)}`);
+  lines.push(`Ongkir: ${deliveryFee === 0 ? "Rp 0 (Gratis Ongkir CookPass Pro 🚚)" : formatRupiah(deliveryFee)}`);
   lines.push(`Total: ${formatRupiah(total)}`);
   lines.push("");
   lines.push("Mohon diproses ya, terima kasih.");
@@ -427,7 +427,7 @@ export async function renderReceiptImage(order, items = []) {
     y += emphasis ? 40 : LINE_H;
   };
   costRow("Subtotal", formatRupiah(subtotal), false);
-  costRow("Ongkir", formatRupiah(deliveryFee), false);
+  costRow("Ongkir", deliveryFee === 0 ? "Rp 0 (Gratis Ongkir Pro)" : formatRupiah(deliveryFee), false);
   costRow("TOTAL", formatRupiah(total), true);
 
   // Footer.

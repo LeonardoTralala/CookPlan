@@ -166,6 +166,9 @@ export function GeneratePlan() {
     }
   }, [guestExhausted, navigate]);
 
+  // User terdaftar tanpa langganan aktif yang kuota 10x gratisnya sudah habis
+  const userQuotaExhausted = !isAnonymous && subscription?.status !== 'active' && usageCount != null && usageCount >= 10;
+
 
 
   // Tampilkan kombinasi preferensi diet acak lain (yang sedang dipilih tetap muncul).
@@ -217,8 +220,18 @@ export function GeneratePlan() {
   };
 
   const handleGenerate = async () => {
-    // Guarded click: kuota habis → jelaskan langsung, JANGAN buang request +
-    // loading panjang yang berujung error (alternatif dari men-disable tombol).
+    // Guarded click: kuota habis → jelaskan langsung & redirect ke langganan jika belum berlangganan
+    if (userQuotaExhausted) {
+      showToast('Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital atau Paket Komplet.', { variant: 'warning' });
+      navigate('/subscription', {
+        replace: true,
+        state: {
+          reason: 'quota_exhausted',
+          message: 'Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk melanjutkan.'
+        }
+      });
+      return;
+    }
     if (quotaExhausted) {
       setError(quotaMessage);
       return;
@@ -253,10 +266,21 @@ export function GeneratePlan() {
         navigate('/auth', { replace: true, state: { from: '/generate' } });
         return;
       }
-      // Server menolak karena rate limit harian → samakan tampilannya & tandai habis.
+      // Server menolak karena rate limit harian/bulanan → samakan tampilannya & tandai habis.
       const lower = msg.toLowerCase();
       if (e.status === 429 || lower.includes('kuota') || lower.includes('limit') || /\brate\b/.test(lower)) {
         setUsageCount(MONTHLY_LIMIT);
+        if (!isAnonymous && subscription?.status !== 'active') {
+          showToast('Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital atau Paket Komplet.', { variant: 'warning' });
+          navigate('/subscription', {
+            replace: true,
+            state: {
+              reason: 'quota_exhausted',
+              message: 'Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk melanjutkan.'
+            }
+          });
+          return;
+        }
         setError(quotaMessage);
       } else {
         setError(msg);
@@ -304,25 +328,26 @@ export function GeneratePlan() {
           </div>
         )}
         {usageCount != null && !isAnonymous && (
-          quotaExhausted ? (
-            <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-error/10 border border-error/20 p-3.5 text-sm text-error">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-[20px] shrink-0">hourglass_empty</span>
-                <span>Kuota pembuatan bulan ini ({MONTHLY_LIMIT}/bulan) sudah habis.</span>
-              </div>
-              <Link to="/subscription" className="shrink-0 px-3.5 py-1.5 bg-primary text-on-primary text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 shadow-sm">
-                Upgrade 👑
-              </Link>
-            </div>
-          ) : (
+          subscription?.status === 'active' ? (
             <div className="mb-5 flex items-center justify-between gap-3 p-3 bg-emerald-50/80 border border-emerald-200/60 rounded-2xl">
               <p className="text-xs text-emerald-800 font-medium flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[18px] text-emerald-600">bolt</span>
-                Sisa kuota bulan ini: <strong>{quotaLeft}</strong> dari {MONTHLY_LIMIT} generate
+                <span className="material-symbols-outlined text-[18px] text-emerald-600">verified</span>
+                Status Berlangganan Aktif ({subscription?.tier === 'lite' ? 'Paket Digital' : 'Paket Komplet'}): Sisa <strong>{quotaLeft}</strong> dari {MONTHLY_LIMIT} generate
               </p>
               <Link to="/subscription" className="shrink-0 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 flex items-center gap-1">
                 <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
-                <span>Upgrade 30x AI</span>
+                <span>Detail Paket</span>
+              </Link>
+            </div>
+          ) : (
+            <div className="mb-5 flex items-center justify-between gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3 text-sm text-amber-900">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-amber-600 shrink-0">bolt</span>
+                <span className="text-xs font-medium">Sisa kuota AI gratis bulan ini: <strong>{quotaLeft}</strong> dari 10 generate</span>
+              </div>
+              <Link to="/subscription" className="shrink-0 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 shadow-sm flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                <span>Berlangganan 👑</span>
               </Link>
             </div>
           )

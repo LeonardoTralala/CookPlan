@@ -377,11 +377,13 @@ export async function saveRecipe(recipeId) {
     .select("recipe_id", { count: "exact", head: true })
     .eq("user_id", user.id);
     
-  if (count >= 10) {
+  if ((count ?? 0) >= 10) {
     // Cek apakah punya langganan aktif
     const sub = await getCurrentSubscription();
     if (!sub || sub.status !== 'active') {
-      throw new Error("Kuota gratis (10 resep) habis. Berlangganan CookPlan Lite/Pro untuk menyimpan tanpa batas.");
+      const err = new Error("Kuota simpan resep gratis (10 resep) telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk menyimpan resep tanpa batas.");
+      err.code = "QUOTA_EXHAUSTED";
+      throw err;
     }
   }
 

@@ -245,13 +245,21 @@ export function GenerateResult() {
 
       setNoteOpenIndex(null);
       setNoteDraft('');
-      showToast(`Menu ${appliedDay?.day || `hari ${dayIndex + 1}`} berhasil diganti!`);
     } catch (e) {
-      showToast(e.message || 'Gagal mengganti menu hari ini.', { variant: 'error' });
+      const msg = e.message || 'Gagal mengganti menu hari ini.';
+      showToast(msg, { variant: 'error' });
+      if (e.status === 429 || /kuota|limit|berlangganan/i.test(msg)) {
+        navigate('/subscription', {
+          state: {
+            reason: 'quota_exhausted',
+            message: 'Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk melanjutkan.'
+          }
+        });
+      }
     } finally {
       setRegenDayIndex(null);
     }
-  }, [planId, regenDayIndex, recipeIndex, result, pantry, applySlots, showToast]);
+  }, [planId, regenDayIndex, recipeIndex, result, pantry, applySlots, showToast, navigate]);
 
   if (loading) {
     return (

@@ -91,7 +91,11 @@ Deno.serve(async (req) => {
   const limit = (sub?.status === 'active') ? 30 : 10;
   
   if ((usageCount ?? 0) >= limit) {
-    return json({ error: `Batas ${limit} generate per bulan tercapai. Upgrade ke CookPass Lite/Pro untuk menambah kuota.` }, 429);
+    return json({
+      error: `Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk melanjutkan.`,
+      limitReached: true,
+      subscriptionRequired: true,
+    }, 429);
   }
 
   // 3. Parse & validasi body

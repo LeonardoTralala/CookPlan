@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useSubscription } from '../hooks/useSubscription.js';
 import { createSubscription } from '../services/subscriptionService.js';
 import { useAuth } from '../hooks/useAuth.js';
@@ -17,10 +17,12 @@ const formatDate = (dateIso) => {
 };
 
 export function SubscriptionPage() {
-  const { subscription = null, refreshSubscription = () => {} } = useSubscription() || {};
+  const { subscription = null, refreshSubscription = () => {}, setShowCelebrationModal } = useSubscription() || {};
   const { isAnonymous = false, user = null } = useAuth() || {};
   const navigate = useNavigate();
+  const location = useLocation();
   const [loadingTier, setLoadingTier] = useState(null);
+  const [checkingStatus, setCheckingStatus] = useState(false);
   const [error, setError] = useState('');
   const [openFaq, setOpenFaq] = useState(null);
   const [billingCycle, setBillingCycle] = useState('monthly');
@@ -28,6 +30,22 @@ export function SubscriptionPage() {
   const activeTier = isActive ? subscription.tier : null;
   const [selectedTier, setSelectedTier] = useState(() => activeTier || 'pro');
   const isPending = subscription?.status === 'pending';
+
+  const handleCheckStatus = async () => {
+    setCheckingStatus(true);
+    try {
+      const updated = await refreshSubscription();
+      if (updated && updated.status === 'active') {
+        setShowCelebrationModal?.(true);
+      }
+    } finally {
+      setCheckingStatus(false);
+    }
+  };
+
+  const quotaExhaustedNotice = location.state?.reason === 'quota_exhausted'
+    ? (location.state?.message || 'Kuota 10x AI generate gratis bulan ini telah habis. Silakan berlangganan Paket Digital (CookPass Lite) atau Paket Komplet (CookPass Pro) untuk melanjutkan.')
+    : null;
 
   // Pricing helper
   const getPricing = (tier) => {
@@ -135,6 +153,21 @@ export function SubscriptionPage() {
         </div>
       </div>
 
+      {/* QUOTA EXHAUSTED NOTICE BANNER */}
+      {quotaExhaustedNotice && (
+        <div className="bg-amber-50 border-2 border-amber-400 text-amber-950 rounded-[28px] p-6 shadow-md flex items-start gap-4 animate-fade-in max-w-4xl mx-auto">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+            <span className="material-symbols-outlined text-2xl">lock_clock</span>
+          </div>
+          <div>
+            <h3 className="font-extrabold text-base text-amber-950">Kuota 10x AI Generate Gratis Bulan Ini Telah Habis!</h3>
+            <p className="text-xs sm:text-sm text-amber-900/90 mt-1 leading-relaxed">
+              {quotaExhaustedNotice}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ERROR ALERT */}
       {error && (
         <div className="bg-rose-50 border border-rose-200 text-rose-700 px-5 py-3.5 rounded-2xl text-sm flex items-center gap-3 max-w-2xl mx-auto animate-shake">
@@ -225,10 +258,18 @@ export function SubscriptionPage() {
             </div>
           </div>
           <button
-            onClick={() => refreshSubscription()}
-            className="px-5 py-2.5 bg-amber-600 text-white rounded-full text-xs font-bold hover:bg-amber-700 transition cursor-pointer shrink-0 shadow-sm"
+            onClick={handleCheckStatus}
+            disabled={checkingStatus}
+            className="px-5 py-2.5 bg-amber-600 text-white rounded-full text-xs font-bold hover:bg-amber-700 transition cursor-pointer shrink-0 shadow-sm disabled:opacity-60 flex items-center gap-1.5"
           >
-            Cek Status Terbaru
+            {checkingStatus ? (
+              <>
+                <span className="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
+                Mengecek...
+              </>
+            ) : (
+              'Cek Status Terbaru'
+            )}
           </button>
         </div>
       )}
