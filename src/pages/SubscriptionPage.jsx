@@ -401,7 +401,7 @@ export function SubscriptionPage() {
                 <strong>Simpan Resep Unlimited</strong> (tanpa batas)
               </FeatureItem>
               <FeatureItem icon="check_circle" iconColor="text-emerald-600" active>
-                Akses Rekomendasi Menu Hemat
+                Prioritas Slot Kurir Standar
               </FeatureItem>
               <FeatureItem icon="lock" iconColor="text-outline" disabled>
                 Voucher Gratis Ongkir (Tarif Pengantaran Normal)
