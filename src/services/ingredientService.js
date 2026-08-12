@@ -263,3 +263,69 @@ export async function linkUnlinkedIngredient(ingredientName, masterIngredientId)
   if (error) throw error;
 }
 
+// --- Penyesuaian Harga Massal (Bulk Margin Adjustment) -----------------------
+
+/**
+ * Penyesuaian harga massal untuk master bahan berharga.
+ * @param {Object} opts
+ * @param {'markup30' | 'gross30' | 'custom'} opts.mode
+ * @param {number} [opts.percentage] - Persentase penyesuaian (misal: -23.08 atau -30)
+ * @param {string} [opts.category] - '' (semua), '__none' (tanpa kategori), atau nama kategori
+ * @returns {Promise<{ updatedCount: number }>}
+ */
+export async function bulkAdjustPrices({ mode = 'markup30', percentage = 0, category = '' } = {}) {
+  await requireUser();
+
+  let query = supabase
+    .from("ingredients")
+    .select("id, price_per_base, category")
+    .not("price_per_base", "is", null);
+
+  if (category && category !== '__none') {
+    query = query.eq("category", category);
+  } else if (category === '__none') {
+    query = query.is("category", null);
+  }
+
+  const { data: list, error } = await query;
+  if (error) throw error;
+  if (!list || list.length === 0) return { updatedCount: 0 };
+
+  const updates = list.map((item) => {
+    const currentPrice = Number(item.price_per_base);
+    let newPrice = currentPrice;
+
+    if (mode === 'markup30') {
+      // Modal = Harga_Pasar / 1.3 (Markup 30% pada modal)
+      newPrice = Math.round((currentPrice / 1.3) * 100) / 100;
+    } else if (mode === 'gross30') {
+      // Modal = 70% dari Harga_Pasar (Gross Margin 30%)
+      newPrice = Math.round((currentPrice * 0.7) * 100) / 100;
+    } else if (mode === 'custom') {
+      const factor = 1 + (Number(percentage) || 0) / 100;
+      newPrice = Math.round((currentPrice * factor) * 100) / 100;
+    }
+
+    newPrice = Math.max(0, newPrice);
+    return { id: item.id, price_per_base: newPrice };
+  });
+
+  // Eksekusi update per baris secara paralel dalam chunk
+  const CHUNK_SIZE = 25;
+  for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
+    const chunk = updates.slice(i, i + CHUNK_SIZE);
+    const promises = chunk.map((u) =>
+      supabase
+        .from("ingredients")
+        .update({ price_per_base: u.price_per_base })
+        .eq("id", u.id)
+    );
+    const results = await Promise.all(promises);
+    for (const res of results) {
+      if (res.error) throw res.error;
+    }
+  }
+
+  return { updatedCount: updates.length };
+}
+
