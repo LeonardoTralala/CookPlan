@@ -12,7 +12,7 @@ async function requireUser() {
 }
 
 const SELECT =
-  "id, name, category, baseUnit:base_unit, pricePerBase:price_per_base, isStaple:is_staple, " +
+  "id, name, category, baseUnit:base_unit, costPricePerBase:cost_price_per_base, pricePerBase:price_per_base, isStaple:is_staple, " +
   "packSize:pack_size, packLabel:pack_label, packPriceIdr:pack_price_idr";
 
 // Map patch camelCase → baris snake_case (hanya field yang dikenal).
@@ -21,6 +21,9 @@ function toRow(patch) {
   if ("name" in patch) row.name = patch.name?.trim();
   if ("category" in patch) row.category = patch.category || null;
   if ("baseUnit" in patch) row.base_unit = patch.baseUnit;
+  if ("costPricePerBase" in patch)
+    row.cost_price_per_base =
+      patch.costPricePerBase === "" || patch.costPricePerBase == null ? null : Number(patch.costPricePerBase);
   if ("pricePerBase" in patch)
     row.price_per_base =
       patch.pricePerBase === "" || patch.pricePerBase == null ? null : Number(patch.pricePerBase);
@@ -59,7 +62,17 @@ export async function listIngredients({ unpriced = false } = {}) {
   await requireUser();
   let q = supabase.from("ingredients").select(SELECT).order("name");
   if (unpriced) q = q.is("price_per_base", null);
-  const { data, error } = await q;
+  let { data, error } = await q;
+  if (error && (error.code === '42703' || error.message?.includes('cost_price_per_base'))) {
+    const FALLBACK_SELECT =
+      "id, name, category, baseUnit:base_unit, pricePerBase:price_per_base, isStaple:is_staple, " +
+      "packSize:pack_size, packLabel:pack_label, packPriceIdr:pack_price_idr";
+    let fq = supabase.from("ingredients").select(FALLBACK_SELECT).order("name");
+    if (unpriced) fq = fq.is("price_per_base", null);
+    const res = await fq;
+    data = res.data;
+    error = res.error;
+  }
   if (error) throw error;
   return data ?? [];
 }
@@ -278,8 +291,7 @@ export async function bulkAdjustPrices({ mode = 'markup30', percentage = 0, cate
 
   let query = supabase
     .from("ingredients")
-    .select("id, price_per_base, category")
-    .not("price_per_base", "is", null);
+    .select("id, cost_price_per_base, price_per_base, category");
 
   if (category && category !== '__none') {
     query = query.eq("category", category);
@@ -292,43 +304,61 @@ export async function bulkAdjustPrices({ mode = 'markup30', percentage = 0, cate
   if (!list || list.length === 0) return { updatedCount: 0 };
 
   const updates = list.map((item) => {
-    const currentPrice = Number(item.price_per_base);
-    let newPrice = currentPrice;
+    let costPrice = item.cost_price_per_base != null ? Number(item.cost_price_per_base) : null;
+    let sellingPrice = item.price_per_base != null ? Number(item.price_per_base) : null;
 
     if (mode === 'markup30') {
-      // Modal = Harga_Pasar / 1.3 (Markup 30% pada modal)
-      newPrice = Math.round((currentPrice / 1.3) * 100) / 100;
+      // Jika ada harga dasar, set harga jual = harga dasar * 1.3
+      // Jika belum ada harga dasar tapi ada harga jual, set harga dasar = harga jual / 1.3
+      if (costPrice != null) {
+        sellingPrice = Math.round((costPrice * 1.3) * 100) / 100;
+      } else if (sellingPrice != null) {
+        costPrice = Math.round((sellingPrice / 1.3) * 100) / 100;
+      }
     } else if (mode === 'gross30') {
-      // Modal = 70% dari Harga_Pasar (Gross Margin 30%)
-      newPrice = Math.round((currentPrice * 0.7) * 100) / 100;
-    } else if (mode === 'raise10') {
-      // Naikkan +10% dari harga saat ini
-      newPrice = Math.round((currentPrice * 1.1) * 100) / 100;
-    } else if (mode === 'raise20') {
-      // Naikkan +20% dari harga saat ini
-      newPrice = Math.round((currentPrice * 1.2) * 100) / 100;
-    } else if (mode === 'raise30') {
-      // Naikkan +30% dari harga saat ini
-      newPrice = Math.round((currentPrice * 1.3) * 100) / 100;
-    } else if (mode === 'custom') {
+      if (costPrice != null) {
+        sellingPrice = Math.round((costPrice / 0.7) * 100) / 100;
+      } else if (sellingPrice != null) {
+        costPrice = Math.round((sellingPrice * 0.7) * 100) / 100;
+      }
+    } else if (mode === 'set_cost_from_selling') {
+      if (sellingPrice != null) {
+        const div = 1 + (Number(percentage) || 30) / 100;
+        costPrice = Math.round((sellingPrice / div) * 100) / 100;
+      }
+    } else if (mode === 'set_selling_from_cost') {
+      if (costPrice != null) {
+        const mult = 1 + (Number(percentage) || 30) / 100;
+        sellingPrice = Math.round((costPrice * mult) * 100) / 100;
+      }
+    } else if (mode === 'raise10' && sellingPrice != null) {
+      sellingPrice = Math.round((sellingPrice * 1.1) * 100) / 100;
+    } else if (mode === 'raise20' && sellingPrice != null) {
+      sellingPrice = Math.round((sellingPrice * 1.2) * 100) / 100;
+    } else if (mode === 'raise30' && sellingPrice != null) {
+      sellingPrice = Math.round((sellingPrice * 1.3) * 100) / 100;
+    } else if (mode === 'custom' && sellingPrice != null) {
       const factor = 1 + (Number(percentage) || 0) / 100;
-      newPrice = Math.round((currentPrice * factor) * 100) / 100;
+      sellingPrice = Math.round((sellingPrice * factor) * 100) / 100;
     }
 
-    newPrice = Math.max(0, newPrice);
-    return { id: item.id, price_per_base: newPrice };
+    if (sellingPrice != null) sellingPrice = Math.max(0, sellingPrice);
+    if (costPrice != null) costPrice = Math.max(0, costPrice);
+
+    return { id: item.id, cost_price_per_base: costPrice, price_per_base: sellingPrice };
   });
 
   // Urutkan berdasarkan ID secara deterministik untuk mencegah deadlock
   updates.sort((a, b) => a.id - b.id);
 
   // Eksekusi update per baris secara SEKUENSIONAL untuk mencegah PostgreSQL deadlock (40P01)
-  // akibat pemicu/trigger DB (ingredients_after_price_change -> recipe_ingredients -> recipes)
-  // yang bertabrakan kunci saat dijalankan secara paralel.
   for (const u of updates) {
     const { error: updateError } = await supabase
       .from("ingredients")
-      .update({ price_per_base: u.price_per_base })
+      .update({
+        cost_price_per_base: u.cost_price_per_base,
+        price_per_base: u.price_per_base,
+      })
       .eq("id", u.id);
 
     if (updateError) throw updateError;

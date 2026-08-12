@@ -19,8 +19,8 @@ const CATEGORIES = [
   { value: 'dry_goods', label: 'Bahan kering' },
 ];
 
-// Admin UI: Master Bahan — sumber kebenaran harga. Ubah harga sekali di sini,
-// biaya bahan & total resep ikut berubah otomatis (trigger DB) di semua resep.
+// Admin UI: Master Bahan — sumber kebenaran harga. Ubah harga dasar (modal) & harga jual di sini.
+// Biaya bahan & total resep dihitung otomatis oleh trigger DB dari harga jual (price_per_base).
 export function IngredientManager() {
   const navigate = useNavigate();
   const { showToast } = usePlan();
@@ -30,7 +30,7 @@ export function IngredientManager() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const [onlyUnpriced, setOnlyUnpriced] = useState(false);
+  const [priceFilter, setPriceFilter] = useState('all'); // 'all' | 'unpriced_cost' | 'unpriced_selling' | 'unpriced_any'
   const [onlyStaple, setOnlyStaple] = useState(false);
   const [category, setCategory] = useState(''); // '' = semua, '__none' = tanpa kategori
 
@@ -50,8 +50,8 @@ export function IngredientManager() {
 
   // State untuk Penyesuaian Margin Massal (Bulk Adjust)
   const [showBulkModal, setShowBulkModal] = useState(false);
-  const [bulkMode, setBulkMode] = useState('markup30'); // 'markup30' | 'gross30' | 'custom'
-  const [bulkPercentage, setBulkPercentage] = useState('-23.08');
+  const [bulkMode, setBulkMode] = useState('markup30'); // 'markup30' | 'gross30' | 'set_cost_from_selling' | 'set_selling_from_cost' | 'custom'
+  const [bulkPercentage, setBulkPercentage] = useState('30');
   const [bulkCategory, setBulkCategory] = useState('');
   const [bulkApplying, setBulkApplying] = useState(false);
 
@@ -85,13 +85,16 @@ export function IngredientManager() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return items.filter((i) =>
-      (!onlyUnpriced || i.pricePerBase == null) &&
-      (!onlyStaple || i.isStaple) &&
-      (category === '' || (category === '__none' ? i.category == null : i.category === category)) &&
-      (!q || i.name.toLowerCase().includes(q))
-    );
-  }, [items, query, onlyUnpriced, onlyStaple, category]);
+    return items.filter((i) => {
+      if (priceFilter === 'unpriced_cost' && i.costPricePerBase != null) return false;
+      if (priceFilter === 'unpriced_selling' && i.pricePerBase != null) return false;
+      if (priceFilter === 'unpriced_any' && (i.costPricePerBase != null || i.pricePerBase != null)) return false;
+      if (onlyStaple && !i.isStaple) return false;
+      if (category !== '' && (category === '__none' ? i.category != null : i.category !== category)) return false;
+      if (q && !i.name.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [items, query, priceFilter, onlyStaple, category]);
 
   const filteredUnlinked = useMemo(() => {
     const q = unlinkedQuery.trim().toLowerCase();
@@ -103,12 +106,19 @@ export function IngredientManager() {
     );
   }, [unlinkedItems, unlinkedQuery]);
 
-  const pricedCount = useMemo(() => items.filter((i) => i.pricePerBase != null).length, [items]);
+  const costPricedCount = useMemo(() => items.filter((i) => i.costPricePerBase != null).length, [items]);
+  const sellingPricedCount = useMemo(() => items.filter((i) => i.pricePerBase != null).length, [items]);
+  const avgMarginPct = useMemo(() => {
+    const valid = items
+      .filter((i) => i.costPricePerBase != null && i.pricePerBase != null && Number(i.pricePerBase) > 0)
+      .map((i) => ((Number(i.pricePerBase) - Number(i.costPricePerBase)) / Number(i.pricePerBase)) * 100);
+    if (valid.length === 0) return 0;
+    return valid.reduce((a, b) => a + b, 0) / valid.length;
+  }, [items]);
 
   const bulkTargetItems = useMemo(() => {
     return items.filter(
       (i) =>
-        i.pricePerBase != null &&
         (bulkCategory === '' || (bulkCategory === '__none' ? i.category == null : i.category === bulkCategory))
     );
   }, [items, bulkCategory]);
@@ -168,7 +178,11 @@ export function IngredientManager() {
       showToast(e.message, { variant: 'error' });
     }
   };
-  const openCreate = () => { setEditing({ id: null, name: '', category: '', baseUnit: 'g', pricePerBase: '', isStaple: false, packSize: '', packLabel: '' }); setOverrides([]); setAliasRows([]); };
+  const openCreate = () => {
+    setEditing({ id: null, name: '', category: '', baseUnit: 'g', costPricePerBase: '', pricePerBase: '', isStaple: false, packSize: '', packLabel: '' });
+    setOverrides([]);
+    setAliasRows([]);
+  };
   const close = () => { setEditing(null); setOverrides([]); setAliasRows([]); setMerging(false); setMergeQuery(''); };
 
   // Kandidat target gabung: semua bahan lain (kecuali diri sendiri), terfilter cari.
@@ -228,7 +242,16 @@ export function IngredientManager() {
     setSaving(true);
     try {
       let id = editing.id;
-      const patch = { name: editing.name, category: editing.category, baseUnit: editing.baseUnit, pricePerBase: editing.pricePerBase, isStaple: !!editing.isStaple, packSize: editing.isStaple ? editing.packSize : '', packLabel: editing.isStaple ? editing.packLabel : '' };
+      const patch = {
+        name: editing.name,
+        category: editing.category,
+        baseUnit: editing.baseUnit,
+        costPricePerBase: editing.costPricePerBase,
+        pricePerBase: editing.pricePerBase,
+        isStaple: !!editing.isStaple,
+        packSize: editing.isStaple ? editing.packSize : '',
+        packLabel: editing.isStaple ? editing.packLabel : ''
+      };
       if (id) await ingredientService.updateIngredient(id, patch);
       else id = (await ingredientService.createIngredient(patch)).id;
 
@@ -285,7 +308,7 @@ export function IngredientManager() {
       <div className="flex items-center justify-between gap-3">
         <h1 className="font-headline-lg text-headline-lg text-primary flex items-center gap-2">
           <span className="material-symbols-outlined text-3xl">inventory_2</span>
-          Master Bahan
+          Master Bahan & Margin
         </h1>
         {activeTab === 'master' && (
           <div className="flex items-center gap-2 shrink-0">
@@ -338,9 +361,27 @@ export function IngredientManager() {
 
       {activeTab === 'master' && (
         <>
-          <p className="text-xs text-on-surface-variant">
-            {pricedCount}/{items.length} bahan sudah berharga. Ubah harga di sini → biaya bahan & total resep ikut otomatis di semua resep.
-          </p>
+          {/* Banner Ringkasan Harga & Margin */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-surface-container-low p-4 rounded-2xl border border-outline-variant/60">
+            <div>
+              <span className="text-[11px] font-semibold text-on-surface-variant block">Total Bahan</span>
+              <span className="text-lg font-bold text-on-surface">{items.length}</span>
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-on-surface-variant block">Harga Dasar (Modal)</span>
+              <span className="text-lg font-bold text-on-surface">{costPricedCount} <span className="text-xs font-normal text-on-surface-variant">bahan</span></span>
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-on-surface-variant block">Harga Jual (Retail)</span>
+              <span className="text-lg font-bold text-primary">{sellingPricedCount} <span className="text-xs font-normal text-on-surface-variant">bahan</span></span>
+            </div>
+            <div>
+              <span className="text-[11px] font-semibold text-on-surface-variant block">Rata-rata Margin</span>
+              <span className={`text-lg font-bold ${avgMarginPct >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                {(avgMarginPct ?? 0).toFixed(1)}%
+              </span>
+            </div>
+          </div>
 
           <div className="flex flex-wrap gap-2 items-center">
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari bahan…"
@@ -351,41 +392,77 @@ export function IngredientManager() {
               {CATEGORIES.filter((c) => c.value).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
               <option value="__none">Tanpa kategori</option>
             </select>
-            <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
-              <input type="checkbox" checked={onlyUnpriced} onChange={(e) => setOnlyUnpriced(e.target.checked)} /> Belum berharga
-            </label>
+            <select value={priceFilter} onChange={(e) => setPriceFilter(e.target.value)} title="Filter status harga"
+              className="px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer">
+              <option value="all">Semua Status Harga</option>
+              <option value="unpriced_cost">Belum harga dasar</option>
+              <option value="unpriced_selling">Belum harga jual</option>
+              <option value="unpriced_any">Belum set lengkap</option>
+            </select>
             <label className="flex items-center gap-1.5 text-sm text-on-surface cursor-pointer whitespace-nowrap">
               <input type="checkbox" checked={onlyStaple} onChange={(e) => setOnlyStaple(e.target.checked)} /> Bahan pokok
             </label>
           </div>
-          {(query || category || onlyUnpriced || onlyStaple) && (
-            <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setOnlyUnpriced(false); setOnlyStaple(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
+          {(query || category || priceFilter !== 'all' || onlyStaple) && (
+            <p className="-mt-2 text-[11px] text-on-surface-variant">{filtered.length} bahan cocok filter. <button onClick={() => { setQuery(''); setCategory(''); setPriceFilter('all'); setOnlyStaple(false); }} className="text-primary font-semibold cursor-pointer">Reset</button></p>
           )}
 
           {loading ? (
             <div className="flex justify-center py-16"><span className="material-symbols-outlined animate-spin text-3xl text-primary">progress_activity</span></div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               {filtered.length === 0 && <p className="text-center text-sm text-on-surface-variant py-8">Tidak ada bahan.</p>}
-              {filtered.slice(0, 300).map((ing) => (
-                <button key={ing.id} onClick={() => openEdit(ing)}
-                  className="w-full text-left rounded-xl border border-outline-variant p-3 flex items-center justify-between gap-3 hover:bg-surface-container-low cursor-pointer">
-                  <div className="min-w-0">
-                    <span className="font-semibold text-on-surface truncate flex items-center gap-1.5">
-                      <span className="truncate">{ing.name}</span>
-                      {ing.isStaple && (
-                        <span title="Bahan pokok dapur — tak masuk daftar belanja" className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[10px] font-bold px-1.5 py-0.5">
-                          <span className="material-symbols-outlined text-[12px]">home</span> pokok
+              {filtered.slice(0, 300).map((ing) => {
+                const cost = ing.costPricePerBase != null ? Number(ing.costPricePerBase) : null;
+                const selling = ing.pricePerBase != null ? Number(ing.pricePerBase) : null;
+                const hasBoth = cost != null && selling != null;
+                const margin = hasBoth ? selling - cost : null;
+                const marginPct = hasBoth && selling > 0 ? ((selling - cost) / selling) * 100 : null;
+
+                return (
+                  <button key={ing.id} onClick={() => openEdit(ing)}
+                    className="w-full text-left rounded-2xl border border-outline-variant p-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3 hover:bg-surface-container-low cursor-pointer transition-all bg-white hover:shadow-xs">
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold text-on-surface truncate flex items-center gap-1.5">
+                        <span className="truncate">{ing.name}</span>
+                        {ing.isStaple && (
+                          <span title="Bahan pokok dapur — tak masuk daftar belanja" className="shrink-0 inline-flex items-center gap-0.5 rounded-full bg-tertiary-container text-on-tertiary-container text-[10px] font-bold px-1.5 py-0.5">
+                            <span className="material-symbols-outlined text-[12px]">home</span> pokok
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-xs text-on-surface-variant">{labelOf(CATEGORIES, ing.category)} · dasar {ing.baseUnit}</span>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
+                      <div className="bg-surface-container px-3 py-1 rounded-xl">
+                        <span className="text-on-surface-variant text-[10px] block font-medium">Harga Dasar (Modal)</span>
+                        <span className="font-bold text-on-surface">
+                          {cost == null ? '—' : `Rp${formatNum(cost)}/${ing.baseUnit}`}
                         </span>
+                      </div>
+                      <div className="bg-primary/5 px-3 py-1 rounded-xl border border-primary/20">
+                        <span className="text-primary text-[10px] block font-semibold">Harga Jual</span>
+                        <span className="font-bold text-primary">
+                          {selling == null ? 'belum set' : `Rp${formatNum(selling)}/${ing.baseUnit}`}
+                        </span>
+                      </div>
+                      {hasBoth ? (
+                        <div className={`px-3 py-1 rounded-xl border ${margin >= 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800'}`}>
+                          <span className="text-[10px] block font-semibold">Margin</span>
+                          <span className="font-bold">
+                            Rp{formatNum(Math.round(margin))} ({marginPct != null ? marginPct.toFixed(1) : '0.0'}%)
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="bg-amber-50 border border-amber-200 text-amber-800 px-2.5 py-1 rounded-xl text-[11px] font-medium">
+                          perlu data margin
+                        </div>
                       )}
-                    </span>
-                    <span className="text-xs text-on-surface-variant">{labelOf(CATEGORIES, ing.category)} · dasar {ing.baseUnit}</span>
-                  </div>
-                  <span className={`text-sm font-bold shrink-0 ${ing.pricePerBase == null ? 'text-error/70' : 'text-primary'}`}>
-                    {ing.pricePerBase == null ? 'belum berharga' : `Rp${formatNum(ing.pricePerBase)}/${ing.baseUnit}`}
-                  </span>
-                </button>
-              ))}
+                    </div>
+                  </button>
+                );
+              })}
               {filtered.length > 300 && <p className="text-center text-xs text-on-surface-variant py-2">Menampilkan 300 dari {filtered.length}. Persempit dengan pencarian.</p>}
             </div>
           )}
@@ -485,13 +562,14 @@ export function IngredientManager() {
         <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-0 md:p-4 bg-on-surface/60 backdrop-blur-sm" onClick={close}>
           <div className="bg-white w-full max-w-lg rounded-t-3xl md:rounded-3xl p-6 max-h-[92dvh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <h2 className="font-headline-md text-headline-md text-primary mb-4">{editing.id ? 'Edit Bahan' : 'Tambah Bahan'}</h2>
-            <div className="space-y-3">
+            <div className="space-y-3.5">
               <Field label="Nama bahan">
                 <input value={editing.name} onChange={(e) => setField('name', e.target.value)} placeholder="Bawang Merah"
                   className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
                 {(() => { const err = validateIngredientName(editing.name); return err ? <span className="block text-[11px] text-error mt-1">{err}</span> : null; })()}
               </Field>
-              <div className="grid grid-cols-3 gap-3">
+
+              <div className="grid grid-cols-2 gap-3">
                 <Field label="Kategori">
                   <select value={editing.category ?? ''} onChange={(e) => setField('category', e.target.value)} className="w-full px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40">
                     {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -502,14 +580,107 @@ export function IngredientManager() {
                     {BASE_UNITS.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
                   </select>
                 </Field>
-                <Field label={`Harga / ${editing.baseUnit}`}>
+              </div>
+
+              {/* Dual Input Harga: Dasar (Modal) & Jual (Retail) */}
+              <div className="grid grid-cols-2 gap-3">
+                <Field label={`Harga Dasar / ${editing.baseUnit} (Modal)`}>
+                  <input type="number" step="any" value={editing.costPricePerBase ?? ''} onChange={(e) => setField('costPricePerBase', e.target.value)} placeholder="30"
+                    className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
+                </Field>
+                <Field label={`Harga Jual / ${editing.baseUnit} (Retail)`}>
                   <input type="number" step="any" value={editing.pricePerBase ?? ''} onChange={(e) => setField('pricePerBase', e.target.value)} placeholder="40"
                     className="w-full px-4 py-2.5 rounded-xl bg-white border border-outline-variant text-base focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary" />
                 </Field>
               </div>
-              <p className="text-[11px] text-on-surface-variant -mt-1">
-                Contoh: bawang Rp40.000/kg → satuan dasar <b>g</b>, harga <b>40</b> (per gram).
-              </p>
+
+              {/* Kalkulator Live Margin */}
+              {(() => {
+                const cost = Number(editing.costPricePerBase);
+                const selling = Number(editing.pricePerBase);
+                const hasCost = editing.costPricePerBase !== '' && editing.costPricePerBase != null && !isNaN(cost) && cost > 0;
+                const hasSelling = editing.pricePerBase !== '' && editing.pricePerBase != null && !isNaN(selling) && selling > 0;
+
+                const margin = (hasSelling ? selling : 0) - (hasCost ? cost : 0);
+                const marginPct = hasSelling && selling > 0 ? (margin / selling) * 100 : 0;
+                const markupPct = hasCost && cost > 0 ? (margin / cost) * 100 : 0;
+
+                return (
+                  <div className="rounded-2xl border border-outline-variant/80 p-3.5 bg-surface-container-low space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[18px] text-primary">calculate</span>
+                        Analisis Margin per {editing.baseUnit}
+                      </span>
+                      {hasCost && hasSelling && (
+                        <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${margin >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'}`}>
+                          Margin: Rp{formatNum(Math.round(margin))} ({(marginPct ?? 0).toFixed(1)}%)
+                        </span>
+                      )}
+                    </div>
+
+                    {hasCost && hasSelling ? (
+                      <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                        <div className="bg-white p-2 rounded-xl border border-outline-variant/60 shadow-2xs">
+                          <span className="block text-[10px] text-on-surface-variant font-medium">Margin Rp</span>
+                          <span className="font-bold text-primary text-sm">Rp{formatNum(Math.round(margin))}</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-outline-variant/60 shadow-2xs">
+                          <span className="block text-[10px] text-on-surface-variant font-medium">Gross Margin %</span>
+                          <span className="font-bold text-emerald-700 text-sm">{(marginPct ?? 0).toFixed(1)}%</span>
+                        </div>
+                        <div className="bg-white p-2 rounded-xl border border-outline-variant/60 shadow-2xs">
+                          <span className="block text-[10px] text-on-surface-variant font-medium">Markup %</span>
+                          <span className="font-bold text-secondary text-sm">{(markupPct ?? 0).toFixed(1)}%</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-[11px] text-on-surface-variant leading-relaxed">
+                        Masukkan Harga Dasar & Harga Jual untuk melihat analisis margin keuntungan secara otomatis.
+                      </p>
+                    )}
+
+                    {/* Quick Helper Buttons */}
+                    <div className="pt-1 space-y-1.5">
+                      <span className="text-[11px] font-semibold text-on-surface block">Hitung Otomatis:</span>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          disabled={!hasCost}
+                          onClick={() => setField('pricePerBase', Math.round(cost * 1.3 * 100) / 100)}
+                          className="px-2.5 py-1 text-[11px] rounded-lg bg-white border border-outline-variant hover:border-primary text-primary font-semibold disabled:opacity-40 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          +30% Markup Jual
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!hasCost}
+                          onClick={() => setField('pricePerBase', Math.round(cost * 1.2 * 100) / 100)}
+                          className="px-2.5 py-1 text-[11px] rounded-lg bg-white border border-outline-variant hover:border-primary text-primary font-semibold disabled:opacity-40 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          +20% Markup Jual
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!hasCost}
+                          onClick={() => setField('pricePerBase', Math.round(cost * 1.5 * 100) / 100)}
+                          className="px-2.5 py-1 text-[11px] rounded-lg bg-white border border-outline-variant hover:border-primary text-primary font-semibold disabled:opacity-40 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          +50% Markup Jual
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!hasSelling}
+                          onClick={() => setField('costPricePerBase', Math.round((selling / 1.3) * 100) / 100)}
+                          className="px-2.5 py-1 text-[11px] rounded-lg bg-white border border-outline-variant hover:border-primary text-on-surface-variant font-medium disabled:opacity-40 cursor-pointer transition-colors shadow-2xs"
+                        >
+                          Hitung Modal (Jual / 1.3)
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* Bahan pokok dapur — dikecualikan dari daftar belanja */}
               <label className="flex items-start gap-2.5 rounded-xl border border-outline-variant p-3 cursor-pointer">
@@ -522,9 +693,7 @@ export function IngredientManager() {
                 </span>
               </label>
 
-              {/* Kemasan jual add-on — hanya untuk bahan pokok. Diisi -> bumbu ini
-                  jadi pilihan CENTANG "kami belikan sekalian" di Belanja di Kami;
-                  dikosongkan -> cuma jadi info "disiapkan sendiri". */}
+              {/* Kemasan jual add-on — hanya untuk bahan pokok. */}
               {editing.isStaple && (
                 <div className="rounded-xl border border-outline-variant p-3 space-y-2">
                   <span className="block text-xs font-semibold text-on-surface">Tawarkan sebagai add-on "kami belikan" (opsional)</span>
@@ -541,11 +710,20 @@ export function IngredientManager() {
                   <p className="text-[11px] text-on-surface-variant">
                     {(() => {
                       const size = Number(editing.packSize);
+                      const cost = Number(editing.costPricePerBase);
                       const price = Number(editing.pricePerBase);
                       if (editing.packSize && editing.pricePerBase && size > 0 && price > 0) {
-                        return <>1 {editing.packLabel || 'kemasan'} = <b>Rp{formatNum(Math.round(size * price))}</b> (terhitung otomatis), muncul sebagai pilihan centang.</>;
+                        const packCost = Math.round(size * (cost || price));
+                        const packSelling = Math.round(size * price);
+                        const packMargin = packSelling - packCost;
+                        return (
+                          <>
+                            1 {editing.packLabel || 'kemasan'} = Jual <b>Rp{formatNum(packSelling)}</b>
+                            {cost > 0 && <> (Modal <b>Rp{formatNum(packCost)}</b> · Profit <b>Rp{formatNum(packMargin)}</b>)</>}.
+                          </>
+                        );
                       }
-                      return <>Isi ukuran kemasan jual <i>dan</i> harga/{editing.baseUnit} agar bahan ini bisa dicentang untuk dibelikan. Kosongkan = hanya jadi info "disiapkan sendiri".</>;
+                      return <>Isi ukuran kemasan jual <i>dan</i> harga/{editing.baseUnit} agar bahan ini bisa dicentang untuk dibelikan.</>;
                     })()}
                   </p>
                 </div>
@@ -576,7 +754,7 @@ export function IngredientManager() {
                 </div>
               </div>
 
-              {/* Alias / sinonim — nama lain yang menunjuk ke bahan ini */}
+              {/* Alias / sinonim */}
               <div className="pt-1">
                 <div className="flex items-center justify-between mb-1">
                   <span className="block text-xs font-semibold text-on-surface">Alias / sinonim (opsional)</span>
@@ -584,7 +762,7 @@ export function IngredientManager() {
                     <span className="material-symbols-outlined text-[18px]">add</span> Baris
                   </button>
                 </div>
-                <p className="text-[11px] text-on-surface-variant mb-2">Nama lain yang menunjuk ke bahan ini, mis. “santan instant” → <b>{editing.name || 'santan instan'}</b>. Saat resep memakai nama itu, otomatis nempel ke bahan ini (bukan bikin master kembar).</p>
+                <p className="text-[11px] text-on-surface-variant mb-2">Nama lain yang menunjuk ke bahan ini, mis. “santan instant” → <b>{editing.name || 'santan instan'}</b>.</p>
                 <div className="space-y-2">
                   {aliasRows.map((row, idx) => (
                     <div key={idx} className="grid grid-cols-12 gap-1.5 items-center">
@@ -599,7 +777,7 @@ export function IngredientManager() {
               </div>
             </div>
 
-            {/* Panel gabung — pembersih duplikat tanpa loss */}
+            {/* Panel gabung */}
             {editing.id && merging && (
               <div className="mt-4 rounded-xl border border-primary/40 bg-primary/5 p-3">
                 <div className="flex items-center justify-between mb-1.5">
@@ -666,7 +844,7 @@ export function IngredientManager() {
             </div>
 
             <p className="text-xs text-on-surface-variant leading-relaxed">
-              Fitur ini akan menyesuaikan <code className="bg-surface-container-high px-1 py-0.5 rounded text-primary font-mono">price_per_base</code> pada semua bahan berharga secara otomatis. Biaya bahan & total harga resep akan dihitung ulang otomatis oleh database.
+              Atur harga dasar (modal) & harga jual secara massal. Biaya bahan & total harga resep akan dihitung ulang otomatis oleh database dari harga jual.
             </p>
 
             <div className="space-y-1.5">
@@ -677,7 +855,7 @@ export function IngredientManager() {
                 disabled={bulkApplying}
                 className="w-full px-3 py-2.5 rounded-xl bg-white border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
               >
-                <option value="">Semua Kategori ({pricedCount} bahan berharga)</option>
+                <option value="">Semua Kategori ({items.length} bahan)</option>
                 {CATEGORIES.filter((c) => c.value).map((c) => (
                   <option key={c.value} value={c.value}>
                     Kategori {c.label}
@@ -688,84 +866,60 @@ export function IngredientManager() {
             </div>
 
             <div className="space-y-3">
-              <label className="block text-xs font-semibold text-on-surface">Mode Penyesuaian Harga</label>
+              <label className="block text-xs font-semibold text-on-surface">Mode Penyesuaian Margin & Harga</label>
 
-              {/* Group 1: Naikkan Harga Jual */}
+              {/* Group 1: Hitung Harga Jual dari Modal */}
               <div className="space-y-1.5">
-                <span className="block text-[11px] font-bold text-primary tracking-wider uppercase">🔼 Naikkan Harga Jual (Markup Harga Pasar)</span>
-                
-                <div className="grid grid-cols-3 gap-2">
-                  {[
-                    { mode: 'raise10', label: '+10%', desc: 'Naik 10%' },
-                    { mode: 'raise20', label: '+20%', desc: 'Naik 20%' },
-                    { mode: 'raise30', label: '+30%', desc: 'Naik 30%' },
-                  ].map((opt) => (
-                    <button
-                      key={opt.mode}
-                      type="button"
-                      onClick={() => setBulkMode(opt.mode)}
-                      disabled={bulkApplying}
-                      className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
-                        bulkMode === opt.mode
-                          ? 'border-primary bg-primary/10 ring-1 ring-primary text-primary font-bold'
-                          : 'border-outline-variant hover:bg-surface-container-low text-on-surface'
-                      }`}
-                    >
-                      <span className="block text-sm font-bold">{opt.label}</span>
-                      <span className="block text-[10px] opacity-80">{opt.desc}</span>
-                    </button>
-                  ))}
+                <span className="block text-[11px] font-bold text-primary tracking-wider uppercase">🔼 Hitung Harga Jual dari Modal</span>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => { setBulkMode('markup30'); setBulkPercentage('30'); }}
+                    disabled={bulkApplying}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      bulkMode === 'markup30'
+                        ? 'border-primary bg-primary/10 ring-1 ring-primary text-primary font-bold'
+                        : 'border-outline-variant hover:bg-surface-container-low text-on-surface'
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">+30% Markup Jual</span>
+                    <span className="block text-[10px] opacity-80 mt-0.5">Rumus: Modal × 1.30</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => { setBulkMode('gross30'); setBulkPercentage('30'); }}
+                    disabled={bulkApplying}
+                    className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                      bulkMode === 'gross30'
+                        ? 'border-primary bg-primary/10 ring-1 ring-primary text-primary font-bold'
+                        : 'border-outline-variant hover:bg-surface-container-low text-on-surface'
+                    }`}
+                  >
+                    <span className="block text-xs font-bold">Gross Margin 30%</span>
+                    <span className="block text-[10px] opacity-80 mt-0.5">Rumus: Modal / 0.70</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Group 2: Hitung Harga Modal */}
+              {/* Group 2: Hitung Modal dari Harga Jual */}
               <div className="space-y-1.5 pt-1">
-                <span className="block text-[11px] font-bold text-on-surface-variant tracking-wider uppercase">🔽 Hitung Harga Modal (Turunkan Base)</span>
+                <span className="block text-[11px] font-bold text-on-surface-variant tracking-wider uppercase">🔽 Hitung Modal dari Harga Jual</span>
 
-                {/* Option: Markup 30% */}
-                <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${bulkMode === 'markup30' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-outline-variant hover:bg-surface-container-low'}`}>
-                  <div className="flex items-start gap-2.5">
-                    <input
-                      type="radio"
-                      name="bulkMode"
-                      value="markup30"
-                      checked={bulkMode === 'markup30'}
-                      onChange={() => setBulkMode('markup30')}
-                      disabled={bulkApplying}
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <span className="font-semibold text-sm text-on-surface block flex items-center gap-1.5">
-                        Harga Modal untuk Margin 30% (Markup)
-                        <span className="bg-primary/10 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full">Modal</span>
-                      </span>
-                      <span className="text-xs text-on-surface-variant block mt-0.5">
-                        Rumus: <code className="bg-surface-container-high px-1 rounded text-on-surface">Harga Saat Ini / 1.30</code> (Turun ~23.08%). Pas untuk jualan di web sesuai harga pasar.
-                      </span>
-                    </div>
-                  </div>
-                </label>
-
-                {/* Option: Gross Margin 30% */}
-                <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${bulkMode === 'gross30' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-outline-variant hover:bg-surface-container-low'}`}>
-                  <div className="flex items-start gap-2.5">
-                    <input
-                      type="radio"
-                      name="bulkMode"
-                      value="gross30"
-                      checked={bulkMode === 'gross30'}
-                      onChange={() => setBulkMode('gross30')}
-                      disabled={bulkApplying}
-                      className="mt-0.5"
-                    />
-                    <div>
-                      <span className="font-semibold text-sm text-on-surface block">Harga Modal untuk Gross Margin 30%</span>
-                      <span className="text-xs text-on-surface-variant block mt-0.5">
-                        Rumus: <code className="bg-surface-container-high px-1 rounded text-on-surface">Harga Saat Ini × 0.70</code> (Turun 30%).
-                      </span>
-                    </div>
-                  </div>
-                </label>
+                <button
+                  type="button"
+                  onClick={() => { setBulkMode('set_cost_from_selling'); setBulkPercentage('30'); }}
+                  disabled={bulkApplying}
+                  className={`w-full p-3 rounded-xl border text-left cursor-pointer transition-all ${
+                    bulkMode === 'set_cost_from_selling'
+                      ? 'border-primary bg-primary/10 ring-1 ring-primary text-primary font-bold'
+                      : 'border-outline-variant hover:bg-surface-container-low text-on-surface'
+                  }`}
+                >
+                  <span className="block text-xs font-bold">Hitung Modal (Diskon/Margin 30% dari Jual)</span>
+                  <span className="block text-[10px] opacity-80 mt-0.5">Rumus: Modal = Harga Jual / 1.30</span>
+                </button>
               </div>
 
               {/* Group 3: Persentase Kustom */}
@@ -783,24 +937,23 @@ export function IngredientManager() {
                     />
                     <div className="flex-1 space-y-2">
                       <div>
-                        <span className="font-semibold text-sm text-on-surface block">⚙️ Persentase Kustom (%)</span>
+                        <span className="font-semibold text-sm text-on-surface block">⚙️ Persentase Penyesuaian Kustom (%)</span>
                         <span className="text-xs text-on-surface-variant block mt-0.5">
-                          Ketik angka persentase atau klik chip di bawah. Gunakan <code className="bg-surface-container-high px-1 rounded text-on-surface">+</code> untuk menaikkan, <code className="bg-surface-container-high px-1 rounded text-on-surface">-</code> untuk menurunkan.
+                          Ubah harga jual dengan persentase (+ untuk naik, - untuk turun).
                         </span>
                       </div>
 
                       {/* Chip presets */}
                       <div className="flex flex-wrap gap-1.5 pt-1">
                         {[
-                          { label: '-30%', val: '-30' },
-                          { label: '-23.08%', val: '-23.08' },
-                          { label: '-10%', val: '-10' },
-                          { label: '+5%', val: '5' },
                           { label: '+10%', val: '10' },
                           { label: '+15%', val: '15' },
                           { label: '+20%', val: '20' },
                           { label: '+25%', val: '25' },
                           { label: '+30%', val: '30' },
+                          { label: '+50%', val: '50' },
+                          { label: '-10%', val: '-10' },
+                          { label: '-20%', val: '-20' },
                         ].map((chip) => (
                           <button
                             key={chip.val}
@@ -828,7 +981,7 @@ export function IngredientManager() {
                             value={bulkPercentage}
                             onChange={(e) => setBulkPercentage(e.target.value)}
                             disabled={bulkApplying}
-                            placeholder="10"
+                            placeholder="30"
                             className="w-32 px-3 py-1.5 rounded-lg bg-white border border-outline-variant text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
                           />
                           <span className="text-xs text-on-surface-variant font-medium">% penyesuaian</span>
@@ -846,32 +999,43 @@ export function IngredientManager() {
                 <div className="flex items-center justify-between text-xs font-semibold text-on-surface">
                   <span className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[16px] text-primary">visibility</span>
-                    Preview Perubahan ({bulkTargetItems.length} bahan terpilih):
+                    Preview Hasil ({bulkTargetItems.length} bahan terpilih):
                   </span>
                 </div>
-                <div className="space-y-1.5 max-h-36 overflow-y-auto text-xs divide-y divide-outline-variant/30">
+                <div className="space-y-2 max-h-40 overflow-y-auto text-xs divide-y divide-outline-variant/30">
                   {bulkTargetItems.slice(0, 4).map((ing) => {
-                    const currentP = Number(ing.pricePerBase);
-                    let newP = currentP;
-                    if (bulkMode === 'markup30') newP = Math.round((currentP / 1.3) * 100) / 100;
-                    else if (bulkMode === 'gross30') newP = Math.round((currentP * 0.7) * 100) / 100;
-                    else if (bulkMode === 'raise10') newP = Math.round((currentP * 1.1) * 100) / 100;
-                    else if (bulkMode === 'raise20') newP = Math.round((currentP * 1.2) * 100) / 100;
-                    else if (bulkMode === 'raise30') newP = Math.round((currentP * 1.3) * 100) / 100;
-                    else if (bulkMode === 'custom') {
+                    let costP = ing.costPricePerBase != null ? Number(ing.costPricePerBase) : null;
+                    let sellP = ing.pricePerBase != null ? Number(ing.pricePerBase) : null;
+
+                    if (bulkMode === 'markup30') {
+                      if (costP != null) sellP = Math.round((costP * 1.3) * 100) / 100;
+                      else if (sellP != null) costP = Math.round((sellP / 1.3) * 100) / 100;
+                    } else if (bulkMode === 'gross30') {
+                      if (costP != null) sellP = Math.round((costP / 0.7) * 100) / 100;
+                      else if (sellP != null) costP = Math.round((sellP * 0.7) * 100) / 100;
+                    } else if (bulkMode === 'set_cost_from_selling' && sellP != null) {
+                      const div = 1 + (Number(bulkPercentage) || 30) / 100;
+                      costP = Math.round((sellP / div) * 100) / 100;
+                    } else if (bulkMode === 'custom' && sellP != null) {
                       const f = 1 + (Number(bulkPercentage) || 0) / 100;
-                      newP = Math.max(0, Math.round((currentP * f) * 100) / 100);
+                      sellP = Math.max(0, Math.round((sellP * f) * 100) / 100);
                     }
-                    const isRaised = newP > currentP;
-                    const isLowered = newP < currentP;
+
+                    const margin = costP != null && sellP != null ? sellP - costP : null;
+                    const marginPct = margin != null && sellP > 0 ? (margin / sellP) * 100 : null;
+
                     return (
-                      <div key={ing.id} className="pt-1.5 flex items-center justify-between gap-2">
+                      <div key={ing.id} className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
                         <span className="truncate text-on-surface font-medium">{ing.name}</span>
-                        <div className="shrink-0 font-mono text-[11px]">
-                          <span className="line-through text-on-surface-variant mr-1.5">Rp{formatNum(currentP)}</span>
-                          <span className={`font-bold ${isRaised ? 'text-amber-700 font-semibold' : isLowered ? 'text-primary' : 'text-on-surface'}`}>
-                            ➔ Rp{formatNum(newP)}/{ing.baseUnit}
-                          </span>
+                        <div className="shrink-0 font-mono text-[11px] flex items-center gap-1.5">
+                          <span className="text-on-surface-variant">Modal: Rp{costP != null ? formatNum(costP) : '—'}</span>
+                          <span>➔</span>
+                          <span className="font-bold text-primary">Jual: Rp{sellP != null ? formatNum(sellP) : '—'}</span>
+                          {marginPct != null && (
+                            <span className="font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px]">
+                              {(marginPct ?? 0).toFixed(0)}%
+                            </span>
+                          )}
                         </div>
                       </div>
                     );
@@ -884,7 +1048,6 @@ export function IngredientManager() {
             )}
 
             <div className="flex gap-3 pt-2">
-
               <button
                 onClick={() => setShowBulkModal(false)}
                 disabled={bulkApplying}
@@ -967,7 +1130,6 @@ function MasterIngredientCombobox({ items, value, onChange, disabled }) {
   );
 }
 
-
 function labelOf(opts, value) {
   return opts.find((o) => o.value === (value ?? ''))?.label ?? '—';
 }
@@ -982,4 +1144,3 @@ function Field({ label, children }) {
     </label>
   );
 }
-
