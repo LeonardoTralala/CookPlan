@@ -319,20 +319,19 @@ export async function bulkAdjustPrices({ mode = 'markup30', percentage = 0, cate
     return { id: item.id, price_per_base: newPrice };
   });
 
-  // Eksekusi update per baris secara paralel dalam chunk
-  const CHUNK_SIZE = 25;
-  for (let i = 0; i < updates.length; i += CHUNK_SIZE) {
-    const chunk = updates.slice(i, i + CHUNK_SIZE);
-    const promises = chunk.map((u) =>
-      supabase
-        .from("ingredients")
-        .update({ price_per_base: u.price_per_base })
-        .eq("id", u.id)
-    );
-    const results = await Promise.all(promises);
-    for (const res of results) {
-      if (res.error) throw res.error;
-    }
+  // Urutkan berdasarkan ID secara deterministik untuk mencegah deadlock
+  updates.sort((a, b) => a.id - b.id);
+
+  // Eksekusi update per baris secara SEKUENSIONAL untuk mencegah PostgreSQL deadlock (40P01)
+  // akibat pemicu/trigger DB (ingredients_after_price_change -> recipe_ingredients -> recipes)
+  // yang bertabrakan kunci saat dijalankan secara paralel.
+  for (const u of updates) {
+    const { error: updateError } = await supabase
+      .from("ingredients")
+      .update({ price_per_base: u.price_per_base })
+      .eq("id", u.id);
+
+    if (updateError) throw updateError;
   }
 
   return { updatedCount: updates.length };
