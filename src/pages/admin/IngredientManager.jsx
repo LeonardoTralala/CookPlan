@@ -687,88 +687,157 @@ export function IngredientManager() {
               </select>
             </div>
 
-            <div className="space-y-2.5">
-              <label className="block text-xs font-semibold text-on-surface">Mode Penyesuaian Margin</label>
+            <div className="space-y-3">
+              <label className="block text-xs font-semibold text-on-surface">Mode Penyesuaian Harga</label>
 
-              {/* Option 1: Markup 30% */}
-              <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${bulkMode === 'markup30' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-outline-variant hover:bg-surface-container-low'}`}>
-                <div className="flex items-start gap-2.5">
-                  <input
-                    type="radio"
-                    name="bulkMode"
-                    value="markup30"
-                    checked={bulkMode === 'markup30'}
-                    onChange={() => setBulkMode('markup30')}
-                    disabled={bulkApplying}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <span className="font-semibold text-sm text-on-surface block flex items-center gap-1.5">
-                      Harga Modal untuk Margin 30% (Markup)
-                      <span className="bg-primary/10 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full">Rekomendasi</span>
-                    </span>
-                    <span className="text-xs text-on-surface-variant block mt-0.5">
-                      Rumus: <code className="bg-surface-container-high px-1 rounded text-on-surface">Harga Saat Ini / 1.30</code> (Turun ~23.08%). Sangat pas agar harga jual di web tetap sesuai harga pasar.
-                    </span>
-                  </div>
+              {/* Group 1: Naikkan Harga Jual */}
+              <div className="space-y-1.5">
+                <span className="block text-[11px] font-bold text-primary tracking-wider uppercase">🔼 Naikkan Harga Jual (Markup Harga Pasar)</span>
+                
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { mode: 'raise10', label: '+10%', desc: 'Naik 10%' },
+                    { mode: 'raise20', label: '+20%', desc: 'Naik 20%' },
+                    { mode: 'raise30', label: '+30%', desc: 'Naik 30%' },
+                  ].map((opt) => (
+                    <button
+                      key={opt.mode}
+                      type="button"
+                      onClick={() => setBulkMode(opt.mode)}
+                      disabled={bulkApplying}
+                      className={`p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                        bulkMode === opt.mode
+                          ? 'border-primary bg-primary/10 ring-1 ring-primary text-primary font-bold'
+                          : 'border-outline-variant hover:bg-surface-container-low text-on-surface'
+                      }`}
+                    >
+                      <span className="block text-sm font-bold">{opt.label}</span>
+                      <span className="block text-[10px] opacity-80">{opt.desc}</span>
+                    </button>
+                  ))}
                 </div>
-              </label>
+              </div>
 
-              {/* Option 2: Gross Margin 30% */}
-              <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${bulkMode === 'gross30' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-outline-variant hover:bg-surface-container-low'}`}>
-                <div className="flex items-start gap-2.5">
-                  <input
-                    type="radio"
-                    name="bulkMode"
-                    value="gross30"
-                    checked={bulkMode === 'gross30'}
-                    onChange={() => setBulkMode('gross30')}
-                    disabled={bulkApplying}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <span className="font-semibold text-sm text-on-surface block">Harga Modal untuk Gross Margin 30%</span>
-                    <span className="text-xs text-on-surface-variant block mt-0.5">
-                      Rumus: <code className="bg-surface-container-high px-1 rounded text-on-surface">Harga Saat Ini × 0.70</code> (Turun 30%).
-                    </span>
+              {/* Group 2: Hitung Harga Modal */}
+              <div className="space-y-1.5 pt-1">
+                <span className="block text-[11px] font-bold text-on-surface-variant tracking-wider uppercase">🔽 Hitung Harga Modal (Turunkan Base)</span>
+
+                {/* Option: Markup 30% */}
+                <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${bulkMode === 'markup30' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-outline-variant hover:bg-surface-container-low'}`}>
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="radio"
+                      name="bulkMode"
+                      value="markup30"
+                      checked={bulkMode === 'markup30'}
+                      onChange={() => setBulkMode('markup30')}
+                      disabled={bulkApplying}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold text-sm text-on-surface block flex items-center gap-1.5">
+                        Harga Modal untuk Margin 30% (Markup)
+                        <span className="bg-primary/10 text-primary text-[10px] font-bold px-1.5 py-0.5 rounded-full">Modal</span>
+                      </span>
+                      <span className="text-xs text-on-surface-variant block mt-0.5">
+                        Rumus: <code className="bg-surface-container-high px-1 rounded text-on-surface">Harga Saat Ini / 1.30</code> (Turun ~23.08%). Pas untuk jualan di web sesuai harga pasar.
+                      </span>
+                    </div>
                   </div>
-                </div>
-              </label>
+                </label>
 
-              {/* Option 3: Custom Percentage */}
-              <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${bulkMode === 'custom' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-outline-variant hover:bg-surface-container-low'}`}>
-                <div className="flex items-start gap-2.5">
-                  <input
-                    type="radio"
-                    name="bulkMode"
-                    value="custom"
-                    checked={bulkMode === 'custom'}
-                    onChange={() => setBulkMode('custom')}
-                    disabled={bulkApplying}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1">
-                    <span className="font-semibold text-sm text-on-surface block">Persentase Kustom (%)</span>
-                    <span className="text-xs text-on-surface-variant block mt-0.5 mb-2">
-                      Gunakan angka minus (misal <code className="bg-surface-container-high px-1 rounded text-on-surface">-23.08</code>) untuk menurunkan atau positif untuk menaikkan harga.
-                    </span>
-                    {bulkMode === 'custom' && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={bulkPercentage}
-                          onChange={(e) => setBulkPercentage(e.target.value)}
-                          disabled={bulkApplying}
-                          placeholder="-23.08"
-                          className="w-32 px-3 py-1.5 rounded-lg bg-white border border-outline-variant text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
-                        />
-                        <span className="text-xs text-on-surface-variant">% penyesuaian</span>
+                {/* Option: Gross Margin 30% */}
+                <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${bulkMode === 'gross30' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-outline-variant hover:bg-surface-container-low'}`}>
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="radio"
+                      name="bulkMode"
+                      value="gross30"
+                      checked={bulkMode === 'gross30'}
+                      onChange={() => setBulkMode('gross30')}
+                      disabled={bulkApplying}
+                      className="mt-0.5"
+                    />
+                    <div>
+                      <span className="font-semibold text-sm text-on-surface block">Harga Modal untuk Gross Margin 30%</span>
+                      <span className="text-xs text-on-surface-variant block mt-0.5">
+                        Rumus: <code className="bg-surface-container-high px-1 rounded text-on-surface">Harga Saat Ini × 0.70</code> (Turun 30%).
+                      </span>
+                    </div>
+                  </div>
+                </label>
+              </div>
+
+              {/* Group 3: Persentase Kustom */}
+              <div className="pt-1">
+                <label className={`block p-3 rounded-xl border cursor-pointer transition-all ${bulkMode === 'custom' ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'border-outline-variant hover:bg-surface-container-low'}`}>
+                  <div className="flex items-start gap-2.5">
+                    <input
+                      type="radio"
+                      name="bulkMode"
+                      value="custom"
+                      checked={bulkMode === 'custom'}
+                      onChange={() => setBulkMode('custom')}
+                      disabled={bulkApplying}
+                      className="mt-0.5"
+                    />
+                    <div className="flex-1 space-y-2">
+                      <div>
+                        <span className="font-semibold text-sm text-on-surface block">⚙️ Persentase Kustom (%)</span>
+                        <span className="text-xs text-on-surface-variant block mt-0.5">
+                          Ketik angka persentase atau klik chip di bawah. Gunakan <code className="bg-surface-container-high px-1 rounded text-on-surface">+</code> untuk menaikkan, <code className="bg-surface-container-high px-1 rounded text-on-surface">-</code> untuk menurunkan.
+                        </span>
                       </div>
-                    )}
+
+                      {/* Chip presets */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {[
+                          { label: '-30%', val: '-30' },
+                          { label: '-23.08%', val: '-23.08' },
+                          { label: '-10%', val: '-10' },
+                          { label: '+5%', val: '5' },
+                          { label: '+10%', val: '10' },
+                          { label: '+15%', val: '15' },
+                          { label: '+20%', val: '20' },
+                          { label: '+25%', val: '25' },
+                          { label: '+30%', val: '30' },
+                        ].map((chip) => (
+                          <button
+                            key={chip.val}
+                            type="button"
+                            onClick={() => {
+                              setBulkMode('custom');
+                              setBulkPercentage(chip.val);
+                            }}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-full border cursor-pointer transition-all ${
+                              bulkMode === 'custom' && bulkPercentage === chip.val
+                                ? 'bg-primary text-on-primary border-primary'
+                                : 'bg-surface-container-low text-on-surface border-outline-variant hover:border-primary/50'
+                            }`}
+                          >
+                            {chip.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {bulkMode === 'custom' && (
+                        <div className="flex items-center gap-2 pt-1">
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={bulkPercentage}
+                            onChange={(e) => setBulkPercentage(e.target.value)}
+                            disabled={bulkApplying}
+                            placeholder="10"
+                            className="w-32 px-3 py-1.5 rounded-lg bg-white border border-outline-variant text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          />
+                          <span className="text-xs text-on-surface-variant font-medium">% penyesuaian</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </label>
+                </label>
+              </div>
             </div>
 
             {/* Live Preview Box */}
@@ -786,16 +855,23 @@ export function IngredientManager() {
                     let newP = currentP;
                     if (bulkMode === 'markup30') newP = Math.round((currentP / 1.3) * 100) / 100;
                     else if (bulkMode === 'gross30') newP = Math.round((currentP * 0.7) * 100) / 100;
+                    else if (bulkMode === 'raise10') newP = Math.round((currentP * 1.1) * 100) / 100;
+                    else if (bulkMode === 'raise20') newP = Math.round((currentP * 1.2) * 100) / 100;
+                    else if (bulkMode === 'raise30') newP = Math.round((currentP * 1.3) * 100) / 100;
                     else if (bulkMode === 'custom') {
                       const f = 1 + (Number(bulkPercentage) || 0) / 100;
                       newP = Math.max(0, Math.round((currentP * f) * 100) / 100);
                     }
+                    const isRaised = newP > currentP;
+                    const isLowered = newP < currentP;
                     return (
                       <div key={ing.id} className="pt-1.5 flex items-center justify-between gap-2">
                         <span className="truncate text-on-surface font-medium">{ing.name}</span>
                         <div className="shrink-0 font-mono text-[11px]">
                           <span className="line-through text-on-surface-variant mr-1.5">Rp{formatNum(currentP)}</span>
-                          <span className="font-bold text-primary">➔ Rp{formatNum(newP)}/{ing.baseUnit}</span>
+                          <span className={`font-bold ${isRaised ? 'text-amber-700 font-semibold' : isLowered ? 'text-primary' : 'text-on-surface'}`}>
+                            ➔ Rp{formatNum(newP)}/{ing.baseUnit}
+                          </span>
                         </div>
                       </div>
                     );
@@ -808,6 +884,7 @@ export function IngredientManager() {
             )}
 
             <div className="flex gap-3 pt-2">
+
               <button
                 onClick={() => setShowBulkModal(false)}
                 disabled={bulkApplying}

@@ -301,6 +301,15 @@ export async function bulkAdjustPrices({ mode = 'markup30', percentage = 0, cate
     } else if (mode === 'gross30') {
       // Modal = 70% dari Harga_Pasar (Gross Margin 30%)
       newPrice = Math.round((currentPrice * 0.7) * 100) / 100;
+    } else if (mode === 'raise10') {
+      // Naikkan +10% dari harga saat ini
+      newPrice = Math.round((currentPrice * 1.1) * 100) / 100;
+    } else if (mode === 'raise20') {
+      // Naikkan +20% dari harga saat ini
+      newPrice = Math.round((currentPrice * 1.2) * 100) / 100;
+    } else if (mode === 'raise30') {
+      // Naikkan +30% dari harga saat ini
+      newPrice = Math.round((currentPrice * 1.3) * 100) / 100;
     } else if (mode === 'custom') {
       const factor = 1 + (Number(percentage) || 0) / 100;
       newPrice = Math.round((currentPrice * factor) * 100) / 100;
