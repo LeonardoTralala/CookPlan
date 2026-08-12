@@ -85,7 +85,7 @@ function App() {
             </Route>
           </Route>
 
-          {/* Terproteksi (butuh akun penuh) + gate onboarding */}
+          {/* Terproteksi (butuh akun penuh) + gate onboardingg */}
           <Route element={<ProtectedRoute />}>
             <Route element={<OnboardingGate />}>
               <Route path="/order/:planId" element={<AppShell><OrderPage /></AppShell>} />
