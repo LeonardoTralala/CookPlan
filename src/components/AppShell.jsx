@@ -8,6 +8,8 @@ import { useAuth } from '../hooks/useAuth.js';
 import { checkIsAdmin } from '../services/adminService.js';
 import { FeedbackButton } from './FeedbackButton.jsx';
 import { PageOnboarding } from './PageOnboarding.jsx';
+import { NotificationDrawerButton } from './NotificationDrawer.jsx';
+import { FullScreenAlarmModal } from './FullScreenAlarmModal.jsx';
 
 // Onboarding Steps per Page
 const ONBOARDING_STEPS = {
@@ -224,6 +226,9 @@ export function AppShell({ children }) {
               </button>
             )}
 
+            {/* Tombol Lonceng Notifikasi & Ketahanan Bahan */}
+            {!isAnonymous && <NotificationDrawerButton />}
+
             {/* Tombol Beri Masukan */}
             {!isAnonymous && (
               <button
@@ -270,14 +275,17 @@ export function AppShell({ children }) {
                   Keluar
                 </button>
 
-                {/* Mobile: hanya logout di header (nav utama di bottom) */}
-                <button
-                  onClick={() => setConfirmOpen(true)}
-                  aria-label="Keluar"
-                  className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-error transition-colors cursor-pointer"
-                >
-                  <span className="material-symbols-outlined" aria-hidden="true">logout</span>
-                </button>
+                {/* Mobile: Notifikasi & logout di header */}
+                <div className="md:hidden flex items-center gap-1">
+                  <NotificationDrawerButton />
+                  <button
+                    onClick={() => setConfirmOpen(true)}
+                    aria-label="Keluar"
+                    className="inline-flex items-center justify-center w-11 h-11 rounded-full text-on-surface-variant hover:text-error transition-colors cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined" aria-hidden="true">logout</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -369,6 +377,9 @@ export function AppShell({ children }) {
           onComplete={() => setTriggerTour(false)}
         />
       )}
+
+      {/* Alarm Pengingat Masak Layar Penuh (WhatsApp/Alarm Style) */}
+      {!isAnonymous && <FullScreenAlarmModal />}
     </div>
   );
 }

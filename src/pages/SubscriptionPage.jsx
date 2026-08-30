@@ -160,7 +160,7 @@ export function SubscriptionPage() {
           </h1>
 
           <p className="text-emerald-100/80 text-sm sm:text-base max-w-2xl mx-auto leading-relaxed">
-            Nikmati kuota generate AI penuh hingga 30x/bulan, simpan resep tanpa batas, dan gratis ongkir pengantaran bahan masakan langsung ke rumahmu.
+            Nikmati kuota generate AI hingga 30x/bulan, simpan resep & susun rencana masak mingguan tanpa batas, serta gratis ongkir pengantaran bahan masakan langsung ke rumahmu.
           </p>
         </div>
       </div>
@@ -409,7 +409,10 @@ export function SubscriptionPage() {
                 <strong>Simpan Resep Unlimited</strong> (tanpa batas)
               </FeatureItem>
               <FeatureItem icon="check_circle" iconColor="text-emerald-600" active>
-                Prioritas Slot Kurir Standar
+                <strong>Susun Rencana Masak Unlimited</strong> (tanpa batas)
+              </FeatureItem>
+              <FeatureItem icon="check_circle" iconColor="text-emerald-600" active>
+                <strong>Daftar Belanja Otomatis Unlimited</strong> (tanpa batas)
               </FeatureItem>
               <FeatureItem icon="lock" iconColor="text-outline" disabled>
                 Voucher Gratis Ongkir (Tarif Pengantaran Normal)
@@ -505,11 +508,14 @@ export function SubscriptionPage() {
               <FeatureItem icon="check_circle" iconColor="text-emerald-600" active>
                 <strong>Simpan Resep Unlimited</strong> (tanpa batas)
               </FeatureItem>
-              <FeatureItem icon="stars" iconColor="text-amber-500" highlight>
-                <strong className="text-emerald-800">Voucher Gratis Ongkir 6x / Bulan</strong> (Area Malang)
+              <FeatureItem icon="check_circle" iconColor="text-emerald-600" active>
+                <strong>Susun Rencana Masak Unlimited</strong> (tanpa batas)
               </FeatureItem>
               <FeatureItem icon="check_circle" iconColor="text-emerald-600" active>
-                Prioritas Utama Slot Kurir Internal CookPlan
+                <strong>Daftar Belanja Otomatis Unlimited</strong> (tanpa batas)
+              </FeatureItem>
+              <FeatureItem icon="stars" iconColor="text-amber-500" highlight>
+                <strong className="text-emerald-800">Voucher Gratis Ongkir 6x / Bulan</strong> (Area Malang)
               </FeatureItem>
             </ul>
           </div>
@@ -592,18 +598,24 @@ export function SubscriptionPage() {
                 <td className="py-4 px-5 text-center font-black text-emerald-800 bg-primary/5">Unlimited</td>
               </tr>
               <tr className="hover:bg-slate-50/50 transition-colors">
+                <td className="py-4 px-5 font-medium text-on-surface">Susun Rencana Masak Mingguan</td>
+                <td className="py-4 px-5 text-center text-on-surface-variant font-medium">Standar</td>
+                <td className="py-4 px-5 text-center font-bold text-emerald-800 bg-surface-container/30">Unlimited</td>
+                <td className="py-4 px-5 text-center font-black text-emerald-800 bg-primary/5">Unlimited</td>
+              </tr>
+              <tr className="hover:bg-slate-50/50 transition-colors">
+                <td className="py-4 px-5 font-medium text-on-surface">Daftar Belanja Otomatis</td>
+                <td className="py-4 px-5 text-center text-on-surface-variant font-medium">Standar</td>
+                <td className="py-4 px-5 text-center font-bold text-emerald-800 bg-surface-container/30">Unlimited</td>
+                <td className="py-4 px-5 text-center font-black text-emerald-800 bg-primary/5">Unlimited</td>
+              </tr>
+              <tr className="hover:bg-slate-50/50 transition-colors">
                 <td className="py-4 px-5 font-medium text-on-surface">Gratis Ongkir Pengantaran</td>
                 <td className="py-4 px-5 text-center text-on-surface-variant font-medium">—</td>
                 <td className="py-4 px-5 text-center text-on-surface-variant bg-surface-container/30 font-medium">—</td>
-                <td className="py-4 px-5 text-center font-black text-primary bg-primary/10">
+                <td className="py-4 px-5 text-center font-black text-primary bg-primary/10 rounded-b-2xl">
                   6x / Bulan (Rp 0)
                 </td>
-              </tr>
-              <tr className="hover:bg-slate-50/50 transition-colors">
-                <td className="py-4 px-5 font-medium text-on-surface">Prioritas Slot Kurir</td>
-                <td className="py-4 px-5 text-center text-on-surface-variant font-medium">Standar</td>
-                <td className="py-4 px-5 text-center text-on-surface bg-surface-container/30 font-medium">Ya</td>
-                <td className="py-4 px-5 text-center font-black text-primary bg-primary/5 rounded-b-2xl">Prioritas Utama</td>
               </tr>
             </tbody>
           </table>
@@ -752,7 +764,7 @@ const FAQS = [
     a: 'Voucher Gratis Ongkir (6x per bulan) akan otomatis memotong biaya pengantaran menjadi Rp 0 secara otomatis saat kamu melakukan checkout paket belanja bahan di wilayah Kota Malang.',
   },
   {
-    q: 'Apakah kuota generate AI bernilai 30x per bulan?',
-    a: 'Ya! Pengguna CookPass Lite dan Pro mendapatkan akses 30x generate menu AI setiap bulannya (3x lipat dibanding batas user gratis).',
+    q: 'Apakah kuota generate AI dan susun rencana masak mingguan bernilai unlimited?',
+    a: 'Pengguna CookPass Lite dan Pro mendapatkan akses 30x generate menu AI setiap bulannya, simpan resep tanpa batas, serta menyusun rencana masak mingguan secara unlimited tanpa batasan.',
   },
 ];
