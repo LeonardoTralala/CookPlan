@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { ShopSelfTab } from '../components/ShopSelfTab.jsx';
 import { ShopWithUsTab } from '../components/ShopWithUsTab.jsx';
 import { SavedListsSection } from '../components/SavedListsSection.jsx';
 import { ModalSheet } from '../components/ModalSheet.jsx';
 import { usePlan } from '../hooks/usePlan.js';
+import { useSubscription } from '../hooks/useSubscription.js';
+import { useAuth } from '../hooks/useAuth.js';
 import {
-  saveShoppingList, getSavedShoppingLists, deleteSavedShoppingList,
+  saveShoppingList, getSavedShoppingLists, deleteSavedShoppingList, getMonthlyShoppingListCount,
 } from '../services/shoppingListService.js';
 import { formatRupiah, formatAmount } from '../utils/buildShoppingList.js';
 import { trackShoppingMode } from '../lib/posthog.js';
@@ -19,17 +21,31 @@ const SOURCE_LABEL = {
 
 function ShoppingList({ weeklyPlan, onGoToPlanner }) {
   const { showToast, weekStart } = usePlan();
+  const { subscription } = useSubscription() || {};
+  const { isAnonymous } = useAuth() || {};
+  const isSubscribed = subscription?.status === 'active';
+  const navigate = useNavigate();
+
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState(() => searchParams.get('tab') === 'kami' ? 'us' : 'self');
   const [savedLists, setSavedLists] = useState([]);
+  const [monthlyCount, setMonthlyCount] = useState(0);
   const [viewList, setViewList] = useState(null);
   const [showSavedDrawer, setShowSavedDrawer] = useState(false);
+
+  const SHOPPING_LIMIT = 10;
+  const quotaLeft = Math.max(0, SHOPPING_LIMIT - monthlyCount);
 
   const refreshSaved = useCallback(() => {
     getSavedShoppingLists()
       .then(setSavedLists)
       .catch(() => {});
-  }, []);
+    if (!isAnonymous) {
+      getMonthlyShoppingListCount()
+        .then(setMonthlyCount)
+        .catch(() => {});
+    }
+  }, [isAnonymous]);
 
   useEffect(() => { refreshSaved(); }, [refreshSaved]);
 
@@ -48,9 +64,18 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
       showToast('Daftar belanja tersimpan! 📋');
       refreshSaved();
     } catch (e) {
-      showToast(e.message || 'Gagal menyimpan daftar.', { variant: 'error' });
+      const msg = e.message || 'Gagal menyimpan daftar.';
+      showToast(msg, { variant: 'error' });
+      if (e.code === 'QUOTA_EXHAUSTED' || /kuota|10x|berlangganan/i.test(msg)) {
+        navigate('/subscription', {
+          state: {
+            reason: 'quota_exhausted',
+            message: msg
+          }
+        });
+      }
     }
-  }, [showToast, refreshSaved]);
+  }, [showToast, refreshSaved, navigate]);
 
   const handleDelete = useCallback(async (id) => {
     try {
@@ -73,6 +98,35 @@ function ShoppingList({ weeklyPlan, onGoToPlanner }) {
             Atur bahan makananmu tanpa mubazir. Belanja sendiri ke pasar, atau pesan paket segar praktis langsung dari CookPlan!
           </p>
         </header>
+
+        {/* Status Quota Banner */}
+        {!isAnonymous && (
+          isSubscribed ? (
+            <div className="max-w-3xl mb-6 flex items-center justify-between gap-3 p-3.5 bg-emerald-50/80 border border-emerald-200/60 rounded-2xl text-left animate-fade-in">
+              <p className="text-xs sm:text-sm text-emerald-800 font-medium flex items-center gap-2">
+                <span className="material-symbols-outlined text-[20px] text-emerald-600">verified</span>
+                <span>Status Berlangganan Aktif: Pembuatan daftar belanja otomatis <strong>Unlimited</strong></span>
+              </p>
+              <Link to="/subscription" className="shrink-0 px-3 py-1 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                <span>Detail Paket</span>
+              </Link>
+            </div>
+          ) : (
+            <div className="max-w-3xl mb-6 flex items-center justify-between gap-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 p-3.5 text-left animate-fade-in">
+              <div className="flex items-center gap-2.5">
+                <span className="material-symbols-outlined text-[22px] text-amber-600 shrink-0">shopping_cart</span>
+                <span className="text-xs sm:text-sm text-amber-950 font-medium">
+                  Kuota Daftar Belanja Gratis Bulan Ini: <strong>{monthlyCount}</strong> dari {SHOPPING_LIMIT}x ({quotaLeft === 0 ? 'Kuota Habis' : `Sisa ${quotaLeft}x`})
+                </span>
+              </div>
+              <Link to="/subscription" className="shrink-0 px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-bold rounded-full hover:shadow-md transition active:scale-95 shadow-sm flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">workspace_premium</span>
+                <span>Daftar Belanja Unlimited 👑</span>
+              </Link>
+            </div>
+          )
+        )}
 
         {/* Tab switcher */}
         <div id="shopping-tab-switcher" className="inline-flex p-1 bg-surface-container-low rounded-full mb-8" role="tablist">

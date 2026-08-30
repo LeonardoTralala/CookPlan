@@ -1,8 +1,7 @@
-// Service Worker CookPlan — caching ringan untuk installability PWA + offline shell.
-// Strategi: cache-first untuk aset statis, network-first untuk navigasi (SPA).
-// Sengaja TIDAK meng-cache request ke Supabase/AI (selalu butuh data fresh).
+/* global clients */
+// Service Worker CookPlan — Caching PWA + Background Notification & Alarm Handler Pukul 06.00 Pagi
 
-const CACHE = "cookplan-v1";
+const CACHE = "cookplan-v2";
 const PRECACHE = [
   "/",
   "/manifest.webmanifest",
@@ -10,7 +9,7 @@ const PRECACHE = [
   "/icon-512.png",
   "/apple-touch-icon.png",
   "/cookplan-logo.svg",
-  "/img/recipe-placeholder.svg",
+  "/favicon.svg"
 ];
 
 self.addEventListener("install", (event) => {
@@ -27,16 +26,32 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Penanganan Klik Notifikasi Background (Membuka aplikasi & memicu Alarm Layar Penuh iPhone)
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && "focus" in client) {
+          client.postMessage({ type: "TRIGGER_COOKPLAN_ALARM" });
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow("/?trigger_alarm=true");
+      }
+    })
+  );
+});
+
+// Handling Fetch (Cache Strategy)
 self.addEventListener("fetch", (event) => {
   const { request } = event;
   if (request.method !== "GET") return;
 
   const url = new URL(request.url);
-
-  // Jangan campur tangan request ke origin lain (Supabase, AI proxy, fonts, dll).
   if (url.origin !== self.location.origin) return;
 
-  // Navigasi (SPA) → network-first, fallback ke shell "/" saat offline.
   if (request.mode === "navigate") {
     event.respondWith(
       fetch(request).catch(() => caches.match("/"))
@@ -44,7 +59,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Aset statis same-origin → cache-first, lalu update cache di background.
   event.respondWith(
     caches.match(request).then((cached) => {
       const network = fetch(request).then((res) => {

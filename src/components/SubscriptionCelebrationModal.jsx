@@ -49,6 +49,14 @@ export function SubscriptionCelebrationModal({ isOpen, onClose, subscription }) 
             <span className="material-symbols-outlined text-emerald-600 text-[18px] shrink-0">bookmark</span>
             <span><strong>Simpan Resep Unlimited</strong> (Tanpa batas kuota)</span>
           </div>
+          <div className="flex items-center gap-2.5 text-xs text-emerald-950 font-medium">
+            <span className="material-symbols-outlined text-emerald-600 text-[18px] shrink-0">calendar_month</span>
+            <span><strong>Susun Rencana Masak Unlimited</strong> (Bebas atur menu mingguan)</span>
+          </div>
+          <div className="flex items-center gap-2.5 text-xs text-emerald-950 font-medium">
+            <span className="material-symbols-outlined text-emerald-600 text-[18px] shrink-0">shopping_cart</span>
+            <span><strong>Daftar Belanja Otomatis Unlimited</strong> (Generasi instan dari planner)</span>
+          </div>
           {isPro && (
             <div className="flex items-center gap-2.5 text-xs text-emerald-950 font-medium">
               <span className="material-symbols-outlined text-emerald-600 text-[18px] shrink-0">local_shipping</span>

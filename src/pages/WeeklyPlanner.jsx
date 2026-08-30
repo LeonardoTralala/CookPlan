@@ -9,6 +9,7 @@ import { getWeekDates, getWeekStart, weekKeyToDate, formatWeekRange, isToday } f
 import { RecipeDetailModal } from '../components/RecipeDetailModal.jsx';
 import { CookingModeModal } from '../components/CookingModeModal.jsx';
 import { PlanShareModal } from '../components/PlanShareModal.jsx';
+import { UncookedMealAssistant } from '../components/UncookedMealAssistant.jsx';
 
 // Hari (key data) + label singkat untuk header kolom
 const DAYS = [
@@ -475,6 +476,9 @@ function WeeklyPlanner({
                 </button>
               )}
             </div>
+
+            {/* Cooking Assistant & Freshness Tracker Widget */}
+            {!planLoading && <UncookedMealAssistant />}
 
             {/* CTA generate AI — hanya saat tidak loading & planner kosong
                 (status kosong belum diketahui selama plan dihidrasi). */}
