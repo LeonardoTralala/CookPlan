@@ -37,15 +37,36 @@ export function formatAmount(amount) {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
+// Hitung modal dasar (HPP beli) untuk satu baris bahan resep.
+// Sumber: master ingredient (costPricePerBase / pricePerBase), costPriceIdr, atau fallback 30% markup (harga / 1.3).
+export function getIngredientCost(ing) {
+  const price = Number(ing?.priceIdr ?? ing?.price_idr) || 0;
+  if (price <= 0) return 0;
+  if (ing.costPriceIdr != null && !isNaN(Number(ing.costPriceIdr))) {
+    return Number(ing.costPriceIdr);
+  }
+  const master = ing?.master;
+  const costBase = master?.costPricePerBase ?? master?.cost_price_per_base;
+  const priceBase = master?.pricePerBase ?? master?.price_per_base;
+  if (costBase != null && priceBase != null && Number(priceBase) > 0) {
+    return price * (Number(costBase) / Number(priceBase));
+  }
+  if (costBase != null && Number(costBase) === 0) {
+    return 0;
+  }
+  // Default CookPlan: modal dasar = harga jual / 1.3 (markup 30%)
+  return price / 1.3;
+}
+
 // Agregasi daftar belanja dari kumpulan slot.
 // slots: [{ recipe, servings }] — recipe shape camelCase (punya ingredients[] & baseServings).
-// Return { sections, totalItems, estimatedCost, pantryItems }.
+// Return { sections, totalItems, estimatedCost, estimatedBaseCost, ingredientProfit, pantryItems }.
 //
 // pantryItems: daftar NAMA bahan pokok dapur (garam, minyak, dll) yang dikecualikan
 // dari belanja & biaya — dikumpulkan terpisah sebagai reminder "cek stok di rumah".
 // Tanpa jumlah/harga (staple = "secukupnya"); dedup lintas resep via pantryStapleKey.
 export function buildShoppingListFromSlots(slots) {
-  const itemMap = new Map(); // key: `${name}__${unit}` -> { name, unit, amount, priceIdr, category }
+  const itemMap = new Map(); // key: `${name}__${unit}` -> { name, unit, amount, priceIdr, costPriceIdr, category }
   const pantryMap = new Map(); // key kanonik -> nama tampil (bentuk asli pertama yang ketemu)
 
   for (const slot of slots ?? []) {
@@ -64,16 +85,19 @@ export function buildShoppingListFromSlots(slots) {
       const nameNorm = String(ing.name ?? '').trim().toLowerCase();
       const unitNorm = String(ing.unit ?? '').trim().toLowerCase();
       const key = `${nameNorm}__${unitNorm}`;
+      const ingCost = getIngredientCost(ing) * factor;
       const existing = itemMap.get(key);
       if (existing) {
         existing.amount += (Number(ing.amount) || 0) * factor;
         existing.priceIdr += (Number(ing.priceIdr) || 0) * factor;
+        existing.costPriceIdr = (existing.costPriceIdr || 0) + ingCost;
       } else {
         itemMap.set(key, {
           name: String(ing.name ?? '').trim(),
           unit: ing.unit,
           amount: (Number(ing.amount) || 0) * factor,
           priceIdr: (Number(ing.priceIdr) || 0) * factor,
+          costPriceIdr: ingCost,
           category: ing.category,
         });
       }
@@ -81,9 +105,12 @@ export function buildShoppingListFromSlots(slots) {
   }
 
   let estimatedCost = 0;
+  let estimatedBaseCost = 0;
   itemMap.forEach((item) => {
     item.priceIdr = Math.round(item.priceIdr);
+    item.costPriceIdr = Math.round(item.costPriceIdr || 0);
     estimatedCost += item.priceIdr;
+    estimatedBaseCost += item.costPriceIdr;
   });
 
   const order = Object.keys(CATEGORY_META);
@@ -104,7 +131,14 @@ export function buildShoppingListFromSlots(slots) {
 
   const pantryItems = [...pantryMap.values()].sort((a, b) => a.localeCompare(b, 'id'));
 
-  return { sections, totalItems: itemMap.size, estimatedCost: Math.round(estimatedCost), pantryItems };
+  return {
+    sections,
+    totalItems: itemMap.size,
+    estimatedCost: Math.round(estimatedCost),
+    estimatedBaseCost: Math.round(estimatedBaseCost),
+    ingredientProfit: Math.round(estimatedCost - estimatedBaseCost),
+    pantryItems,
+  };
 }
 
 // Bentuk slot dari weeklyPlan (shape PlanContext: { Senin:{breakfast,lunch,dinner}, ... }).
