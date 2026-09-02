@@ -18,16 +18,21 @@ const MEAL_TYPES = [
 const EMPTY_PACKAGE = {
   slug: '', name: '', description: '',
   periodeDays: 3, mealsPerDay: 3, baseServings: 2,
-  priceIdr: 0, imageUrl: '', badges: [], sortOrder: 0, isActive: true,
+  priceIdr: 0, packagingCost: 10000, imageUrl: '', badges: [], sortOrder: 0, isActive: true,
 };
 
 const clamp = (v, min, max) => Math.max(min, Math.min(max, Number(v) || min));
 const numOrZero = (v) => (v === '' || v == null ? 0 : Number(v));
 
-// Hitung perkiraan harga paket (agregasi recipe_ingredients menu × base_servings).
-function packageCost(pkg) {
+// Hitung perkiraan rincian biaya paket (agregasi recipe_ingredients menu × base_servings).
+function packageCostDetails(pkg) {
   const slots = slotsFromPackageMeals(pkg.meals, pkg.baseServings);
-  return buildShoppingListFromSlots(slots).estimatedCost;
+  const list = buildShoppingListFromSlots(slots);
+  return {
+    rawSellingCost: list.estimatedCost,
+    rawCost: list.estimatedBaseCost,
+    ingredientProfit: list.ingredientProfit,
+  };
 }
 
 // Admin UI: kelola Paket "Belanja di Kami" (metadata + menu fiks per hari).
@@ -94,7 +99,7 @@ export function PackageManager() {
   };
 
   const openEdit = (p) => {
-    setEditing({ ...EMPTY_PACKAGE, ...p });
+    setEditing({ ...EMPTY_PACKAGE, packagingCost: 10000, ...p });
     setBadgesRaw((p.badges ?? []).join(', '));
     const next = {};
     for (const m of p.meals ?? []) {
@@ -133,8 +138,8 @@ export function PackageManager() {
   }, [days, visibleMealTypes, menu]);
 
   // Preview harga live: skala harga di base_servings (acuan harga paket).
-  const { previewCost, filledSlots, totalSlots } = useMemo(() => {
-    if (!editing) return { previewCost: 0, filledSlots: 0, totalSlots: 0 };
+  const { previewCost, previewBaseCost, previewIngredientProfit, filledSlots, totalSlots } = useMemo(() => {
+    if (!editing) return { previewCost: 0, previewBaseCost: 0, previewIngredientProfit: 0, filledSlots: 0, totalSlots: 0 };
     const meals = [];
     let filled = 0;
     for (const day of days) {
@@ -147,8 +152,11 @@ export function PackageManager() {
       }
     }
     const slots = slotsFromPackageMeals(meals, editing.baseServings);
+    const list = buildShoppingListFromSlots(slots);
     return {
-      previewCost: buildShoppingListFromSlots(slots).estimatedCost,
+      previewCost: list.estimatedCost,
+      previewBaseCost: list.estimatedBaseCost,
+      previewIngredientProfit: list.ingredientProfit,
       filledSlots: filled,
       totalSlots: days.length * visibleMealTypes.length,
     };
@@ -249,13 +257,14 @@ export function PackageManager() {
         <div className="space-y-3">
           {filtered.length === 0 && <p className="text-center text-sm text-on-surface-variant py-8">Belum ada paket.</p>}
           {filtered.map((p) => {
-            const rawHpp = packageCost(p);
+            const { rawSellingCost, rawCost, ingredientProfit } = packageCostDetails(p);
             const pkgCost = numOrZero(p.packagingCost ?? 10000);
-            const totalHpp = rawHpp + pkgCost;
-            const price = p.priceIdr > 0 ? p.priceIdr : totalHpp;
+            const realHpp = rawCost + pkgCost;
+            const standardSellingPrice = rawSellingCost + pkgCost;
+            const price = p.priceIdr > 0 ? p.priceIdr : standardSellingPrice;
             const hasManualPrice = p.priceIdr > 0;
-            const grossProfit = price - totalHpp;
-            const margin = hasManualPrice && price > 0 ? Math.round((grossProfit / price) * 100) : null;
+            const grossProfit = price - realHpp;
+            const margin = price > 0 ? Math.round((grossProfit / price) * 100) : null;
             return (
               <div key={p.id} className={`rounded-2xl border p-3.5 flex items-center gap-3.5 ${p.isActive ? 'border-outline-variant' : 'border-error/30 bg-error/5'}`}>
                 <div className="w-14 h-14 rounded-xl bg-surface-container-high overflow-hidden shrink-0 flex items-center justify-center">
@@ -276,14 +285,17 @@ export function PackageManager() {
                   </p>
                   <div className="flex items-center gap-2 mt-1.5 text-xs flex-wrap">
                     <span className="font-bold text-primary">
-                      {hasManualPrice ? formatRupiah(p.priceIdr) : `${formatRupiah(totalHpp)} (Otomatis)`}
+                      {hasManualPrice ? formatRupiah(p.priceIdr) : `${formatRupiah(standardSellingPrice)} (Otomatis)`}
                     </span>
-                    <span className="text-on-surface-variant text-[11px]">
-                      (HPP Total: {formatRupiah(totalHpp)})
+                    <span className="text-on-surface-variant text-[11px]" title={`Modal Bahan: ${formatRupiah(rawCost)} + Kemasan: ${formatRupiah(pkgCost)}`}>
+                      (HPP Modal: {formatRupiah(realHpp)})
                     </span>
                     {margin !== null && (
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${margin >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                        Margin {margin}%
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${margin >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}
+                        title={`Gross Profit Murni: ${formatRupiah(grossProfit)} (Untung bahan: ${formatRupiah(ingredientProfit)})`}
+                      >
+                        Margin {margin}% ({formatRupiah(grossProfit)})
                       </span>
                     )}
                   </div>
@@ -357,40 +369,69 @@ export function PackageManager() {
               {/* Kalkulator live HPP vs Harga Jual */}
               {(() => {
                 const pkgCost = numOrZero(editing.packagingCost ?? 10000);
-                const totalHpp = previewCost + pkgCost;
+                const realHpp = previewBaseCost + pkgCost;
+                const standardPrice = previewCost + pkgCost;
                 const price = numOrZero(editing.priceIdr);
                 const hasManualPrice = price > 0;
-                const grossProfit = price - totalHpp;
-                const grossMargin = hasManualPrice && price > 0 ? Math.round((grossProfit / price) * 100) : 0;
+                const finalPrice = hasManualPrice ? price : standardPrice;
+                const packageMarkup = hasManualPrice ? (price - standardPrice) : 0;
+                // Gross profit murni = Harga Jual - Total HPP Modal Riil (Bahan Baku Asli + Kemasan)
+                // Memperhitungkan keuntungan dari kenaikan bahan baku (previewIngredientProfit) + margin paket (packageMarkup)
+                const grossProfit = finalPrice - realHpp;
+                const grossMargin = finalPrice > 0 ? Math.round((grossProfit / finalPrice) * 100) : 0;
 
                 return (
-                  <div className="rounded-2xl bg-surface-container-low border border-outline-variant p-4 space-y-2">
+                  <div className="rounded-2xl bg-surface-container-low border border-outline-variant p-4 space-y-2.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="text-on-surface-variant">HPP Bahan Baku Otomatis ({editing.baseServings ?? 2} porsi):</span>
+                      <span className="text-on-surface-variant">Modal Dasar Bahan Baku ({editing.baseServings ?? 2} porsi):</span>
+                      <span className="font-semibold text-on-surface">{formatRupiah(previewBaseCost)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-on-surface-variant">Harga Jual Bahan di Katalog:</span>
                       <span className="font-semibold text-on-surface">{formatRupiah(previewCost)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                      <span className="font-medium flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[16px]">trending_up</span>
+                        Keuntungan Kenaikan Bahan Baku:
+                      </span>
+                      <span className="font-bold">+{formatRupiah(previewIngredientProfit)}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-on-surface-variant">Estimasi Biaya Kemasan & Packaging:</span>
                       <span className="font-semibold text-on-surface">+{formatRupiah(pkgCost)}</span>
                     </div>
-                    <div className="flex items-center justify-between text-xs pt-1.5 border-t border-outline-variant/40 font-semibold">
-                      <span className="text-on-surface">Total HPP Paket (Bahan + Kemasan):</span>
-                      <span className="text-on-surface">{formatRupiah(totalHpp)}</span>
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-outline-variant/50 font-semibold">
+                      <span className="text-on-surface">Total HPP Modal Riil (Bahan + Kemasan):</span>
+                      <span className="text-on-surface">{formatRupiah(realHpp)}</span>
                     </div>
                     <div className="flex items-center justify-between text-xs pt-1.5 border-t border-outline-variant/60">
-                      <span className="text-on-surface-variant font-medium">Harga Jual Paket (Manual):</span>
+                      <span className="text-on-surface-variant font-medium">Harga Jual Paket:</span>
                       <span className="font-bold text-primary text-sm">
-                        {hasManualPrice ? formatRupiah(price) : `${formatRupiah(totalHpp)} (Otomatis)`}
+                        {hasManualPrice ? formatRupiah(price) : `${formatRupiah(standardPrice)} (Otomatis)`}
                       </span>
                     </div>
-                    {hasManualPrice && (
-                      <div className="flex items-center justify-between text-xs pt-2 border-t border-outline-variant/60">
-                        <span className="text-on-surface-variant font-medium">Estimasi Gross Profit Murni:</span>
-                        <span className={`font-bold ${grossProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
-                          {formatRupiah(grossProfit)} ({grossMargin}%)
+                    {hasManualPrice && packageMarkup !== 0 && (
+                      <div className="flex items-center justify-between text-xs text-on-surface-variant">
+                        <span>Penyesuaian Harga Paket vs Standar:</span>
+                        <span className={`font-semibold ${packageMarkup >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {packageMarkup >= 0 ? '+' : ''}{formatRupiah(packageMarkup)}
                         </span>
                       </div>
                     )}
+                    <div className="pt-2.5 border-t border-outline-variant/60">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-on-surface font-bold text-xs block">Estimasi Gross Profit Murni:</span>
+                          <span className="text-[11px] text-on-surface-variant">
+                            Termasuk untung bahan ({formatRupiah(previewIngredientProfit)}) {hasManualPrice && packageMarkup !== 0 ? `${packageMarkup >= 0 ? '+' : '-'} paket (${formatRupiah(Math.abs(packageMarkup))})` : ''}
+                          </span>
+                        </div>
+                        <span className={`font-bold text-sm md:text-base ${grossProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                          {formatRupiah(grossProfit)} ({grossMargin}%)
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 );
               })()}

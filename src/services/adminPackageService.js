@@ -22,7 +22,10 @@ const PACKAGE_ADMIN_SELECT = `
     recipe:recipes (
       id, title, baseServings:base_servings,
       imageUrl:image_url,
-      ingredients:recipe_ingredients ( name, amount, unit, category, priceIdr:price_idr )
+      ingredients:recipe_ingredients (
+        name, amount, unit, category, priceIdr:price_idr,
+        master:ingredients ( costPricePerBase:cost_price_per_base, pricePerBase:price_per_base )
+      )
     )
   )
 `;
@@ -82,7 +85,10 @@ export async function listRecipeOptions() {
       baseServings:base_servings,
       imageUrl:image_url,
       isActive:is_active,
-      ingredients:recipe_ingredients ( name, amount, unit, category, priceIdr:price_idr )
+      ingredients:recipe_ingredients (
+        name, amount, unit, category, priceIdr:price_idr,
+        master:ingredients ( costPricePerBase:cost_price_per_base, pricePerBase:price_per_base )
+      )
     `)
     .order("title");
   if (error) throw error;
