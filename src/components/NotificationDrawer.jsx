@@ -128,6 +128,10 @@ function NotificationDrawerModal({ onClose, uncookedList, todayName }) {
         <button
           type="button"
           onClick={() => {
+            if (uncookedList.length === 0) {
+              showToast('Isi jadwal makanmu terlebih dahulu di Rencana Masak agar alarm dapat berfungsi!', { variant: 'warning' });
+              return;
+            }
             onClose();
             triggerCookPlanAlarm();
           }}

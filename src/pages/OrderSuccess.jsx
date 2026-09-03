@@ -6,6 +6,7 @@ import {
 import { usePlan } from '../hooks/usePlan.js';
 import { FeedbackCard } from '../components/FeedbackCard.jsx';
 import { trackWhatsappCheckout } from '../lib/posthog.js';
+import { extractKecamatanFromAddress, getDeliveryFeeByKecamatan } from '../utils/delivery.js';
 
 // Layar konfirmasi pasca-checkout. Order sudah tersimpan sebagai 'draft'; di sini
 // user meninjau ringkasan + ID pesanan, lalu menekan "Buka WhatsApp" untuk
@@ -46,6 +47,7 @@ export function OrderSuccess() {
   const subtotal = order?.total_price ?? 0;
   const deliveryFee = order?.delivery_fee ?? 0;
   const total = subtotal + deliveryFee;
+  const originalFee = getDeliveryFeeByKecamatan(extractKecamatanFromAddress(order?.delivery_address)) || 15000;
 
   const waUrl = useMemo(
     () => (order ? buildWhatsappUrl(order) : null),
@@ -140,7 +142,7 @@ export function OrderSuccess() {
           <span className={`font-semibold ${deliveryFee === 0 ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
             {deliveryFee === 0 ? (
               <span className="flex items-center gap-1">
-                <span className="line-through text-xs text-on-surface-variant/60 font-normal">{formatRupiah(15000)}</span>
+                <span className="line-through text-xs text-on-surface-variant/60 font-normal">{formatRupiah(originalFee)}</span>
                 <span>Rp 0</span>
               </span>
             ) : formatRupiah(deliveryFee)}

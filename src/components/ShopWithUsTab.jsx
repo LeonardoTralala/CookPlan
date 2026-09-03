@@ -2,6 +2,10 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getPackages } from '../services/packageService.js';
 import { getPantryAddons } from '../services/ingredientService.js';
+import { getProfile } from '../services/profileService.js';
+import { getDeliveryFeeByKecamatan } from '../utils/delivery.js';
+import { useSubscription } from '../hooks/useSubscription.js';
+import { getFreeShippingStatus } from '../services/subscriptionService.js';
 import {
   buildShoppingListFromSlots, slotsFromPackageMeals, flattenSections,
   formatRupiah, formatAmount,
@@ -10,17 +14,17 @@ import { pantryStapleKey } from '../utils/pantryStaples.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { ModalSheet } from './ModalSheet.jsx';
 
-const DELIVERY_FEE = 15000;
-
-// Tab "Belanja di Kami": pilih paket (menu fiks, bahan kami stok), atur porsi,
+// Tab "Belanja di Kami": pilih paket (menu fiks, bahan kami stok, porsi dasar sesuai admin),
 // lihat daftar belanja + harga (agregasi recipe_ingredients), order via WhatsApp.
 export function ShopWithUsTab({ onSave }) {
   const { showToast, applySlots, weekStart, restoreSlot } = usePlan();
+  const { subscription } = useSubscription();
   const navigate = useNavigate();
   const [packages, setPackages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState(null);
-  const [servings, setServings] = useState(2);
+  const [profile, setProfile] = useState(null);
+  const [freeShippingUsed, setFreeShippingUsed] = useState(0);
 
   // Katalog bumbu dapur add-on (garam, minyak, dll) + pilihan user. Default KOSONG
   // (opt-in): yang sudah punya di rumah biarkan, yang butuh tinggal centang.
@@ -29,12 +33,28 @@ export function ShopWithUsTab({ onSave }) {
   const [applied, setApplied] = useState(false);
   const [confirmApply, setConfirmApply] = useState(false);
 
-  // Reset status applied jika ganti paket atau porsi berubah (derived state pattern)
+  // Inisialisasi profil untuk sinkronisasi alamat pengiriman
+  useEffect(() => {
+    let active = true;
+    getProfile()
+      .then((p) => { if (active) setProfile(p); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  // Cek voucher gratis ongkir jika langganan Pro
+  useEffect(() => {
+    if (subscription?.status === 'active' && subscription?.tier === 'pro') {
+      getFreeShippingStatus()
+        .then((count) => setFreeShippingUsed(count))
+        .catch(() => setFreeShippingUsed(0));
+    }
+  }, [subscription]);
+
+  // Reset status applied jika ganti paket (derived state pattern)
   const [prevSelectedId, setPrevSelectedId] = useState(selectedId);
-  const [prevServings, setPrevServings] = useState(servings);
-  if (selectedId !== prevSelectedId || servings !== prevServings) {
+  if (selectedId !== prevSelectedId) {
     setPrevSelectedId(selectedId);
-    setPrevServings(servings);
     setApplied(false);
   }
 
@@ -72,6 +92,9 @@ export function ShopWithUsTab({ onSave }) {
     [packages, selectedId]
   );
 
+  // Porsi paket dikunci ke baseServings yang diatur di dashboard admin (tidak dicustom user)
+  const servings = selected?.baseServings && selected.baseServings > 0 ? selected.baseServings : 2;
+
   const mealsByDay = useMemo(() => {
     const grouped = new Map();
     for (const meal of selected?.meals ?? []) {
@@ -84,7 +107,7 @@ export function ShopWithUsTab({ onSave }) {
       .map(([dayIndex, meals]) => ({ dayIndex, meals }));
   }, [selected]);
 
-  // Agregasi daftar belanja paket terpilih, skala sesuai porsi yang diminta.
+  // Agregasi daftar belanja paket terpilih, skala sesuai porsi dasar paket (dari dashboard admin).
   const { sections, totalItems, estimatedCost, pantryItems } = useMemo(() => {
     if (!selected) return { sections: [], totalItems: 0, estimatedCost: 0, pantryItems: [] };
     const slots = slotsFromPackageMeals(selected.meals, servings);
@@ -133,18 +156,24 @@ export function ShopWithUsTab({ onSave }) {
     });
   };
 
-  // Hitung harga paket: jika admin menginput priceIdr manual (>0), pakai & skalakan berdasarkan porsi request / baseServings.
-  // Jika priceIdr 0/null, fallback ke estimatedCost (agregasi bahan resep).
+  // Hitung harga paket: jika admin menginput priceIdr manual (>0), pakai langsung (sudah untuk baseServings).
+  // Jika priceIdr 0/null, fallback ke estimatedCost (agregasi bahan resep pada porsi dasar).
   const packageSellingPrice = useMemo(() => {
     if (!selected) return 0;
-    const baseServings = selected.baseServings && selected.baseServings > 0 ? selected.baseServings : 2;
     if (selected.priceIdr && selected.priceIdr > 0) {
-      return Math.round((selected.priceIdr * servings) / baseServings);
+      return Math.round(selected.priceIdr);
     }
     return estimatedCost;
-  }, [selected, servings, estimatedCost]);
+  }, [selected, estimatedCost]);
 
-  const total = packageSellingPrice + addonsTotal + (totalItems > 0 ? DELIVERY_FEE : 0);
+  const savedKecamatan = profile?.deliveryKecamatan || '';
+  const isProActive = subscription?.status === 'active' && subscription?.tier === 'pro';
+  const hasFreeShippingVoucher = isProActive && freeShippingUsed < 6;
+  const rawDeliveryFee = savedKecamatan ? getDeliveryFeeByKecamatan(savedKecamatan) : null;
+  const deliveryFee = hasFreeShippingVoucher ? 0 : rawDeliveryFee;
+
+  const subtotal = packageSellingPrice + addonsTotal;
+  const total = subtotal + (deliveryFee ?? 0);
 
   const handleOrder = () => {
     if (!selected || totalItems === 0) return;
@@ -158,8 +187,10 @@ export function ShopWithUsTab({ onSave }) {
     navigate('/order/package', {
       state: {
         items,
-        subtotal: packageSellingPrice + addonsTotal,
+        subtotal,
         notes: `Paket: ${selected.name} (${servings} porsi/menu, ${selected.periodeDays} hari)`,
+        kecamatan: savedKecamatan,
+        deliveryFee: deliveryFee ?? (rawDeliveryFee || 15000),
       }
     });
   };
@@ -246,9 +277,9 @@ export function ShopWithUsTab({ onSave }) {
             </div>
             <p className="font-bold text-on-surface text-sm">{p.name}</p>
             <p className="text-xs text-on-surface-variant mt-0.5 line-clamp-2">{p.description}</p>
-            <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-outline-variant/40">
-              <span className="text-[11px] text-primary font-semibold">{p.periodeDays} hari · {p.mealsPerDay}× makan</span>
-              <span className="font-bold text-primary text-xs">
+            <div className="flex items-center justify-between mt-2 pt-1.5 border-t border-outline-variant/40 gap-1.5">
+              <span className="text-[11px] text-primary font-semibold truncate">{p.periodeDays} hari · {p.mealsPerDay}× makan · {p.baseServings || 2} porsi</span>
+              <span className="font-bold text-primary text-xs shrink-0">
                 {formatRupiah(p.priceIdr > 0 ? p.priceIdr : buildShoppingListFromSlots(slotsFromPackageMeals(p.meals, p.baseServings || 2)).estimatedCost)}
               </span>
             </div>
@@ -258,31 +289,12 @@ export function ShopWithUsTab({ onSave }) {
 
       {selected && (
         <>
-          {/* Stepper porsi */}
-          <div className="flex items-center justify-between bg-surface-container-low rounded-2xl p-4">
-            <div>
-              <p className="font-semibold text-on-surface text-sm">Porsi per Menu</p>
-              <p className="text-xs text-on-surface-variant">Sesuaikan dengan jumlah anggota keluarga atau porsi makanmu.</p>
-            </div>
-            <div className="flex items-center gap-3">
-              <button onClick={() => setServings((s) => Math.max(1, s - 1))} aria-label="Kurangi porsi"
-                className="w-10 h-10 rounded-xl bg-white border border-outline-variant flex items-center justify-center text-primary cursor-pointer active:scale-95 transition">
-                <span className="material-symbols-outlined">remove</span>
-              </button>
-              <span className="font-bold text-lg text-primary w-10 text-center" aria-live="polite">{servings}</span>
-              <button onClick={() => setServings((s) => Math.min(20, s + 1))} aria-label="Tambah porsi"
-                className="w-10 h-10 rounded-xl bg-white border border-outline-variant flex items-center justify-center text-primary cursor-pointer active:scale-95 transition">
-                <span className="material-symbols-outlined">add</span>
-              </button>
-            </div>
-          </div>
-
           {/* Menu paket: user bisa lihat menu fiks per hari, bukan cuma bahan. */}
           <section className="space-y-3">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-primary text-2xl">restaurant_menu</span>
               <h3 className="font-headline-md text-headline-md text-on-surface">Menu Paket</h3>
-              <span className="ml-auto text-sm text-outline">{mealsByDay.length} hari</span>
+              <span className="ml-auto text-sm text-outline">{mealsByDay.length} hari · {servings} porsi</span>
             </div>
             <div className="space-y-3">
               {mealsByDay.map(({ dayIndex, meals }) => (
@@ -418,7 +430,7 @@ export function ShopWithUsTab({ onSave }) {
           </div>
 
           {/* Ringkasan + aksi - disembunyikan di mobile (lihat sticky bar di bawah) */}
-          <div className="hidden sm:block bg-surface-cream rounded-2xl p-5 space-y-2">
+          <div className="hidden sm:block bg-surface-cream rounded-2xl p-5 space-y-2.5">
             <div className="flex justify-between text-sm">
               <span className="text-on-surface-variant font-medium">Paket {selected.name} ({servings} porsi)</span>
               <span className="font-semibold text-on-surface">{formatRupiah(packageSellingPrice)}</span>
@@ -429,13 +441,79 @@ export function ShopWithUsTab({ onSave }) {
                 <span className="font-semibold text-on-surface">{formatRupiah(addonsTotal)}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm">
-              <span className="text-on-surface-variant">Biaya Pengantaran</span>
-              <span className="font-semibold text-on-surface">{formatRupiah(DELIVERY_FEE)}</span>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-on-surface-variant flex items-center gap-1.5">
+                <span>Biaya Pengantaran</span>
+                {savedKecamatan && (
+                  <span className="text-xs text-on-surface-variant">
+                    (Kec. {savedKecamatan})
+                  </span>
+                )}
+                {hasFreeShippingVoucher && (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full border border-emerald-200">
+                    PRO FREE ONGKIR
+                  </span>
+                )}
+              </span>
+              {savedKecamatan ? (
+                <span className={`font-semibold ${hasFreeShippingVoucher ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
+                  {hasFreeShippingVoucher ? (
+                    <span className="flex items-center gap-1">
+                      <span className="line-through text-xs text-on-surface-variant/60 font-normal">
+                        {formatRupiah(rawDeliveryFee ?? 15000)}
+                      </span>
+                      <span>Rp 0</span>
+                    </span>
+                  ) : (
+                    formatRupiah(deliveryFee)
+                  )}
+                </span>
+              ) : (
+                <span className="text-xs text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full font-medium">
+                  Belum atur alamat (mulai Rp 5.000)
+                </span>
+              )}
             </div>
+
+            {/* Banner info alamat tersinkron dari profil */}
+            {savedKecamatan ? (
+              <div className="flex items-center justify-between text-xs text-on-surface-variant bg-surface-container-low px-3 py-2 rounded-xl">
+                <span className="flex items-center gap-1.5 truncate">
+                  <span className="material-symbols-outlined text-[16px] text-primary shrink-0">location_on</span>
+                  <span className="truncate">Tersinkron profil: <strong>Kec. {savedKecamatan}</strong>{profile?.deliveryDetailAlamat ? ` · ${profile.deliveryDetailAlamat}` : ''}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/profile?tab=addresses')}
+                  className="text-primary hover:underline font-semibold shrink-0 ml-2 cursor-pointer"
+                >
+                  Ubah
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between text-xs text-amber-900 bg-amber-500/10 px-3 py-2 rounded-xl border border-amber-500/20">
+                <span className="flex items-center gap-1.5 truncate">
+                  <span className="material-symbols-outlined text-[16px] text-amber-700 shrink-0">info</span>
+                  <span>Belum ada alamat di profil</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/profile?tab=addresses')}
+                  className="text-primary hover:underline font-semibold shrink-0 ml-2 cursor-pointer"
+                >
+                  Atur Alamat
+                </button>
+              </div>
+            )}
+
             <div className="flex justify-between pt-2 border-t border-outline/20">
               <span className="font-bold text-primary">Total</span>
-              <span className="font-bold text-primary text-lg">{formatRupiah(total)}</span>
+              <span className="font-bold text-primary text-lg">
+                {formatRupiah(total)}
+                {!savedKecamatan && (
+                  <span className="text-xs font-normal text-on-surface-variant ml-1">(+ ongkir)</span>
+                )}
+              </span>
             </div>
           </div>
 
@@ -458,8 +536,17 @@ export function ShopWithUsTab({ onSave }) {
     {selected && totalItems > 0 && (
       <div className="sm:hidden fixed bottom-above-nav left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-outline-variant shadow-xl px-4 py-3">
         <div className="flex items-center gap-2 mb-2.5">
-          <span className="text-xs text-on-surface-variant flex-1">{totalItems} bahan</span>
-          <span className="font-bold text-primary">{formatRupiah(total)}</span>
+          <span className="text-xs text-on-surface-variant flex-1 truncate">
+            {totalItems} bahan
+            {savedKecamatan ? (
+              <span className="text-primary font-medium">
+                {' · '}Ongkir {hasFreeShippingVoucher ? 'Rp 0' : formatRupiah(deliveryFee)} (Kec. {savedKecamatan})
+              </span>
+            ) : (
+              <span className="text-amber-800 font-medium"> · Ongkir mulai Rp 5.000</span>
+            )}
+          </span>
+          <span className="font-bold text-primary shrink-0">{formatRupiah(total)}</span>
         </div>
         <div className="flex gap-2">
           <button onClick={handleSave} disabled={totalItems === 0}

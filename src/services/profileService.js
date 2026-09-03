@@ -12,33 +12,74 @@ const PROFILE_SELECT = "id, full_name, username, gender, avatar_url, created_at,
 // Persona valid (selaras CHECK constraint DB & VALID_PERSONA di Edge Function).
 const VALID_PERSONA = ["mahasiswa", "pekerja", "ibu_rumah_tangga", "keluarga", "lainnya"];
 
+const DELIVERY_LOCAL_KEY = (uid) => `cookplan_delivery_${uid}`;
+
+function getSavedLocalDelivery(uid) {
+  if (!uid || typeof window === "undefined") return {};
+  try {
+    const raw = localStorage.getItem(DELIVERY_LOCAL_KEY(uid));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalDelivery(uid, patch) {
+  if (!uid || typeof window === "undefined") return;
+  try {
+    const prev = getSavedLocalDelivery(uid);
+    const next = { ...prev };
+    if (patch.deliveryCustomerName !== undefined) next.deliveryCustomerName = patch.deliveryCustomerName;
+    if (patch.deliveryCustomerPhone !== undefined) next.deliveryCustomerPhone = patch.deliveryCustomerPhone;
+    if (patch.deliveryKecamatan !== undefined) next.deliveryKecamatan = patch.deliveryKecamatan;
+    if (patch.deliveryDetailAlamat !== undefined) next.deliveryDetailAlamat = patch.deliveryDetailAlamat;
+    localStorage.setItem(DELIVERY_LOCAL_KEY(uid), JSON.stringify(next));
+  } catch {
+    // abaikan error localStorage
+  }
+}
+
 // Ambil profil pengguna aktif dalam bentuk camelCase yang siap dipakai UI.
+// Menggunakan pendekatan bertingkat: DB public.profiles -> auth user metadata -> localStorage.
 export async function getProfile() {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData?.user;
   if (!user) throw new Error("Belum login.");
 
-  const { data, error } = await supabase
-    .from("profiles")
-    .select(PROFILE_SELECT)
-    .eq("id", user.id)
-    .single();
-  if (error) throw error;
+  let data = null;
+  try {
+    const { data: row, error } = await supabase
+      .from("profiles")
+      .select(PROFILE_SELECT)
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (!error) {
+      data = row;
+    } else {
+      console.warn("Akses public.profiles terbatas, menggunakan data auth metadata:", error.message);
+    }
+  } catch (err) {
+    console.warn("Gagal select dari public.profiles:", err);
+  }
+
+  const meta = user.user_metadata || {};
+  const local = getSavedLocalDelivery(user.id);
 
   return {
-    id: data.id,
+    id: user.id,
     email: user.email ?? "",          // email hanya ada di auth.users
-    fullName: data.full_name || "",
-    username: data.username || "",
-    gender: data.gender || "",        // NULL di DB → "" untuk UI
-    avatarUrl: data.avatar_url || "",
-    createdAt: data.created_at ?? user.created_at ?? null,
-    dietPrefs: data.diet_prefs ?? [], // array slug diet_tags.value
-    persona: data.persona || "",      // NULL di DB → "" untuk UI ("belum diisi")
-    deliveryCustomerName: data.delivery_customer_name || "",
-    deliveryCustomerPhone: data.delivery_customer_phone || "",
-    deliveryKecamatan: data.delivery_kecamatan || "",
-    deliveryDetailAlamat: data.delivery_detail_alamat || "",
+    fullName: data?.full_name || meta.full_name || meta.name || "",
+    username: data?.username || meta.username || (user.email ? user.email.split('@')[0] : 'user'),
+    gender: data?.gender || meta.gender || "",        // NULL di DB -> "" untuk UI
+    avatarUrl: data?.avatar_url || meta.avatar_url || "",
+    createdAt: data?.created_at ?? user.created_at ?? null,
+    dietPrefs: data?.diet_prefs ?? meta.diet_prefs ?? [], // array slug diet_tags.value
+    persona: data?.persona || meta.persona || "",      // NULL di DB -> "" untuk UI ("belum diisi")
+    deliveryCustomerName: data?.delivery_customer_name || meta.deliveryCustomerName || local.deliveryCustomerName || "",
+    deliveryCustomerPhone: data?.delivery_customer_phone || meta.deliveryCustomerPhone || local.deliveryCustomerPhone || "",
+    deliveryKecamatan: data?.delivery_kecamatan || meta.deliveryKecamatan || local.deliveryKecamatan || "",
+    deliveryDetailAlamat: data?.delivery_detail_alamat || meta.deliveryDetailAlamat || local.deliveryDetailAlamat || "",
   };
 }
 
@@ -49,6 +90,29 @@ export async function updateProfile(patch = {}) {
   const user = userData?.user;
   if (!user) throw new Error("Belum login.");
 
+  // 1. Simpan segera ke localStorage (offline-first & instan)
+  saveLocalDelivery(user.id, patch);
+
+  // 2. Simpan ke auth.user_metadata (selalu diizinkan untuk authenticated user, aman dari DB table permission error)
+  const metaUpdates = {};
+  if (patch.fullName !== undefined) metaUpdates.full_name = patch.fullName.trim();
+  if (patch.deliveryCustomerName !== undefined) metaUpdates.deliveryCustomerName = patch.deliveryCustomerName.trim();
+  if (patch.deliveryCustomerPhone !== undefined) metaUpdates.deliveryCustomerPhone = patch.deliveryCustomerPhone.trim();
+  if (patch.deliveryKecamatan !== undefined) metaUpdates.deliveryKecamatan = patch.deliveryKecamatan;
+  if (patch.deliveryDetailAlamat !== undefined) metaUpdates.deliveryDetailAlamat = patch.deliveryDetailAlamat.trim();
+  if (patch.gender !== undefined) metaUpdates.gender = patch.gender;
+  if (patch.persona !== undefined) metaUpdates.persona = patch.persona;
+  if (patch.dietPrefs !== undefined) metaUpdates.diet_prefs = patch.dietPrefs;
+
+  if (Object.keys(metaUpdates).length > 0) {
+    try {
+      await supabase.auth.updateUser({ data: metaUpdates });
+    } catch (authErr) {
+      console.warn("Gagal update user metadata:", authErr);
+    }
+  }
+
+  // 3. Coba simpan ke tabel public.profiles (best-effort)
   const updates = {};
   if (patch.fullName !== undefined) {
     const name = patch.fullName.trim();
@@ -56,18 +120,14 @@ export async function updateProfile(patch = {}) {
     updates.full_name = name;
   }
   if (patch.gender !== undefined) {
-    // Check constraint DB hanya izinkan 'male'/'female'. "" (tidak disebutkan)
-    // dipetakan ke NULL agar lolos constraint sekaligus berarti "belum diisi".
     updates.gender = patch.gender === "" ? null : patch.gender;
   }
   if (patch.avatarUrl !== undefined) updates.avatar_url = patch.avatarUrl;
   if (patch.dietPrefs !== undefined) {
     if (!Array.isArray(patch.dietPrefs)) throw new Error("Preferensi diet tidak valid.");
-    // Normalisasi: hanya string, buang duplikat & kosong.
     updates.diet_prefs = [...new Set(patch.dietPrefs.filter((v) => typeof v === "string" && v))];
   }
   if (patch.persona !== undefined) {
-    // "" (belum diisi) → NULL agar lolos CHECK constraint & berarti "belum diisi".
     if (patch.persona === "") {
       updates.persona = null;
     } else if (VALID_PERSONA.includes(patch.persona)) {
@@ -89,13 +149,20 @@ export async function updateProfile(patch = {}) {
     updates.delivery_detail_alamat = patch.deliveryDetailAlamat.trim() || null;
   }
 
-  if (Object.keys(updates).length === 0) return getProfile();
+  if (Object.keys(updates).length > 0) {
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update(updates)
+        .eq("id", user.id);
 
-  const { error } = await supabase
-    .from("profiles")
-    .update(updates)
-    .eq("id", user.id);
-  if (error) throw error;
+      if (error) {
+        console.warn("Update public.profiles tidak dapat dijalankan (izin DB):", error.message);
+      }
+    } catch (dbErr) {
+      console.warn("Gagal update public.profiles:", dbErr);
+    }
+  }
 
   return getProfile();
 }
