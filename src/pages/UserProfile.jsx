@@ -16,6 +16,7 @@ import { Modal } from '../components/Modal.jsx';
 import { SettingsDrawer } from '../components/SettingsDrawer.jsx';
 import { RecipeDetailModal } from '../components/RecipeDetailModal.jsx';
 import { FeedbackCard } from '../components/FeedbackCard.jsx';
+import { KECAMATAN_LIST } from '../utils/delivery.js';
 
 // Item navigasi Pengaturan. Dipakai bersama oleh sidebar (desktop) & drawer (mobile).
 const SETTINGS_NAV = [
@@ -375,11 +376,11 @@ function AddressPanel({ profile, onUpdate }) {
                 setErrors(p => ({ ...p, kecamatan: undefined }));
               }} className={`w-full px-4 py-2.5 bg-surface-container-low border-none rounded-xl text-base focus:outline-none focus:ring-2 ${errors.kecamatan ? 'focus:ring-error-100' : 'focus:ring-primary/20'}`}>
                 <option value="">Pilih Kecamatan</option>
-                <option value="Blimbing">Blimbing</option>
-                <option value="Klojen">Klojen</option>
-                <option value="Kedungkandang">Kedungkandang</option>
-                <option value="Lowokwaru">Lowokwaru</option>
-                <option value="Sukun">Sukun</option>
+                {KECAMATAN_LIST.map((k) => (
+                  <option key={k.name} value={k.name}>
+                    Kecamatan {k.name} (Ongkir {formatRupiah(k.fee)})
+                  </option>
+                ))}
               </select>
               {errors.kecamatan && <p className="text-xs text-error font-medium">{errors.kecamatan}</p>}
             </div>

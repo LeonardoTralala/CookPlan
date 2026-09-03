@@ -5,6 +5,7 @@ import { createOrder, formatRupiah } from '../services/orderService.js';
 import { usePlan } from '../hooks/usePlan.js';
 import { trackOrderCreated } from '../lib/posthog.js';
 import { getProfile, updateProfile } from '../services/profileService.js';
+import { KECAMATAN_LIST, getDeliveryFeeByKecamatan, DEFAULT_DELIVERY_FEE } from '../utils/delivery.js';
 
 import { useSubscription } from '../hooks/useSubscription.js';
 import { getFreeShippingStatus } from '../services/subscriptionService.js';
@@ -38,7 +39,7 @@ export function OrderPage() {
     name: '',
     phone: '',
     city: 'malang',
-    kecamatan: '',
+    kecamatan: location.state?.kecamatan || '',
     detailAddress: '',
     notes: ''
   });
@@ -87,7 +88,7 @@ export function OrderPage() {
             ...p,
             name: p.name || profile.deliveryCustomerName || profile.fullName || '',
             phone: p.phone || profile.deliveryCustomerPhone || '',
-            kecamatan: p.kecamatan || profile.deliveryKecamatan || '',
+            kecamatan: p.kecamatan || location.state?.kecamatan || profile.deliveryKecamatan || '',
             detailAddress: p.detailAddress || profile.deliveryDetailAlamat || '',
             city: profile.deliveryKecamatan ? 'malang' : p.city,
           }));
@@ -118,7 +119,8 @@ export function OrderPage() {
 
   const isProActive = subscription?.status === 'active' && subscription?.tier === 'pro';
   const hasFreeShippingVoucher = isProActive && freeShippingUsed < 6;
-  const deliveryFee = hasFreeShippingVoucher ? 0 : 15000;
+  const baseDeliveryFee = form.kecamatan ? (getDeliveryFeeByKecamatan(form.kecamatan) ?? DEFAULT_DELIVERY_FEE) : 0;
+  const deliveryFee = hasFreeShippingVoucher ? 0 : baseDeliveryFee;
   const total = subtotal + deliveryFee;
 
   const validate = () => {
@@ -237,14 +239,27 @@ export function OrderPage() {
                 PRO FREE ONGKIR
               </span>
             )}
+            {form.kecamatan && (
+              <span className="text-xs text-on-surface-variant">
+                (Kec. {form.kecamatan})
+              </span>
+            )}
           </span>
           <span className={`font-semibold ${hasFreeShippingVoucher ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
             {hasFreeShippingVoucher ? (
               <span className="flex items-center gap-1">
-                <span className="line-through text-xs text-on-surface-variant/60 font-normal">{formatRupiah(15000)}</span>
+                <span className="line-through text-xs text-on-surface-variant/60 font-normal">
+                  {formatRupiah(baseDeliveryFee || DEFAULT_DELIVERY_FEE)}
+                </span>
                 <span>Rp 0</span>
               </span>
-            ) : formatRupiah(deliveryFee)}
+            ) : form.kecamatan ? (
+              formatRupiah(deliveryFee)
+            ) : (
+              <span className="text-xs font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">
+                Pilih kecamatan di bawah
+              </span>
+            )}
           </span>
         </div>
 
@@ -262,7 +277,12 @@ export function OrderPage() {
 
         <div className="flex justify-between pt-2 border-t border-outline/20">
           <span className="font-bold text-primary">Total</span>
-          <span className="font-bold text-primary text-lg">{formatRupiah(total)}</span>
+          <span className="font-bold text-primary text-lg">
+            {formatRupiah(total)}
+            {!form.kecamatan && (
+              <span className="text-xs font-normal text-on-surface-variant ml-1">(+ ongkir)</span>
+            )}
+          </span>
         </div>
       </div>
 
@@ -296,11 +316,11 @@ export function OrderPage() {
             <OrderField id="o-kecamatan" label="Kecamatan" error={formErr.kecamatan}>
               <select id="o-kecamatan" value={form.kecamatan} onChange={update('kecamatan')} className={inputCls(formErr.kecamatan)}>
                 <option value="">Pilih Kecamatan</option>
-                <option value="Blimbing">Blimbing</option>
-                <option value="Klojen">Klojen</option>
-                <option value="Kedungkandang">Kedungkandang</option>
-                <option value="Lowokwaru">Lowokwaru</option>
-                <option value="Sukun">Sukun</option>
+                {KECAMATAN_LIST.map((k) => (
+                  <option key={k.name} value={k.name}>
+                    Kecamatan {k.name} ({formatRupiah(k.fee)})
+                  </option>
+                ))}
               </select>
             </OrderField>
             <OrderField id="o-address" label="Detail Alamat Pengiriman" error={formErr.detailAddress}>

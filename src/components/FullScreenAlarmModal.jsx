@@ -17,31 +17,32 @@ export function FullScreenAlarmModal() {
   const todayName = DAY_NAMES[new Date().getDay()];
 
   // Ambil menu hari ini yang belum dimasak
-  const todayPlan = weeklyPlan[todayName] || {};
-  let uncookedMeals = Object.entries(todayPlan)
-    .filter(([, slot]) => slot && slot.recipeId && !slot.isCooked)
-    .map(([type, slot]) => ({ mealType: type, day: todayName, ...slot }));
+  const todayPlan = weeklyPlan?.[todayName] || {};
+  const uncookedMeals = [];
+  
+  Object.entries(todayPlan).forEach(([type, slot]) => {
+    if (slot && (slot.recipeId || slot.title) && !slot.isCooked) {
+      uncookedMeals.push({ mealType: type, day: todayName, ...slot });
+    }
+  });
 
-  // Fallback: Jika hari ini kosong, ambil menu hari lain di minggu ini
+  // Fallback: Jika hari ini kosong, periksa menu hari lain di minggu ini
   if (uncookedMeals.length === 0) {
     Object.entries(weeklyPlan || {}).forEach(([day, meals]) => {
       Object.entries(meals || {}).forEach(([type, slot]) => {
-        if (slot && slot.recipeId && !slot.isCooked) {
+        if (slot && (slot.recipeId || slot.title) && !slot.isCooked) {
           uncookedMeals.push({ day, mealType: type, ...slot });
         }
       });
     });
   }
 
-  // Fallback Sample jika planner masih kosong agar notifikasi alarm TETAP BISA TAMPIL
-  if (uncookedMeals.length === 0) {
-    uncookedMeals = [
-      { mealType: 'breakfast', day: todayName, title: 'Nasi Goreng Spesial Telur', servings: 2, recipeId: 'sample-1' },
-      { mealType: 'lunch', day: todayName, title: 'Soto Ayam Madura Lengkap', servings: 2, recipeId: 'sample-2' },
-    ];
-  }
+  // ALARM TIDAK AKTIF jika user belum mengisi jadwal makan (tidak menggunakan sampel dummy)
 
   const checkAlarmTrigger = useCallback(() => {
+    // Jika user belum mengisi jadwal makan, jangan hidupkan alarm
+    if (uncookedMeals.length === 0) return;
+
     const now = new Date();
     const currentHour = now.getHours();
 
@@ -100,12 +101,17 @@ export function FullScreenAlarmModal() {
 
     // Event listener pemicu alarm manual & dari Service Worker message
     const handleCustomTrigger = () => {
+      if (uncookedMeals.length === 0) {
+        showToast('Isi jadwal makan terlebih dahulu di Rencana Masak agar alarm dapat berfungsi.', { variant: 'warning' });
+        return;
+      }
       setIsVisible(true);
       playAlarmRingtone();
     };
 
     const handleServiceWorkerMessage = (event) => {
       if (event.data && event.data.type === 'TRIGGER_COOKPLAN_ALARM') {
+        if (uncookedMeals.length === 0) return;
         setIsVisible(true);
         playAlarmRingtone();
       }
@@ -124,7 +130,7 @@ export function FullScreenAlarmModal() {
         navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
       }
     };
-  }, [checkAlarmTrigger]);
+  }, [checkAlarmTrigger, showToast, uncookedMeals.length]);
 
   // Tombol 1: Tunda 10 Menit (Snooze 10 Mins)
   const handleSnooze = () => {
@@ -144,10 +150,11 @@ export function FullScreenAlarmModal() {
 
   const handleMarkCooked = async (day, mealType, title) => {
     try {
-      if (!title.includes('Spesial') && !title.includes('Madura')) {
-        await toggleCookedStatus(day, mealType, true);
-      }
+      await toggleCookedStatus(day, mealType, true);
       showToast(`"${title}" ditandai sudah dimasak! 🍳✨`);
+      if (uncookedMeals.length <= 1) {
+        setIsVisible(false);
+      }
     } catch {
       showToast('Gagal mengubah status.', { variant: 'error' });
     }

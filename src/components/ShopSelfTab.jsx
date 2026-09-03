@@ -9,8 +9,6 @@ import { ShoppingListSkeleton } from './Skeleton.jsx';
 import { DAYS } from '../utils/week.js';
 import { FeedbackCard } from './FeedbackCard.jsx';
 
-const DELIVERY_FEE = 15000;
-
 // Tab "Belanja Sendiri": daftar belanja dari Weekly Planner (menu hasil generate /
 // pilihan sendiri). Bahannya belum tentu kami sediakan → checklist + estimasi,
 // tanpa order ke kami. Bisa disimpan sebagai daftar.
@@ -157,8 +155,7 @@ export function ShopSelfTab({ weeklyPlan, onGoToPlanner, onSave }) {
     return { visibleCount: total, checkedCount: checked, estCost: Math.round(cost) };
   }, [sections, removedItems, checkedItems]);
 
-
-  const total = estCost + (visibleCount > 0 ? DELIVERY_FEE : 0);
+  const total = estCost;
   const removedCount = totalItems - visibleCount;
 
   const handleSave = () => {

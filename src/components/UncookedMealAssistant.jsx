@@ -115,7 +115,13 @@ export function UncookedMealAssistant() {
         <div className="flex flex-wrap items-center gap-2 self-start sm:self-center shrink-0">
           <button
             type="button"
-            onClick={triggerCookPlanAlarm}
+            onClick={() => {
+              if (todayMeals.length === 0 && allUncookedMeals.length === 0) {
+                showToast('Isi jadwal makanmu terlebih dahulu di Rencana Masak agar alarm dapat berfungsi!', { variant: 'warning' });
+                return;
+              }
+              triggerCookPlanAlarm();
+            }}
             className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-black transition flex items-center gap-1.5 cursor-pointer shadow-md active:scale-95 border border-emerald-400/40"
           >
             <span className="material-symbols-outlined text-[16px]">alarm_on</span>
