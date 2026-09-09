@@ -5,6 +5,15 @@ import { getAdminSalesAnalytics, formatMonthLabel } from '../../services/adminAn
 import { formatRupiah, CATEGORY_FALLBACK } from '../../utils/buildShoppingList.js';
 import { usePlan } from '../../hooks/usePlan.js';
 
+const fmtDateShort = (iso) => {
+  if (!iso) return '—';
+  try {
+    return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
+  } catch {
+    return iso;
+  }
+};
+
 // Kartu tool navigasi admin. statKey -> ambil angka dari getAdminStats (null = tanpa angka).
 const TOOLS = [
   { to: '/admin/recipes', icon: 'restaurant_menu', title: 'Kelola Resep', desc: 'Bank resep: harga, foto, bahan, dan langkah memasak.', statKey: 'recipes', unit: 'resep' },
@@ -12,7 +21,7 @@ const TOOLS = [
   { to: '/admin/packages', icon: 'shopping_bag', title: 'Kelola Paket', desc: 'Paket "Belanja di Kami" beserta menu fiksnya.', statKey: 'packages', unit: 'paket' },
   { to: '/admin/orders', icon: 'receipt_long', title: 'Pesanan Masuk', desc: 'Lacak pesanan WhatsApp & ubah status pengiriman.', statKey: 'ordersActive', unit: 'perlu diproses' },
   { to: '/admin/feedback', icon: 'feedback', title: 'Masukan Pengguna', desc: 'Baca umpan balik & rating pengguna untuk evaluasi.', statKey: 'feedback', unit: 'masukan' },
-  { to: '/admin/subscriptions', icon: 'workspace_premium', title: 'Langganan CookPass', desc: 'Verifikasi & aktifkan paket berlangganan pengguna.', statKey: 'subscriptionsPending', unit: 'perlu disetujui' },
+  { to: '/admin/subscriptions', icon: 'workspace_premium', title: 'Langganan CookPass', desc: 'Verifikasi & pantau keanggotaan paket langganan CookPass.', statKey: 'subscriptionsActive', unit: 'member aktif', badgeKey: 'subscriptionsPending', badgeUnit: 'perlu disetujui' },
   { to: '/admin/ai', icon: 'settings_suggest', title: 'Provider AI', desc: 'Konfigurasi penyedia model AI untuk generate plan.', statKey: null },
 ];
 
@@ -205,8 +214,47 @@ export function AdminDashboard() {
           )}
         </div>
 
-        {/* 4 Kartu KPI Ringkasan */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* 5 Kartu KPI Ringkasan Bisnis & Penjualan */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {/* 1. Total Omset Bisnis */}
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4.5 flex flex-col justify-between shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-primary">Total Omset Bisnis</span>
+              <span className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
+                <span className="material-symbols-outlined text-lg">account_balance</span>
+              </span>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl font-extrabold text-on-surface">
+                {currentStats ? formatRupiah(currentStats.totalBusinessRevenue) : '—'}
+              </div>
+              <p className="text-[11px] text-on-surface-variant mt-0.5">
+                Paket: {currentStats ? formatRupiah(currentStats.subtotalRevenue) : '—'} · Subs: {currentStats ? formatRupiah(currentStats.subscriptionRevenue || 0) : '—'}
+              </p>
+            </div>
+          </div>
+
+          {/* 2. Langganan CookPass */}
+          <div className="rounded-2xl border border-purple-200 bg-purple-50/50 p-4.5 flex flex-col justify-between shadow-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-purple-900">Langganan CookPass</span>
+              <span className="w-8 h-8 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center">
+                <span className="material-symbols-outlined text-lg">workspace_premium</span>
+              </span>
+            </div>
+            <div className="mt-3">
+              <div className="text-2xl font-extrabold text-on-surface">
+                {currentStats ? formatRupiah(currentStats.subscriptionRevenue || 0) : '—'}
+              </div>
+              <p className="text-[11px] text-purple-800/80 mt-0.5">
+                {currentStats?.activeSubscribersCount != null
+                  ? `${currentStats.activeSubscribersCount} Member Aktif (${currentStats.proSubscribersCount || 0} Pro · ${currentStats.liteSubscribersCount || 0} Lite)`
+                  : '0 Member Aktif'}
+              </p>
+            </div>
+          </div>
+
+          {/* 3. Penjualan Paket */}
           <div className="rounded-2xl border border-outline-variant bg-white p-4.5 flex flex-col justify-between shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-on-surface-variant">Penjualan Paket</span>
@@ -218,29 +266,13 @@ export function AdminDashboard() {
               <div className="text-2xl font-extrabold text-on-surface">
                 {currentStats ? formatRupiah(currentStats.subtotalRevenue) : '—'}
               </div>
-              <p className="text-[11px] text-on-surface-variant mt-0.5">Nilai bersih produk bahan</p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl border border-outline-variant bg-white p-4.5 flex flex-col justify-between shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-on-surface-variant">Pesanan Selesai</span>
-              <span className="w-8 h-8 rounded-lg bg-secondary/15 text-secondary flex items-center justify-center">
-                <span className="material-symbols-outlined text-lg">local_shipping</span>
-              </span>
-            </div>
-            <div className="mt-3">
-              <div className="text-2xl font-extrabold text-on-surface">
-                {currentStats ? `${currentStats.orderCount} Pesanan` : '—'}
-              </div>
               <p className="text-[11px] text-on-surface-variant mt-0.5">
-                {currentStats && currentStats.orderCount > 0
-                  ? `Rata-rata: ${formatRupiah(currentStats.averageOrderValue)} / order`
-                  : 'Belum ada transaksi'}
+                {currentStats ? `${currentStats.orderCount} pesanan selesai` : 'Nilai bersih produk bahan'}
               </p>
             </div>
           </div>
 
+          {/* 4. Total Kas (+ Ongkir) */}
           <div className="rounded-2xl border border-outline-variant bg-white p-4.5 flex flex-col justify-between shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-on-surface-variant">Total Kas (+ Ongkir)</span>
@@ -250,7 +282,7 @@ export function AdminDashboard() {
             </div>
             <div className="mt-3">
               <div className="text-2xl font-extrabold text-on-surface">
-                {currentStats ? formatRupiah(currentStats.grandTotal) : '—'}
+                {currentStats ? formatRupiah(currentStats.totalCashIn || (currentStats.grandTotal + (currentStats.subscriptionRevenue || 0))) : '—'}
               </div>
               <p className="text-[11px] text-on-surface-variant mt-0.5">
                 Ongkir: {currentStats ? formatRupiah(currentStats.totalDeliveryFee) : '—'}
@@ -258,6 +290,7 @@ export function AdminDashboard() {
             </div>
           </div>
 
+          {/* 5. Komoditas Bahan */}
           <div className="rounded-2xl border border-outline-variant bg-white p-4.5 flex flex-col justify-between shadow-xs">
             <div className="flex items-center justify-between">
               <span className="text-xs font-medium text-on-surface-variant">Komoditas Bahan</span>
@@ -278,38 +311,182 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        {/* Breakdown Paket Terjual */}
-        <div className="rounded-2xl border border-outline-variant bg-white p-5 space-y-4 shadow-xs">
-          <h3 className="font-bold text-sm text-on-surface flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary text-base">pie_chart</span>
-            Distribusi Paket Terjual
-          </h3>
+        {/* 2 Kolom Sejajar: Distribusi Paket Belanja & Performa Langganan CookPass */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Kolom Kiri: Distribusi Paket Belanja Terjual */}
+          <div className="rounded-2xl border border-outline-variant bg-white p-5 space-y-4 shadow-xs flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-on-surface flex items-center gap-2">
+                  <span className="material-symbols-outlined text-primary text-base">pie_chart</span>
+                  Distribusi Paket Belanja Terjual
+                </h3>
+                {currentStats && currentStats.orderCount > 0 && (
+                  <span className="text-[11px] font-semibold text-on-surface-variant bg-surface-container px-2.5 py-0.5 rounded-full">
+                    {currentStats.orderCount} pesanan
+                  </span>
+                )}
+              </div>
 
-          {!currentStats?.packagesBreakdown?.length ? (
-            <p className="text-xs text-on-surface-variant py-3 text-center">Tidak ada paket terjual pada periode ini.</p>
-          ) : (
-            <div className="space-y-3.5">
-              {currentStats.packagesBreakdown.map((pkg) => (
-                <div key={pkg.name} className="space-y-1.5">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-semibold text-on-surface flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
-                      {pkg.name}
-                    </span>
-                    <span className="text-on-surface-variant">
-                      <strong className="text-on-surface">{pkg.count} box</strong> ({formatRupiah(pkg.revenue)}) · {pkg.percent}%
-                    </span>
-                  </div>
-                  <div className="w-full h-2.5 bg-surface-container rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full transition-all duration-500"
-                      style={{ width: `${Math.max(pkg.percent, 4)}%` }}
-                    />
-                  </div>
+              {!currentStats?.packagesBreakdown?.length ? (
+                <div className="py-8 text-center text-on-surface-variant text-xs">
+                  <span className="material-symbols-outlined text-3xl opacity-40 mb-1 block">shopping_bag</span>
+                  Tidak ada paket terjual pada periode ini.
                 </div>
-              ))}
+              ) : (
+                <div className="space-y-3.5">
+                  {currentStats.packagesBreakdown.map((pkg) => (
+                    <div key={pkg.name} className="space-y-1.5">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-semibold text-on-surface flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-primary inline-block"></span>
+                          {pkg.name}
+                        </span>
+                        <span className="text-on-surface-variant">
+                          <strong className="text-on-surface">{pkg.count} box</strong> ({formatRupiah(pkg.revenue)}) · {pkg.percent}%
+                        </span>
+                      </div>
+                      <div className="w-full h-2.5 bg-surface-container rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(pkg.percent, 4)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+
+            <div className="pt-3 border-t border-outline-variant/60 flex items-center justify-between text-xs text-on-surface-variant">
+              <span>Rata-rata Nilai Order:</span>
+              <strong className="text-on-surface">
+                {currentStats && currentStats.orderCount > 0 ? formatRupiah(currentStats.averageOrderValue) : '—'}
+              </strong>
+            </div>
+          </div>
+
+          {/* Kolom Kanan: Performa Langganan CookPass */}
+          <div className="rounded-2xl border border-outline-variant bg-white p-5 space-y-4 shadow-xs flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-sm text-on-surface flex items-center gap-2">
+                  <span className="material-symbols-outlined text-purple-600 text-base">workspace_premium</span>
+                  Performa Langganan CookPass
+                </h3>
+                <span className="text-[11px] font-semibold text-purple-700 bg-purple-50 border border-purple-200/80 px-2.5 py-0.5 rounded-full">
+                  {currentStats?.activeSubscribersCount || 0} Member Aktif
+                </span>
+              </div>
+
+              {/* Progress bar perbandingan Pro vs Lite */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-on-surface-variant">
+                  <span className="flex items-center gap-1.5 font-medium text-purple-900">
+                    <span className="w-2 h-2 rounded-full bg-purple-600 inline-block"></span>
+                    CookPass Pro ({formatRupiah(29000)}/bln): <strong>{currentStats?.proSubscribersCount || 0}</strong>
+                  </span>
+                  <span className="flex items-center gap-1.5 font-medium text-sky-900">
+                    <span className="w-2 h-2 rounded-full bg-sky-500 inline-block"></span>
+                    CookPass Lite ({formatRupiah(11000)}/bln): <strong>{currentStats?.liteSubscribersCount || 0}</strong>
+                  </span>
+                </div>
+
+                <div className="w-full h-2.5 bg-surface-container rounded-full overflow-hidden flex">
+                  {currentStats?.subscriptionRevenue > 0 ? (
+                    <>
+                      <div
+                        className="h-full bg-purple-600 transition-all duration-500"
+                        title={`Pro: ${currentStats.subscriptionTierBreakdown?.[0]?.percent || 0}%`}
+                        style={{ width: `${currentStats.subscriptionTierBreakdown?.[0]?.percent || 0}%` }}
+                      />
+                      <div
+                        className="h-full bg-sky-500 transition-all duration-500"
+                        title={`Lite: ${currentStats.subscriptionTierBreakdown?.[1]?.percent || 0}%`}
+                        style={{ width: `${currentStats.subscriptionTierBreakdown?.[1]?.percent || 0}%` }}
+                      />
+                    </>
+                  ) : (
+                    <div className="h-full bg-surface-container-high w-full" />
+                  )}
+                </div>
+              </div>
+
+              {/* List Member Aktif pada Periode Terpilih */}
+              <div className="space-y-2 pt-1">
+                <span className="text-[11px] font-semibold text-on-surface-variant block uppercase tracking-wider">
+                  Member Terdaftar Periode Ini
+                </span>
+                {!currentStats?.subscribersList?.length ? (
+                  <div className="py-6 text-center text-on-surface-variant text-xs">
+                    <span className="material-symbols-outlined text-3xl opacity-40 mb-1 block">card_membership</span>
+                    Belum ada langganan CookPass pada periode ini.
+                  </div>
+                ) : (
+                  <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                    {currentStats.subscribersList.map((sub) => (
+                      <div
+                        key={sub.id}
+                        className="flex items-center justify-between p-2 rounded-xl bg-surface-container-lowest border border-outline-variant/60 text-xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${
+                              sub.tier === 'pro' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'
+                            }`}
+                          >
+                            {sub.name.charAt(0).toUpperCase()}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="font-semibold text-on-surface truncate">{sub.name}</p>
+                            <p className="text-[10px] text-on-surface-variant">
+                              Mulai: {fmtDateShort(sub.startDate || sub.createdAt)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                              sub.tier === 'pro'
+                                ? 'bg-purple-50 text-purple-700 border-purple-200'
+                                : 'bg-sky-50 text-sky-700 border-sky-200'
+                            }`}
+                          >
+                            {sub.tierName}
+                          </span>
+                          <span
+                            className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+                              sub.status === 'active'
+                                ? 'text-emerald-700 bg-emerald-50'
+                                : sub.status === 'pending'
+                                ? 'text-amber-700 bg-amber-50'
+                                : 'text-on-surface-variant bg-surface-container'
+                            }`}
+                          >
+                            {sub.status === 'active' ? 'Aktif' : sub.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-outline-variant/60 flex items-center justify-between">
+              <span className="text-xs text-on-surface-variant">
+                Total Digital: <strong className="text-purple-700">{currentStats ? formatRupiah(currentStats.subscriptionRevenue || 0) : '—'}</strong>
+              </span>
+              <Link
+                to="/admin/subscriptions"
+                className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1"
+              >
+                Kelola Semua Langganan
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -587,12 +764,17 @@ export function AdminDashboard() {
                     <span className="material-symbols-outlined">{t.icon}</span>
                   </span>
                   {t.statKey != null && (
-                    <span className="text-right">
+                    <div className="text-right">
                       <span className="block text-xl font-bold text-on-surface leading-none">
                         {count == null ? '—' : count}
                       </span>
                       <span className="block text-[11px] text-on-surface-variant">{t.unit}</span>
-                    </span>
+                      {t.badgeKey && stats?.[t.badgeKey] > 0 && (
+                        <span className="inline-block mt-1 text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded-md">
+                          +{stats[t.badgeKey]} {t.badgeUnit || 'pending'}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div>

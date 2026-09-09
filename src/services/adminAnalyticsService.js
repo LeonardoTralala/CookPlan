@@ -9,6 +9,19 @@ const BULAN_NAMES = [
   'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
 ];
 
+// Tarif resmi langganan CookPass per bulan
+export const COOKPASS_PRICES = {
+  pro: 29000,
+  lite: 11000,
+  basic: 11000,
+};
+
+export const COOKPASS_NAMES = {
+  pro: 'CookPass Pro',
+  lite: 'CookPass Lite',
+  basic: 'CookPass Lite',
+};
+
 /**
  * Format string tanggal ISO ke label bulan (contoh: "2026-08" -> "Agustus 2026")
  */
@@ -103,18 +116,33 @@ export function formatReadableAmount(amount, unit) {
  * Data dihitung secara deterministik dari orders yang berstatus non-draft.
  */
 export async function getAdminSalesAnalytics() {
-  // 1. Ambil data pesanan non-draft beserta rincian itemnya
-  const { data: orders, error: ordersErr } = await supabase
-    .from('orders')
-    .select(`
-      id, customer_name, customer_phone, delivery_address, delivery_fee, total_price,
-      output_type, order_status, payment_status, payment_method, notes, created_at,
-      items:order_items ( id, name, amount, unit, category, price_idr )
-    `)
-    .neq('order_status', 'draft')
-    .order('created_at', { ascending: false });
+  // 1. Ambil data pesanan non-draft beserta rincian itemnya, dan data langganan CookPass
+  const [ordersRes, subsRes] = await Promise.all([
+    supabase
+      .from('orders')
+      .select(`
+        id, customer_name, customer_phone, delivery_address, delivery_fee, total_price,
+        output_type, order_status, payment_status, payment_method, notes, created_at,
+        items:order_items ( id, name, amount, unit, category, price_idr )
+      `)
+      .neq('order_status', 'draft')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('subscriptions')
+      .select(`
+        id, user_id, tier, status, start_date, end_date, created_at,
+        user:profiles ( id, full_name, username, delivery_customer_phone )
+      `)
+      .order('created_at', { ascending: false }),
+  ]);
 
-  if (ordersErr) throw ordersErr;
+  if (ordersRes.error) throw ordersRes.error;
+  if (subsRes.error) {
+    console.warn('Gagal memuat langganan untuk analitik:', subsRes.error);
+  }
+
+  const orders = ordersRes.data ?? [];
+  const subscriptions = subsRes.data ?? [];
 
   // 2. Ambil master paket (lengkap dengan recipe dan recipe_ingredients)
   let packages = [];
@@ -147,37 +175,127 @@ export async function getAdminSalesAnalytics() {
     console.warn('Gagal memuat master bahan untuk fallback harga analitik:', e);
   }
 
-  // 4. Kelompokkan order per bulan
-  const monthsMap = new Map(); // key: '2026-08' -> { monthKey, orders: [] }
+  // 4. Kelompokkan order dan langganan CookPass per bulan
+  const monthsMap = new Map(); // key: '2026-08' -> { monthKey, label, orders: [], subscriptions: [] }
 
-  for (const o of orders ?? []) {
-    const dateObj = o.created_at ? new Date(o.created_at) : new Date();
-    const y = dateObj.getFullYear();
-    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
-    const monthKey = `${y}-${m}`;
-
+  const ensureMonthEntry = (monthKey) => {
     if (!monthsMap.has(monthKey)) {
       monthsMap.set(monthKey, {
         monthKey,
         label: formatMonthLabel(monthKey),
-        orders: []
+        orders: [],
+        subscriptions: [],
       });
     }
-    monthsMap.get(monthKey).orders.push(o);
+    return monthsMap.get(monthKey);
+  };
+
+  for (const o of orders) {
+    const dateObj = o.created_at ? new Date(o.created_at) : new Date();
+    const y = dateObj.getFullYear();
+    const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const monthKey = `${y}-${m}`;
+    ensureMonthEntry(monthKey).orders.push(o);
+  }
+
+  for (const s of subscriptions) {
+    let monthKey = null;
+    if (s.start_date && typeof s.start_date === 'string' && s.start_date.length >= 7) {
+      monthKey = s.start_date.slice(0, 7);
+    } else if (s.created_at) {
+      const d = new Date(s.created_at);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      monthKey = `${y}-${m}`;
+    }
+    if (monthKey) {
+      ensureMonthEntry(monthKey).subscriptions.push(s);
+    }
   }
 
   // Daftar bulan yang terurut dari terbaru ke terlama
   const availableMonths = Array.from(monthsMap.keys()).sort().reverse();
 
   /**
-   * Helper untuk menghitung statistik dari sekumpulan orders
+   * Helper untuk menghitung statistik dari sekumpulan orders & subscriptions
    */
-  function computeStats(targetOrders) {
+  function computeStats(targetOrders, targetSubs = []) {
     let subtotalRevenue = 0;
     let totalDeliveryFee = 0;
     let orderCount = targetOrders.length;
     const pkgCounts = new Map(); // pkgName -> { name, count, revenue }
     const ingredientsMap = new Map(); // key: nameNorm__unitNorm -> { name, category, unit, totalAmount, totalPrice, isStaple }
+
+    // 1. Hitung langganan CookPass
+    let subscriptionRevenue = 0;
+    let activeSubscribersCount = 0;
+    let pendingSubscribersCount = 0;
+    let proSubscribersCount = 0;
+    let liteSubscribersCount = 0;
+
+    const subscribersList = [];
+    const tierCounts = {
+      pro: { tier: 'pro', name: 'CookPass Pro', price: COOKPASS_PRICES.pro, count: 0, revenue: 0 },
+      lite: { tier: 'lite', name: 'CookPass Lite', price: COOKPASS_PRICES.lite, count: 0, revenue: 0 },
+    };
+
+    for (const sub of targetSubs) {
+      const tierKey = (sub.tier || 'pro').toLowerCase();
+      const price = COOKPASS_PRICES[tierKey] || COOKPASS_PRICES.lite;
+      const tierName = COOKPASS_NAMES[tierKey] || 'CookPass Pro';
+      const isActive = sub.status === 'active';
+      const isPending = sub.status === 'pending';
+
+      if (isActive) {
+        activeSubscribersCount++;
+        subscriptionRevenue += price;
+        if (tierKey === 'pro') {
+          proSubscribersCount++;
+          tierCounts.pro.count++;
+          tierCounts.pro.revenue += price;
+        } else {
+          liteSubscribersCount++;
+          tierCounts.lite.count++;
+          tierCounts.lite.revenue += price;
+        }
+      } else if (isPending) {
+        pendingSubscribersCount++;
+      }
+
+      const userName = sub.user?.full_name || sub.user?.username || 'Pengguna CookPass';
+      const userPhone = sub.user?.delivery_customer_phone || null;
+
+      subscribersList.push({
+        id: sub.id,
+        userId: sub.user_id,
+        name: userName,
+        phone: userPhone,
+        tier: tierKey,
+        tierName,
+        status: sub.status,
+        startDate: sub.start_date,
+        endDate: sub.end_date,
+        price,
+        createdAt: sub.created_at,
+      });
+    }
+
+    subscribersList.sort((a, b) => {
+      if (a.status === 'active' && b.status !== 'active') return -1;
+      if (a.status !== 'active' && b.status === 'active') return 1;
+      return new Date(b.startDate || b.createdAt) - new Date(a.startDate || a.createdAt);
+    });
+
+    const subscriptionTierBreakdown = [
+      {
+        ...tierCounts.pro,
+        percent: subscriptionRevenue > 0 ? Math.round((tierCounts.pro.revenue / subscriptionRevenue) * 100) : 0,
+      },
+      {
+        ...tierCounts.lite,
+        percent: subscriptionRevenue > 0 ? Math.round((tierCounts.lite.revenue / subscriptionRevenue) * 100) : 0,
+      },
+    ];
 
     for (const order of targetOrders) {
       const orderSubtotal = Number(order.total_price) || 0;
@@ -395,11 +513,22 @@ export async function getAdminSalesAnalytics() {
       totalIngredientsValue,
       totalIngredientsCost,
       totalIngredientsMargin,
+      // Metrik Langganan CookPass
+      subscriptionRevenue,
+      activeSubscribersCount,
+      pendingSubscribersCount,
+      proSubscribersCount,
+      liteSubscribersCount,
+      subscriptionTierBreakdown,
+      subscribersList,
+      // Total Performa Bisnis Keseluruhan (Paket Belanja + Langganan CookPass)
+      totalBusinessRevenue: subtotalRevenue + subscriptionRevenue,
+      totalCashIn: subtotalRevenue + totalDeliveryFee + subscriptionRevenue,
     };
   }
 
   // Hitung untuk 'all' (semua periode)
-  const allStats = computeStats(orders ?? []);
+  const allStats = computeStats(orders ?? [], subscriptions ?? []);
 
   // Hitung untuk masing-masing bulan
   const byMonth = {};
@@ -407,7 +536,7 @@ export async function getAdminSalesAnalytics() {
     byMonth[monthKey] = {
       monthKey,
       label: mData.label,
-      ...computeStats(mData.orders),
+      ...computeStats(mData.orders, mData.subscriptions),
     };
   }
 
