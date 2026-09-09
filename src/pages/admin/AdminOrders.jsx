@@ -4,7 +4,7 @@ import { Modal } from '../../components/Modal.jsx';
 import { checkIsAdmin } from '../../services/adminService.js';
 
 import { listOrders, updateOrder, deleteOrder, waLink } from '../../services/adminOrderService.js';
-import { downloadReceiptImage, orderJenisLabel } from '../../services/orderService.js';
+import { downloadReceiptImage, orderJenisLabel, PAYMENT_METHOD_LABEL, parseDiscountInfo } from '../../services/orderService.js';
 import {
   ORDER_STATUSES, PAYMENT_STATUSES, STATUS_TONE_CLS as TONE_CLS, orderMeta, payMeta,
 } from '../../utils/orderStatus.js';
@@ -237,7 +237,7 @@ export function AdminOrders() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                       <Info label="Pelanggan" value={o.customer_name || '—'} />
                       <Info label="Telepon" value={o.customer_phone || '—'} />
-                      <Info label="Pembayaran" value={o.payment_method || '—'} />
+                      <Info label="Pembayaran" value={PAYMENT_METHOD_LABEL[o.payment_method] || o.payment_method || '—'} />
                       <Info label="Jenis" value={orderJenisLabel(o)} />
                       {o.delivery_address && <div className="sm:col-span-2"><Info label="Alamat" value={o.delivery_address} /></div>}
                       {o.notes && <div className="sm:col-span-2"><Info label="Catatan" value={o.notes} /></div>}
@@ -246,14 +246,45 @@ export function AdminOrders() {
                     {/* Rincian item */}
                     {o.items?.length > 0 && (
                       <div className="rounded-xl border border-outline-variant bg-white divide-y divide-outline-variant/40 overflow-hidden">
-                        {o.items.map((it) => (
-                          <div key={it.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                            <span className="text-on-surface">{it.name}</span>
-                            <span className="text-on-surface-variant">{formatAmount(it.amount)} {it.unit}
-                              {it.priceIdr > 0 && <span className="ml-2 text-primary font-semibold">{formatRupiah(it.priceIdr)}</span>}
-                            </span>
-                          </div>
-                        ))}
+                        {(() => {
+                          const disc = parseDiscountInfo(o);
+                          return (
+                            <>
+                              {o.items.map((it) => {
+                                const displayPrice = disc ? disc.originalPrice : it.priceIdr;
+                                return (
+                                  <div key={it.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                                    <span className="text-on-surface font-medium">{it.name}</span>
+                                    <span className="text-on-surface-variant">
+                                      {formatAmount(it.amount)} {it.unit}
+                                      {displayPrice > 0 && (
+                                        <span className="ml-2 text-on-surface font-semibold">
+                                          {formatRupiah(displayPrice)}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {disc && (
+                                <>
+                                  <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30">
+                                    <span className="text-on-surface-variant">Harga Asli</span>
+                                    <span className="text-on-surface font-semibold">{formatRupiah(disc.originalPrice)}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30 text-error">
+                                    <span className="font-medium">Potongan Diskon ({disc.percent}%)</span>
+                                    <span className="font-semibold">-{formatRupiah(disc.discountAmount)}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/50">
+                                    <span className="text-on-surface font-medium">Subtotal Setelah Diskon</span>
+                                    <span className="text-primary font-bold">{formatRupiah(o.total_price)}</span>
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
                         <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream">
                           <span className="text-on-surface-variant flex items-center gap-1.5">
                             Ongkir
