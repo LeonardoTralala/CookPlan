@@ -328,8 +328,8 @@ export async function renderReceiptImage(order, items = []) {
   const rows = items.map((it) => ({
     name: it.name ?? "",
     qty: [it.amount, it.unit].filter((v) => v != null && v !== "").join(" "),
-    price: formatRupiah(it.priceIdr ?? 0),
-    discountSub: discount ? `Harga Asli: ${formatRupiah(discount.originalPrice)} · Diskon ${discount.percent}% (-${formatRupiah(discount.discountAmount)})` : null,
+    price: formatRupiah(discount ? discount.originalPrice : (it.priceIdr ?? 0)),
+    discountSub: discount ? `Diskon Promo ${discount.percent}%: -${formatRupiah(discount.discountAmount)}` : null,
   }));
 
   // Pengukur teks (font wajib di-set sebelum measureText).
@@ -482,9 +482,11 @@ export async function renderReceiptImage(order, items = []) {
   };
   if (discount) {
     costRow("Harga Asli", formatRupiah(discount.originalPrice), false);
-    costRow(`Diskon Promo (${discount.percent}%)`, `-${formatRupiah(discount.discountAmount)}`, false, true);
+    costRow(`Potongan Diskon (${discount.percent}%)`, `-${formatRupiah(discount.discountAmount)}`, false, true);
+    costRow("Subtotal Setelah Diskon", formatRupiah(subtotal), false);
+  } else {
+    costRow("Subtotal", formatRupiah(subtotal), false);
   }
-  costRow("Subtotal", formatRupiah(subtotal), false);
   costRow("Ongkir", deliveryFee === 0 ? "Rp 0 (Gratis Ongkir Pro)" : formatRupiah(deliveryFee), false);
   costRow("TOTAL", formatRupiah(total), true);
 

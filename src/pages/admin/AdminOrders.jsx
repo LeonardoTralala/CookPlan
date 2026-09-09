@@ -246,27 +246,42 @@ export function AdminOrders() {
                     {/* Rincian item */}
                     {o.items?.length > 0 && (
                       <div className="rounded-xl border border-outline-variant bg-white divide-y divide-outline-variant/40 overflow-hidden">
-                        {o.items.map((it) => (
-                          <div key={it.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                            <span className="text-on-surface">{it.name}</span>
-                            <span className="text-on-surface-variant">{formatAmount(it.amount)} {it.unit}
-                              {it.priceIdr > 0 && <span className="ml-2 text-primary font-semibold">{formatRupiah(it.priceIdr)}</span>}
-                            </span>
-                          </div>
-                        ))}
                         {(() => {
                           const disc = parseDiscountInfo(o);
-                          if (!disc) return null;
                           return (
                             <>
-                              <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30">
-                                <span className="text-on-surface-variant">Harga Asli</span>
-                                <span className="text-on-surface-variant line-through font-medium">{formatRupiah(disc.originalPrice)}</span>
-                              </div>
-                              <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30 text-error">
-                                <span className="font-medium">Diskon Promo ({disc.percent}%)</span>
-                                <span className="font-semibold">-{formatRupiah(disc.discountAmount)}</span>
-                              </div>
+                              {o.items.map((it) => {
+                                const displayPrice = disc ? disc.originalPrice : it.priceIdr;
+                                return (
+                                  <div key={it.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                                    <span className="text-on-surface font-medium">{it.name}</span>
+                                    <span className="text-on-surface-variant">
+                                      {formatAmount(it.amount)} {it.unit}
+                                      {displayPrice > 0 && (
+                                        <span className="ml-2 text-on-surface font-semibold">
+                                          {formatRupiah(displayPrice)}
+                                        </span>
+                                      )}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                              {disc && (
+                                <>
+                                  <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30">
+                                    <span className="text-on-surface-variant">Harga Asli</span>
+                                    <span className="text-on-surface font-semibold">{formatRupiah(disc.originalPrice)}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30 text-error">
+                                    <span className="font-medium">Potongan Diskon ({disc.percent}%)</span>
+                                    <span className="font-semibold">-{formatRupiah(disc.discountAmount)}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/50">
+                                    <span className="text-on-surface font-medium">Subtotal Setelah Diskon</span>
+                                    <span className="text-primary font-bold">{formatRupiah(o.total_price)}</span>
+                                  </div>
+                                </>
+                              )}
                             </>
                           );
                         })()}
