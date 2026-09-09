@@ -155,6 +155,13 @@ const OUTPUT_TYPE_LABEL = {
   foodprep: "Food Prep",
 };
 
+// Label ramah metode pembayaran
+export const PAYMENT_METHOD_LABEL = {
+  cod: "Tunai (COD)",
+  qris: "QRIS",
+  transfer_bank: "Transfer Bank",
+};
+
 // Order paket "Belanja di Kami" menyimpan nama paket di notes sebagai
 // "Paket: <nama> (<detail>)". Pisahkan jadi { name, detail } bila cocok.
 function parsePackageNote(notes) {
@@ -285,7 +292,7 @@ export async function renderReceiptImage(order, items = []) {
     ["Nama", order.customer_name],
     ["Telepon", order.customer_phone],
     ["Alamat", order.delivery_address],
-    ["Pembayaran", order.payment_method],
+    ["Pembayaran", PAYMENT_METHOD_LABEL[order.payment_method] || order.payment_method],
   ];
   if (!pkg && order.notes) metaRaw.push(["Catatan", order.notes]);
   const meta = metaRaw.filter(([, v]) => v != null && v !== "");

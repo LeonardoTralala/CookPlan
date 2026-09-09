@@ -4,7 +4,7 @@ import { Modal } from '../../components/Modal.jsx';
 import { checkIsAdmin } from '../../services/adminService.js';
 
 import { listOrders, updateOrder, deleteOrder, waLink } from '../../services/adminOrderService.js';
-import { downloadReceiptImage, orderJenisLabel } from '../../services/orderService.js';
+import { downloadReceiptImage, orderJenisLabel, PAYMENT_METHOD_LABEL } from '../../services/orderService.js';
 import {
   ORDER_STATUSES, PAYMENT_STATUSES, STATUS_TONE_CLS as TONE_CLS, orderMeta, payMeta,
 } from '../../utils/orderStatus.js';
@@ -237,7 +237,7 @@ export function AdminOrders() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
                       <Info label="Pelanggan" value={o.customer_name || '—'} />
                       <Info label="Telepon" value={o.customer_phone || '—'} />
-                      <Info label="Pembayaran" value={o.payment_method || '—'} />
+                      <Info label="Pembayaran" value={PAYMENT_METHOD_LABEL[o.payment_method] || o.payment_method || '—'} />
                       <Info label="Jenis" value={orderJenisLabel(o)} />
                       {o.delivery_address && <div className="sm:col-span-2"><Info label="Alamat" value={o.delivery_address} /></div>}
                       {o.notes && <div className="sm:col-span-2"><Info label="Catatan" value={o.notes} /></div>}
