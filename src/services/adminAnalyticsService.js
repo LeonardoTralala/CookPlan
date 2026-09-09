@@ -262,22 +262,24 @@ export async function getAdminSalesAnalytics() {
         pendingSubscribersCount++;
       }
 
-      const userName = sub.user?.full_name || sub.user?.username || 'Pengguna CookPass';
-      const userPhone = sub.user?.delivery_customer_phone || null;
+      if (isActive || isPending) {
+        const userName = sub.user?.full_name || sub.user?.username || 'Pengguna CookPass';
+        const userPhone = sub.user?.delivery_customer_phone || null;
 
-      subscribersList.push({
-        id: sub.id,
-        userId: sub.user_id,
-        name: userName,
-        phone: userPhone,
-        tier: tierKey,
-        tierName,
-        status: sub.status,
-        startDate: sub.start_date,
-        endDate: sub.end_date,
-        price,
-        createdAt: sub.created_at,
-      });
+        subscribersList.push({
+          id: sub.id,
+          userId: sub.user_id,
+          name: userName,
+          phone: userPhone,
+          tier: tierKey,
+          tierName,
+          status: sub.status,
+          startDate: sub.start_date,
+          endDate: sub.end_date,
+          price,
+          createdAt: sub.created_at,
+        });
+      }
     }
 
     subscribersList.sort((a, b) => {
