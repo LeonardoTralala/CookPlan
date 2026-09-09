@@ -4,7 +4,7 @@ import { Modal } from '../../components/Modal.jsx';
 import { checkIsAdmin } from '../../services/adminService.js';
 
 import { listOrders, updateOrder, deleteOrder, waLink } from '../../services/adminOrderService.js';
-import { downloadReceiptImage, orderJenisLabel, PAYMENT_METHOD_LABEL } from '../../services/orderService.js';
+import { downloadReceiptImage, orderJenisLabel, PAYMENT_METHOD_LABEL, parseDiscountInfo } from '../../services/orderService.js';
 import {
   ORDER_STATUSES, PAYMENT_STATUSES, STATUS_TONE_CLS as TONE_CLS, orderMeta, payMeta,
 } from '../../utils/orderStatus.js';
@@ -254,6 +254,22 @@ export function AdminOrders() {
                             </span>
                           </div>
                         ))}
+                        {(() => {
+                          const disc = parseDiscountInfo(o);
+                          if (!disc) return null;
+                          return (
+                            <>
+                              <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30">
+                                <span className="text-on-surface-variant">Harga Asli</span>
+                                <span className="text-on-surface-variant line-through font-medium">{formatRupiah(disc.originalPrice)}</span>
+                              </div>
+                              <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30 text-error">
+                                <span className="font-medium">Diskon Promo ({disc.percent}%)</span>
+                                <span className="font-semibold">-{formatRupiah(disc.discountAmount)}</span>
+                              </div>
+                            </>
+                          );
+                        })()}
                         <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream">
                           <span className="text-on-surface-variant flex items-center gap-1.5">
                             Ongkir

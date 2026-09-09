@@ -194,6 +194,27 @@ export function orderJenisLabel(order) {
   return formatJenis(order, parsePackageNote(order.notes)) || "—";
 }
 
+// Deteksi dan hitung rincian diskon dari catatan pesanan (misal "Diskon 20%")
+export function parseDiscountInfo(order) {
+  if (!order) return null;
+  const notes = order.notes || "";
+  const match = /diskon\s*(\d+)%/i.exec(notes);
+  if (!match) return null;
+
+  const percent = parseInt(match[1], 10);
+  if (!percent || percent <= 0 || percent >= 100) return null;
+
+  const subtotal = order.total_price ?? 0;
+  const originalPrice = Math.round(subtotal / (1 - percent / 100));
+  const discountAmount = originalPrice - subtotal;
+
+  return {
+    percent,
+    originalPrice,
+    discountAmount,
+  };
+}
+
 // Teks WhatsApp RINGKAS dari pembeli ke admin: cukup ringkasan pesanan (kode,
 // tanggal, jenis, porsi, biaya). Rincian item & struk rapi dikirim admin sebagai
 // GAMBAR (renderReceiptImage) — teks monospace panjang mudah "rusak" di HP.
@@ -203,6 +224,7 @@ export function buildWhatsappText(order) {
   const total = subtotal + deliveryFee;
   const pkg = parsePackageNote(order.notes);
   const jenis = formatJenis(order, pkg);
+  const discount = parseDiscountInfo(order);
 
   const lines = [];
   lines.push("Halo CookPlan! Aku mau pesan, berikut ringkasannya:");
@@ -211,6 +233,10 @@ export function buildWhatsappText(order) {
   lines.push(`Tanggal: ${formatTanggal(order)}`);
   if (jenis) lines.push(`Jenis: ${jenis}`);
   if (pkg?.detail) lines.push(`Porsi: ${pkg.detail}`);
+  if (discount) {
+    lines.push(`Harga Asli: ${formatRupiah(discount.originalPrice)}`);
+    lines.push(`Diskon Promo (${discount.percent}%): -${formatRupiah(discount.discountAmount)}`);
+  }
   lines.push(`Subtotal: ${formatRupiah(subtotal)}`);
   lines.push(`Ongkir: ${deliveryFee === 0 ? "Rp 0 (Gratis Ongkir CookPass Pro 🚚)" : formatRupiah(deliveryFee)}`);
   lines.push(`Total: ${formatRupiah(total)}`);
@@ -297,10 +323,13 @@ export async function renderReceiptImage(order, items = []) {
   if (!pkg && order.notes) metaRaw.push(["Catatan", order.notes]);
   const meta = metaRaw.filter(([, v]) => v != null && v !== "");
 
+  const discount = parseDiscountInfo(order);
+
   const rows = items.map((it) => ({
     name: it.name ?? "",
     qty: [it.amount, it.unit].filter((v) => v != null && v !== "").join(" "),
     price: formatRupiah(it.priceIdr ?? 0),
+    discountSub: discount ? `Harga Asli: ${formatRupiah(discount.originalPrice)} · Diskon ${discount.percent}% (-${formatRupiah(discount.discountAmount)})` : null,
   }));
 
   // Pengukur teks (font wajib di-set sebelum measureText).
@@ -325,8 +354,13 @@ export async function renderReceiptImage(order, items = []) {
   H += 18; // divider
   if (rows.length) {
     H += 30; // judul "RINCIAN BELANJA"
-    H += rows.length * ITEM_H;
+    for (const r of rows) {
+      H += r.discountSub ? ITEM_H + 18 : ITEM_H;
+    }
     H += 18; // divider
+  }
+  if (discount) {
+    H += LINE_H * 2; // tambahan untuk Harga Asli dan Diskon Promo
   }
   H += LINE_H * 2; // subtotal + ongkir
   H += 40; // total (ditebalkan)
@@ -422,23 +456,34 @@ export async function renderReceiptImage(order, items = []) {
       ctx.fillText(r.price, W - padX, y);
       ctx.textAlign = "left";
       y += ITEM_H;
+
+      if (r.discountSub) {
+        ctx.fillStyle = "#b3261e";
+        ctx.font = `italic 12px ${RECEIPT_FONT}`;
+        ctx.fillText(r.discountSub, padX, y - 8);
+        y += 18;
+      }
     }
     divider();
   }
 
   // Rincian biaya.
-  const costRow = (label, value, emphasis) => {
+  const costRow = (label, value, emphasis, isDiscount = false) => {
     ctx.textAlign = "left";
-    ctx.fillStyle = emphasis ? BRAND.green : BRAND.muted;
+    ctx.fillStyle = emphasis ? BRAND.green : (isDiscount ? "#b3261e" : BRAND.muted);
     ctx.font = emphasis ? `bold 18px ${RECEIPT_FONT}` : `14px ${RECEIPT_FONT}`;
     ctx.fillText(label, padX, y);
     ctx.textAlign = "right";
-    ctx.fillStyle = emphasis ? BRAND.green : BRAND.ink;
+    ctx.fillStyle = emphasis ? BRAND.green : (isDiscount ? "#b3261e" : BRAND.ink);
     ctx.font = emphasis ? `bold 18px ${RECEIPT_FONT}` : `15px ${RECEIPT_FONT}`;
     ctx.fillText(value, W - padX, y);
     ctx.textAlign = "left";
     y += emphasis ? 40 : LINE_H;
   };
+  if (discount) {
+    costRow("Harga Asli", formatRupiah(discount.originalPrice), false);
+    costRow(`Diskon Promo (${discount.percent}%)`, `-${formatRupiah(discount.discountAmount)}`, false, true);
+  }
   costRow("Subtotal", formatRupiah(subtotal), false);
   costRow("Ongkir", deliveryFee === 0 ? "Rp 0 (Gratis Ongkir Pro)" : formatRupiah(deliveryFee), false);
   costRow("TOTAL", formatRupiah(total), true);

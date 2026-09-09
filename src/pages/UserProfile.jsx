@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
 import { getSavedRecipes, unsaveRecipe, saveRecipe, getRecipes } from '../services/recipeService.js';
-import { getMyOrders, formatRupiah } from '../services/orderService.js';
+import { getMyOrders, formatRupiah, parseDiscountInfo } from '../services/orderService.js';
 import { ORDER_STATUS_META, PAYMENT_STATUS_META, STATUS_TONE_CLS } from '../utils/orderStatus.js';
 import { getProfile, updateProfile, uploadAvatar } from '../services/profileService.js';
 import { getActiveDietTags } from '../services/dietService.js';
@@ -122,6 +122,22 @@ function OrderHistoryPanel() {
                             </span>
                           </div>
                         ))}
+                        {(() => {
+                          const disc = parseDiscountInfo(o);
+                          if (!disc) return null;
+                          return (
+                            <>
+                              <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30">
+                                <span className="text-on-surface-variant">Harga Asli</span>
+                                <span className="text-on-surface-variant line-through font-medium">{formatRupiah(disc.originalPrice)}</span>
+                              </div>
+                              <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream/30 text-error">
+                                <span className="font-medium">Diskon Promo ({disc.percent}%)</span>
+                                <span className="font-semibold">-{formatRupiah(disc.discountAmount)}</span>
+                              </div>
+                            </>
+                          );
+                        })()}
                         <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream">
                           <span className="text-on-surface-variant flex items-center gap-1.5">
                             Ongkir
