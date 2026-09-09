@@ -9,6 +9,7 @@ import {
   orderJenisLabel,
   PAYMENT_METHOD_LABEL,
   parseDiscountInfo,
+  parseMemberTierFromNotes,
   downloadSubscriptionReceiptImage,
   buildSubscriptionWhatsappUrl,
 } from '../../services/orderService.js';
@@ -376,6 +377,7 @@ export function AdminOrders() {
             const pm = payMeta(o.paymentStatus);
             const grand = (o.total_price ?? 0) + (o.delivery_fee ?? 0);
             const isOpen = expanded === o.id;
+            const memberTier = parseMemberTierFromNotes(o.notes);
             return (
               <div key={o.id} className="rounded-2xl border border-outline-variant bg-white overflow-hidden">
                 {/* Header card (klik untuk buka) */}
@@ -390,6 +392,16 @@ export function AdminOrders() {
                         <span className="material-symbols-outlined text-[13px]">{om.icon}</span>{om.label}
                       </span>
                       <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${TONE_CLS[pm.tone]}`}>{pm.label}</span>
+                      {memberTier === 'pro' && (
+                        <span className="text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-full inline-flex items-center gap-1 bg-amber-100 text-amber-900 border border-amber-300">
+                          <span>👑</span> PRO (Free Ongkir + Prioritas Antar)
+                        </span>
+                      )}
+                      {memberTier === 'lite' && (
+                        <span className="text-[10px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-full inline-flex items-center gap-1 bg-emerald-100 text-emerald-900 border border-emerald-300">
+                          <span>🌿</span> LITE (Prioritas Antar)
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-on-surface-variant mt-1 truncate">
                       {o.customer_name || 'Tanpa nama'} · {o.items?.length ?? 0} item · {fmtDate(o.createdAt)}
@@ -426,6 +438,16 @@ export function AdminOrders() {
                       <Info label="Telepon" value={o.customer_phone || '—'} />
                       <Info label="Pembayaran" value={PAYMENT_METHOD_LABEL[o.payment_method] || o.payment_method || '—'} />
                       <Info label="Jenis" value={orderJenisLabel(o)} />
+                      {memberTier === 'pro' && (
+                        <div className="sm:col-span-2">
+                          <Info label="Keanggotaan" value="Member CookPass Pro 👑 (Prioritas Antar Kurir & Free Ongkir)" />
+                        </div>
+                      )}
+                      {memberTier === 'lite' && (
+                        <div className="sm:col-span-2">
+                          <Info label="Keanggotaan" value="Member CookPass Lite 🌿 (Prioritas Antar Kurir Internal)" />
+                        </div>
+                      )}
                       {o.delivery_address && <div className="sm:col-span-2"><Info label="Alamat" value={o.delivery_address} /></div>}
                       {o.notes && <div className="sm:col-span-2"><Info label="Catatan" value={o.notes} /></div>}
                     </div>
@@ -473,13 +495,17 @@ export function AdminOrders() {
                           );
                         })()}
                         <div className="flex items-center justify-between px-3 py-2 text-sm bg-surface-cream">
-                          <span className="text-on-surface-variant flex items-center gap-1.5">
-                            Ongkir
-                            {(o.delivery_fee ?? 0) === 0 && (
+                          <span className="text-on-surface-variant flex items-center gap-1.5 flex-wrap">
+                            <span>Ongkir</span>
+                            {(o.delivery_fee ?? 0) === 0 ? (
                               <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
                                 PRO FREE ONGKIR
                               </span>
-                            )}
+                            ) : memberTier === 'lite' ? (
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                                ⚡ PRIORITAS KURIR
+                              </span>
+                            ) : null}
                           </span>
                           <span className={`font-semibold ${(o.delivery_fee ?? 0) === 0 ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
                             {(o.delivery_fee ?? 0) === 0 ? 'Rp 0 (Gratis Ongkir)' : formatRupiah(o.delivery_fee ?? 0)}

@@ -118,6 +118,7 @@ export function OrderPage() {
   const subtotal = plan?.total_estimated_cost ?? 0;
 
   const isProActive = subscription?.status === 'active' && subscription?.tier === 'pro';
+  const isLiteActive = subscription?.status === 'active' && subscription?.tier === 'lite';
   const hasFreeShippingVoucher = isProActive && freeShippingUsed < 6;
   const baseDeliveryFee = form.kecamatan ? (getDeliveryFeeByKecamatan(form.kecamatan) ?? DEFAULT_DELIVERY_FEE) : 0;
   const deliveryFee = hasFreeShippingVoucher ? 0 : baseDeliveryFee;
@@ -154,6 +155,21 @@ export function OrderPage() {
     try {
       const fullAddress = `${form.detailAddress.trim()}, Kec. ${form.kecamatan}, Kota Malang`;
 
+      let finalNotes = isPackage 
+        ? `${plan?.notes || ''}${form.notes.trim() ? ` (Catatan: ${form.notes.trim()})` : ''}` 
+        : (form.notes.trim() || '');
+
+      let membershipTag = '';
+      if (isProActive) {
+        membershipTag = '[Member CookPass Pro - Prioritas Antar & Free Ongkir]';
+      } else if (isLiteActive) {
+        membershipTag = '[Member CookPass Lite - Prioritas Antar Kurir]';
+      }
+
+      if (membershipTag && !finalNotes.includes('Member CookPass')) {
+        finalNotes = finalNotes ? `${finalNotes} ${membershipTag}` : membershipTag;
+      }
+
       const order = await createOrder({
         planId: isPackage ? null : Number(planId),
         outputType: isPackage ? 'package' : 'full',
@@ -164,9 +180,7 @@ export function OrderPage() {
         name: form.name.trim(),
         phone: form.phone.trim(),
         paymentMethod: null,
-        notes: isPackage 
-          ? `${plan?.notes || ''}${form.notes.trim() ? ` (Catatan: ${form.notes.trim()})` : ''}` 
-          : (form.notes.trim() || null),
+        notes: finalNotes || null,
       });
       trackOrderCreated(order.id, total, form.paymentMethod);
 
@@ -232,22 +246,26 @@ export function OrderPage() {
           <span className="font-semibold text-on-surface">{formatRupiah(subtotal)}</span>
         </div>
         <div className="flex justify-between text-sm items-center">
-          <span className="text-on-surface-variant flex items-center gap-1.5">
-            Biaya Pengantaran
-            {hasFreeShippingVoucher && (
-              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                PRO FREE ONGKIR
-              </span>
-            )}
+          <span className="text-on-surface-variant flex items-center gap-1.5 flex-wrap">
+            <span>Biaya Pengantaran</span>
             {form.kecamatan && (
               <span className="text-xs text-on-surface-variant">
                 (Kec. {form.kecamatan})
               </span>
             )}
+            {hasFreeShippingVoucher ? (
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                PRO FREE ONGKIR
+              </span>
+            ) : isLiteActive ? (
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                ⚡ PRIORITAS KURIR
+              </span>
+            ) : null}
           </span>
           <span className={`font-semibold ${hasFreeShippingVoucher ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
             {hasFreeShippingVoucher ? (
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1.5">
                 <span className="line-through text-xs text-on-surface-variant/60 font-normal">
                   {formatRupiah(baseDeliveryFee || DEFAULT_DELIVERY_FEE)}
                 </span>
@@ -267,10 +285,22 @@ export function OrderPage() {
           <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200/60">
             <span className="flex items-center gap-1">
               <span className="material-symbols-outlined text-[16px] text-emerald-600">verified</span>
-              Voucher Gratis Ongkir CookPass Pro Terpakai
+              Voucher Gratis Ongkir CookPass Pro Terpakai (Hemat {formatRupiah(baseDeliveryFee || DEFAULT_DELIVERY_FEE)})
             </span>
             <span className="bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full text-[11px]">
-              Sisa {6 - freeShippingUsed}/6 bln ini
+              Sisa {Math.max(0, 6 - freeShippingUsed)}/6 bln ini
+            </span>
+          </div>
+        )}
+
+        {isLiteActive && (
+          <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200/60">
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px] text-emerald-600">bolt</span>
+              Member CookPass Lite: Prioritas Slot Pengantaran Kurir Internal Aktif {form.kecamatan ? `(Kec. ${form.kecamatan})` : ''}
+            </span>
+            <span className="bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full text-[11px]">
+              Kurir Internal
             </span>
           </div>
         )}
@@ -293,6 +323,39 @@ export function OrderPage() {
           Layanan pengantaran bahan masakan CookPlan saat ini hanya melayani area <strong>Kota Malang</strong>.
         </p>
       </div>
+
+      {/* Banner Status Member CookPass */}
+      {isProActive ? (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-surface-container-low border border-amber-500/30 rounded-2xl p-4 flex items-start gap-3">
+          <span className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-[22px]">workspace_premium</span>
+          </span>
+          <div className="text-xs space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-on-surface text-sm">👑 Member CookPass Pro</span>
+              <span className="bg-amber-500/20 text-amber-900 px-2 py-0.5 rounded-full text-[10px] font-bold">Terverifikasi</span>
+            </div>
+            <p className="text-on-surface-variant">
+              Pesananmu mendapatkan <strong>Voucher Gratis Ongkir</strong> dan <strong>Prioritas Slot Pengantaran Kurir Internal</strong> CookPlan.
+            </p>
+          </div>
+        </div>
+      ) : isLiteActive ? (
+        <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-400/5 to-surface-container-low border border-emerald-500/30 rounded-2xl p-4 flex items-start gap-3">
+          <span className="w-9 h-9 rounded-xl bg-emerald-500/20 text-emerald-800 flex items-center justify-center shrink-0">
+            <span className="material-symbols-outlined text-[22px]">eco</span>
+          </span>
+          <div className="text-xs space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-on-surface text-sm">🌿 Member CookPass Lite</span>
+              <span className="bg-emerald-500/20 text-emerald-900 px-2 py-0.5 rounded-full text-[10px] font-bold">Terverifikasi</span>
+            </div>
+            <p className="text-on-surface-variant">
+              Pesananmu mendapatkan <strong>Prioritas Slot Pengantaran Kurir Internal</strong> CookPlan (Tarif ongkir sesuai lokasi kecamatan).
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {/* Form */}
       <div className="space-y-4">

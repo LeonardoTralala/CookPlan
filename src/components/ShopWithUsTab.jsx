@@ -168,6 +168,7 @@ export function ShopWithUsTab({ onSave }) {
 
   const savedKecamatan = profile?.deliveryKecamatan || '';
   const isProActive = subscription?.status === 'active' && subscription?.tier === 'pro';
+  const isLiteActive = subscription?.status === 'active' && subscription?.tier === 'lite';
   const hasFreeShippingVoucher = isProActive && freeShippingUsed < 6;
   const rawDeliveryFee = savedKecamatan ? getDeliveryFeeByKecamatan(savedKecamatan) : null;
   const deliveryFee = hasFreeShippingVoucher ? 0 : rawDeliveryFee;
@@ -184,11 +185,19 @@ export function ShopWithUsTab({ onSave }) {
       })),
       ...addonItems,
     ];
+
+    let membershipTag = '';
+    if (isProActive) {
+      membershipTag = ' [Member CookPass Pro - Prioritas Antar & Free Ongkir]';
+    } else if (isLiteActive) {
+      membershipTag = ' [Member CookPass Lite - Prioritas Antar Kurir]';
+    }
+
     navigate('/order/package', {
       state: {
         items,
         subtotal,
-        notes: `Paket: ${selected.name} (${servings} porsi/menu, ${selected.periodeDays} hari)`,
+        notes: `Paket: ${selected.name} (${servings} porsi/menu, ${selected.periodeDays} hari)${membershipTag}`,
         kecamatan: savedKecamatan,
         deliveryFee: deliveryFee ?? (rawDeliveryFee || 15000),
       }
@@ -257,6 +266,97 @@ export function ShopWithUsTab({ onSave }) {
         <span className="material-symbols-outlined text-primary text-[18px]">info</span>
         <span>Layanan pengiriman CookPlan saat ini baru melayani area <strong>Kota Malang</strong>.</span>
       </div>
+
+      {/* Kartu Status & Benefit Keanggotaan CookPass */}
+      {isProActive ? (
+        <div className="bg-gradient-to-r from-amber-500/10 via-amber-400/5 to-surface-container-low border border-amber-500/30 rounded-2xl p-4 sm:p-5 relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-800 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[24px]">workspace_premium</span>
+              </span>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-on-surface text-sm sm:text-base flex items-center gap-1.5">
+                    Member CookPass Pro Aktif 👑
+                  </span>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider bg-amber-500/20 text-amber-900 px-2 py-0.5 rounded-full border border-amber-500/30">
+                    Prioritas Antar & Free Ongkir
+                  </span>
+                </div>
+                <p className="text-xs text-on-surface-variant leading-relaxed">
+                  🚚 <strong>Voucher Gratis Ongkir:</strong> Sisa <strong>{Math.max(0, 6 - freeShippingUsed)} dari 6</strong> voucher bulan ini.
+                  {savedKecamatan ? (
+                    <span> Ongkir Kec. {savedKecamatan} otomatis <strong>Rp 0</strong> (Hemat {formatRupiah(rawDeliveryFee ?? 15000)})!</span>
+                  ) : (
+                    <span> Ongkir otomatis Rp 0 saat pilih kecamatan Kota Malang.</span>
+                  )}
+                </p>
+                <p className="text-xs text-amber-900/90 font-medium flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px] text-amber-700">bolt</span>
+                  <span>Pesanan paketmu mendapatkan <strong>Prioritas Slot Pengantaran Kurir Internal</strong> CookPlan.</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : isLiteActive ? (
+        <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-400/5 to-surface-container-low border border-emerald-500/30 rounded-2xl p-4 sm:p-5 relative overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <span className="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-800 flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-[24px]">eco</span>
+              </span>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-on-surface text-sm sm:text-base flex items-center gap-1.5">
+                    Member CookPass Lite Aktif 🌿
+                  </span>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-900 px-2 py-0.5 rounded-full border border-emerald-500/30">
+                    Prioritas Antar Kurir Internal
+                  </span>
+                </div>
+                <p className="text-xs text-on-surface-variant leading-relaxed">
+                  ⚡ <strong>Prioritas Slot Pengantaran:</strong> Paket belanja bahanmu diproses dan diantar lebih awal oleh tim kurir internal CookPlan!
+                </p>
+                <p className="text-xs text-emerald-900/90 font-medium">
+                  📍 <strong>Tarif Pengantaran:</strong> {savedKecamatan ? `Sesuai lokasi antarmu di Kec. ${savedKecamatan} (${formatRupiah(rawDeliveryFee ?? 15000)})` : 'Disesuaikan dengan kecamatan tujuanmu di Kota Malang (mulai Rp 5.000)'}.
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/subscription')}
+              className="self-start sm:self-center shrink-0 px-3.5 py-1.5 rounded-full bg-emerald-600 text-white font-semibold text-xs hover:bg-emerald-700 transition cursor-pointer flex items-center gap-1 shadow-sm"
+            >
+              <span className="material-symbols-outlined text-[16px]">upgrade</span>
+              <span>Mau Gratis Ongkir 6x? Upgrade ke Pro</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-surface-cream/70 border border-primary/20 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+              <span className="material-symbols-outlined text-[20px]">workspace_premium</span>
+            </span>
+            <div className="text-xs">
+              <p className="font-bold text-on-surface text-sm">Mau Belanja Lebih Hemat & Diprioritaskan?</p>
+              <p className="text-on-surface-variant">
+                Langganan <strong>CookPass</strong> mulai Rp 11rb/bln untuk prioritas kurir pengantaran atau Rp 29rb/bln untuk <strong>Voucher Gratis Ongkir 6x</strong>!
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/subscription')}
+            className="self-start sm:self-center shrink-0 px-4 py-2 rounded-full border border-primary text-primary hover:bg-primary hover:text-white font-semibold text-xs transition cursor-pointer flex items-center gap-1.5"
+          >
+            <span>Lihat CookPass</span>
+            <span className="material-symbols-outlined text-[16px]">arrow_forward</span>
+          </button>
+        </div>
+      )}
 
       {/* Pemilih paket */}
       <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-1">
@@ -442,23 +542,27 @@ export function ShopWithUsTab({ onSave }) {
               </div>
             )}
             <div className="flex justify-between text-sm items-center">
-              <span className="text-on-surface-variant flex items-center gap-1.5">
+              <span className="text-on-surface-variant flex items-center gap-1.5 flex-wrap">
                 <span>Biaya Pengantaran</span>
                 {savedKecamatan && (
                   <span className="text-xs text-on-surface-variant">
                     (Kec. {savedKecamatan})
                   </span>
                 )}
-                {hasFreeShippingVoucher && (
+                {hasFreeShippingVoucher ? (
                   <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full border border-emerald-200">
                     PRO FREE ONGKIR
                   </span>
-                )}
+                ) : isLiteActive ? (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full border border-emerald-200">
+                    ⚡ PRIORITAS KURIR
+                  </span>
+                ) : null}
               </span>
               {savedKecamatan ? (
                 <span className={`font-semibold ${hasFreeShippingVoucher ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
                   {hasFreeShippingVoucher ? (
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-1.5">
                       <span className="line-through text-xs text-on-surface-variant/60 font-normal">
                         {formatRupiah(rawDeliveryFee ?? 15000)}
                       </span>
@@ -474,6 +578,30 @@ export function ShopWithUsTab({ onSave }) {
                 </span>
               )}
             </div>
+
+            {hasFreeShippingVoucher && (
+              <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200/60">
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px] text-emerald-600">verified</span>
+                  Voucher Gratis Ongkir Terpakai (Hemat {formatRupiah(rawDeliveryFee ?? 15000)})
+                </span>
+                <span className="bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full text-[11px]">
+                  Sisa {Math.max(0, 6 - freeShippingUsed)}/6 bln ini
+                </span>
+              </div>
+            )}
+
+            {isLiteActive && (
+              <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200/60">
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px] text-emerald-600">bolt</span>
+                  Member CookPass Lite: Prioritas Slot Pengantaran Kurir Aktif
+                </span>
+                <span className="bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full text-[11px]">
+                  Kurir Internal
+                </span>
+              </div>
+            )}
 
             {/* Banner info alamat tersinkron dari profil */}
             {savedKecamatan ? (
@@ -540,7 +668,12 @@ export function ShopWithUsTab({ onSave }) {
             {totalItems} bahan
             {savedKecamatan ? (
               <span className="text-primary font-medium">
-                {' · '}Ongkir {hasFreeShippingVoucher ? 'Rp 0' : formatRupiah(deliveryFee)} (Kec. {savedKecamatan})
+                {' · '}
+                {hasFreeShippingVoucher ? (
+                  <>Ongkir <span className="line-through text-on-surface-variant/70">{formatRupiah(rawDeliveryFee ?? 15000)}</span> <strong className="text-emerald-700">Rp 0</strong> (Pro Free Ongkir)</>
+                ) : (
+                  <>Ongkir {formatRupiah(deliveryFee)} (Kec. {savedKecamatan}){isLiteActive ? ' ⚡ Prioritas' : ''}</>
+                )}
               </span>
             ) : (
               <span className="text-amber-800 font-medium"> · Ongkir mulai Rp 5.000</span>

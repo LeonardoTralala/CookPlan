@@ -164,11 +164,25 @@ export const PAYMENT_METHOD_LABEL = {
 
 // Order paket "Belanja di Kami" menyimpan nama paket di notes sebagai
 // "Paket: <nama> (<detail>)". Pisahkan jadi { name, detail } bila cocok.
-function parsePackageNote(notes) {
+export function parsePackageNote(notes) {
   if (!notes) return null;
-  const m = /^Paket:\s*(.+?)\s*(?:\(([^)]*)\))?\s*$/.exec(notes.trim());
-  if (!m) return null;
+  // Bersihkan tag membership [Member CookPass...] agar tidak mengganggu parsing nama & porsi
+  const clean = notes.replace(/\[Member\s+CookPass[^\]]*\]/gi, '').trim();
+  const m = /^Paket:\s*(.+?)(?:\s*\(([^)]*)\))?(?:\s*\(Catatan:[^)]*\))?\s*$/i.exec(clean);
+  if (!m) {
+    const simpleMatch = /Paket:\s*([^(]+?)(?:\s*\(([^)]*)\))?/i.exec(clean);
+    if (!simpleMatch) return null;
+    return { name: simpleMatch[1].trim(), detail: (simpleMatch[2] || "").trim() };
+  }
   return { name: m[1].trim(), detail: (m[2] || "").trim() };
+}
+
+// Deteksi status membership CookPass dari catatan pesanan
+export function parseMemberTierFromNotes(notes) {
+  if (!notes) return null;
+  if (/CookPass Pro/i.test(notes)) return 'pro';
+  if (/CookPass Lite/i.test(notes)) return 'lite';
+  return null;
 }
 
 // Jenis paket terbaca: nama paket asli (mis. "Paket Hemat 5 Hari") bila ada,
@@ -225,12 +239,18 @@ export function buildWhatsappText(order) {
   const pkg = parsePackageNote(order.notes);
   const jenis = formatJenis(order, pkg);
   const discount = parseDiscountInfo(order);
+  const memberTier = parseMemberTierFromNotes(order.notes);
 
   const lines = [];
   lines.push("Halo CookPlan! Aku mau pesan, berikut ringkasannya:");
   lines.push("");
   lines.push(`No. Pesanan: ${order.id}`);
   lines.push(`Tanggal: ${formatTanggal(order)}`);
+  if (memberTier === 'pro') {
+    lines.push("👑 Keanggotaan: CookPass Pro (Prioritas Antar & Free Ongkir)");
+  } else if (memberTier === 'lite') {
+    lines.push("🌿 Keanggotaan: CookPass Lite (Prioritas Antar Kurir Internal)");
+  }
   if (jenis) lines.push(`Jenis: ${jenis}`);
   if (pkg?.detail) lines.push(`Porsi: ${pkg.detail}`);
   if (discount) {
@@ -238,7 +258,11 @@ export function buildWhatsappText(order) {
     lines.push(`Diskon Promo (${discount.percent}%): -${formatRupiah(discount.discountAmount)}`);
   }
   lines.push(`Subtotal: ${formatRupiah(subtotal)}`);
-  lines.push(`Ongkir: ${deliveryFee === 0 ? "Rp 0 (Gratis Ongkir CookPass Pro 🚚)" : formatRupiah(deliveryFee)}`);
+  if (deliveryFee === 0) {
+    lines.push("Ongkir: Rp 0 (Voucher Gratis Ongkir CookPass Pro 🚚)");
+  } else {
+    lines.push(`Ongkir: ${formatRupiah(deliveryFee)}${memberTier === 'lite' ? ' (Prioritas Kurir Internal ⚡)' : ''}`);
+  }
   lines.push(`Total: ${formatRupiah(total)}`);
   lines.push("");
   lines.push("Mohon diproses ya, terima kasih.");
@@ -309,18 +333,32 @@ export async function renderReceiptImage(order, items = []) {
   const deliveryFee = order.delivery_fee ?? 0;
   const total = subtotal + deliveryFee;
   const pkg = parsePackageNote(order.notes);
+  const memberTier = parseMemberTierFromNotes(order.notes);
 
   const metaRaw = [
     ["No. Pesanan", order.id],
     ["Tanggal", formatTanggal(order)],
+  ];
+  if (memberTier === 'pro') {
+    metaRaw.push(["Keanggotaan", "CookPass Pro 👑 (Prioritas Antar & Free Ongkir)"]);
+  } else if (memberTier === 'lite') {
+    metaRaw.push(["Keanggotaan", "CookPass Lite 🌿 (Prioritas Antar Kurir Internal)"]);
+  }
+  metaRaw.push(
     ["Jenis", formatJenis(order, pkg)],
     ["Porsi", pkg?.detail],
     ["Nama", order.customer_name],
     ["Telepon", order.customer_phone],
     ["Alamat", order.delivery_address],
     ["Pembayaran", PAYMENT_METHOD_LABEL[order.payment_method] || order.payment_method],
-  ];
-  if (!pkg && order.notes) metaRaw.push(["Catatan", order.notes]);
+  );
+
+  const customNoteMatch = /\(Catatan:\s*([^)]+)\)/i.exec(order.notes || '');
+  const customNote = customNoteMatch ? customNoteMatch[1].trim() : (!pkg ? order.notes : null);
+  if (customNote && !/\[Member\s+CookPass/i.test(customNote)) {
+    metaRaw.push(["Catatan", customNote]);
+  }
+
   const meta = metaRaw.filter(([, v]) => v != null && v !== "");
 
   const discount = parseDiscountInfo(order);
@@ -487,7 +525,10 @@ export async function renderReceiptImage(order, items = []) {
   } else {
     costRow("Subtotal", formatRupiah(subtotal), false);
   }
-  costRow("Ongkir", deliveryFee === 0 ? "Rp 0 (Gratis Ongkir Pro)" : formatRupiah(deliveryFee), false);
+  const ongkirText = deliveryFee === 0
+    ? "Rp 0 (Gratis Ongkir Pro)"
+    : (memberTier === 'lite' ? `${formatRupiah(deliveryFee)} (Prioritas Kurir)` : formatRupiah(deliveryFee));
+  costRow("Ongkir", ongkirText, false);
   costRow("TOTAL", formatRupiah(total), true);
 
   // Footer.

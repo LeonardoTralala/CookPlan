@@ -47,7 +47,11 @@ export function OrderSuccess() {
   const subtotal = order?.total_price ?? 0;
   const deliveryFee = order?.delivery_fee ?? 0;
   const total = subtotal + deliveryFee;
-  const originalFee = getDeliveryFeeByKecamatan(extractKecamatanFromAddress(order?.delivery_address)) || 15000;
+  const kecamatan = useMemo(() => extractKecamatanFromAddress(order?.delivery_address), [order?.delivery_address]);
+  const originalFee = useMemo(() => (kecamatan ? getDeliveryFeeByKecamatan(kecamatan) : 15000) || 15000, [kecamatan]);
+
+  const isProOrder = useMemo(() => /Member CookPass Pro/i.test(order?.notes || '') || deliveryFee === 0, [order?.notes, deliveryFee]);
+  const isLiteOrder = useMemo(() => /Member CookPass Lite/i.test(order?.notes || ''), [order?.notes]);
 
   const waUrl = useMemo(
     () => (order ? buildWhatsappUrl(order) : null),
@@ -131,23 +135,57 @@ export function OrderSuccess() {
           <span className="font-semibold text-on-surface">{formatRupiah(subtotal)}</span>
         </div>
         <div className="flex justify-between text-sm items-center">
-          <span className="text-on-surface-variant flex items-center gap-1.5">
-            Biaya Pengantaran
-            {deliveryFee === 0 && (
+          <span className="text-on-surface-variant flex items-center gap-1.5 flex-wrap">
+            <span>Biaya Pengantaran</span>
+            {kecamatan && (
+              <span className="text-xs text-on-surface-variant">
+                (Kec. {kecamatan})
+              </span>
+            )}
+            {isProOrder ? (
               <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
                 PRO FREE ONGKIR
               </span>
-            )}
+            ) : isLiteOrder ? (
+              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                ⚡ PRIORITAS KURIR
+              </span>
+            ) : null}
           </span>
-          <span className={`font-semibold ${deliveryFee === 0 ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
-            {deliveryFee === 0 ? (
-              <span className="flex items-center gap-1">
+          <span className={`font-semibold ${isProOrder ? 'text-emerald-600 font-bold' : 'text-on-surface'}`}>
+            {isProOrder ? (
+              <span className="flex items-center gap-1.5">
                 <span className="line-through text-xs text-on-surface-variant/60 font-normal">{formatRupiah(originalFee)}</span>
                 <span>Rp 0</span>
               </span>
             ) : formatRupiah(deliveryFee)}
           </span>
         </div>
+
+        {isProOrder && (
+          <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200/60">
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px] text-emerald-600">verified</span>
+              Voucher Gratis Ongkir CookPass Pro Terpakai (Hemat {formatRupiah(originalFee)})
+            </span>
+            <span className="bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full text-[11px]">
+              Kurir Prioritas
+            </span>
+          </div>
+        )}
+
+        {isLiteOrder && (
+          <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200/60">
+            <span className="flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px] text-emerald-600">bolt</span>
+              Member CookPass Lite: Prioritas Slot Pengantaran Kurir Internal Aktif
+            </span>
+            <span className="bg-emerald-200/60 text-emerald-900 px-2 py-0.5 rounded-full text-[11px]">
+              Kurir Internal
+            </span>
+          </div>
+        )}
+
         <div className="flex justify-between pt-2 border-t border-outline/20">
           <span className="font-bold text-primary">Total</span>
           <span className="font-bold text-primary text-lg">{formatRupiah(total)}</span>
