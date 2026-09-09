@@ -563,7 +563,7 @@ export async function renderSubscriptionReceiptImage(sub) {
     ["Nama Pelanggan", userName],
     ["No. WhatsApp", userPhone],
     ["Status Akun", statusLabel],
-    ["Metode Pembayaran", "Transfer / QRIS / WhatsApp"],
+    ["Metode Pembayaran", "QRIS"],
   ];
   if (userEmail && userEmail !== '-') {
     metaRaw.splice(5, 0, ["Email", userEmail]);

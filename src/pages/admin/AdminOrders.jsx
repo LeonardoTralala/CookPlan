@@ -686,7 +686,7 @@ export function AdminOrders() {
                             }
                           />
                           <Info label="Tanggal Pesanan" value={fmtDate(sub.created_at)} />
-                          <Info label="Metode Pembayaran" value="Transfer Bank / QRIS" />
+                          <Info label="Metode Pembayaran" value="QRIS" />
                         </div>
 
                         {/* Benefit list preview */}

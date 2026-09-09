@@ -110,7 +110,7 @@ export async function createSubscription(tier) {
   const harga = tier === 'lite' ? 'Rp 11.000' : 'Rp 29.000';
   const paket = tier === 'lite' ? 'CookPass Lite' : 'CookPass Pro';
   
-  const message = `Halo Admin CookPlan,\n\nSaya ingin berlangganan paket *${paket}* seharga *${harga}* per bulan.\n\nMohon informasi instruksi pembayarannya. Terima kasih!\n\n(Kode Subs: SUB-${data.id})`;
+  const message = `Halo Admin CookPlan,\n\nSaya ingin berlangganan paket *${paket}* seharga *${harga}* per bulan via pembayaran *QRIS*.\n\nMohon kirimkan kode QRIS pembayarannya. Terima kasih!\n\n(Kode Subs: SUB-${data.id})`;
   const waUrl = buildSimpleWhatsappUrl(message);
   
   return { id: data.id, waUrl };

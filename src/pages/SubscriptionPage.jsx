@@ -112,7 +112,7 @@ export function SubscriptionPage() {
       if (billingCycle === '3months') cycleText = '3 Bulan';
       if (billingCycle === '6months') cycleText = '6 Bulan';
 
-      const message = `Halo Admin CookPlan,\n\nSaya ingin berlangganan paket *${baseName}* dengan durasi *${cycleText}* seharga *Rp ${pricing.total.toLocaleString('id-ID')}*.\n\nMohon informasi instruksi pembayarannya. Terima kasih!\n\n(Kode Subs: SUB-${id})`;
+      const message = `Halo Admin CookPlan,\n\nSaya ingin berlangganan paket *${baseName}* dengan durasi *${cycleText}* seharga *Rp ${pricing.total.toLocaleString('id-ID')}* via pembayaran *QRIS*.\n\nMohon kirimkan kode QRIS pembayarannya. Terima kasih!\n\n(Kode Subs: SUB-${id})`;
       const waUrl = buildSimpleWhatsappUrl(message);
 
       setCheckoutSub({
@@ -705,7 +705,7 @@ export function SubscriptionPage() {
                 Instruksi Pembayaran:
               </div>
               <p className="text-amber-800/90 leading-relaxed">
-                Tekan tombol di bawah untuk membuka WhatsApp resmi CookPlan. Admin akan memberikan instruksi transfer / QRIS untuk pengaktifan akun secara instan.
+                Tekan tombol di bawah untuk membuka WhatsApp resmi CookPlan. Admin akan memberikan kode QRIS resmi CookPlan untuk pembayaran dan pengaktifan akun secara instan.
               </p>
             </div>
 
@@ -753,11 +753,11 @@ function FeatureItem({ icon, iconColor, disabled, highlight, children }) {
 const FAQS = [
   {
     q: 'Bagaimana cara pembayaran berlangganan CookPass?',
-    a: 'Setelah menekan tombol "Pilih via WhatsApp", kamu akan diarahkan ke chat WhatsApp resmi CookPlan. Admin kami akan memberikan instruksi pembayaran mudah via E-Wallet (GoPay/OVO/Dana) atau QRIS/Transfer Bank.',
+    a: 'Setelah menekan tombol "Pilih via WhatsApp", kamu akan diarahkan ke chat WhatsApp resmi CookPlan. Admin kami akan memberikan kode QRIS resmi CookPlan untuk pembayaran praktis dan instan.',
   },
   {
     q: 'Berapa lama langganan aktif setelah pembayaran?',
-    a: 'Setelah transfer berhasil dikonfirmasi oleh Admin CookPlan, akun kamu akan langsung aktif sebagai member CookPass selama 30 hari penuh.',
+    a: 'Setelah pembayaran via QRIS berhasil diverifikasi oleh Admin CookPlan, akun kamu akan langsung aktif sebagai member CookPass selama 30 hari penuh.',
   },
   {
     q: 'Bagaimana cara menggunakan Voucher Gratis Ongkir Paket Pro?',
