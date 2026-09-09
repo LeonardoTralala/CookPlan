@@ -124,8 +124,11 @@ export async function getAdminSubscriptions() {
     .select(`
       *,
       user:profiles (
+        id,
         full_name,
-        username
+        username,
+        delivery_customer_name,
+        delivery_customer_phone
       )
     `)
     .order("created_at", { ascending: false });

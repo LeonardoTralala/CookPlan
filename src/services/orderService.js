@@ -522,6 +522,257 @@ export async function downloadReceiptImage(order, items = []) {
   URL.revokeObjectURL(url);
 }
 
+// Render struk langganan CookPass jadi PNG Blob.
+export async function renderSubscriptionReceiptImage(sub) {
+  const scale = Math.min(3, Math.max(2, window.devicePixelRatio || 2));
+  const W = 680;
+  const padX = 48;
+  const contentW = W - padX * 2;
+  const labelColW = 140;
+
+  const isPro = (sub.tier || '').toLowerCase() === 'pro';
+  const tierName = isPro ? 'CookPass Pro' : 'CookPass Lite';
+  const tierLabel = isPro ? 'Paket Komplet' : 'Paket Digital';
+  const price = isPro ? 29000 : 11000;
+  const statusLabel = sub.status === 'active'
+    ? 'LUNAS / MEMBER AKTIF'
+    : (sub.status === 'pending' ? 'MENUNGGU VERIFIKASI' : String(sub.status || '').toUpperCase());
+
+  const userName = sub.user?.full_name || sub.user?.username || sub.name || 'Pengguna CookPass';
+  const userPhone = sub.user?.delivery_customer_phone || sub.phone || '-';
+  const userEmail = sub.user?.email || sub.email || '-';
+
+  const fmtSubDate = (dateVal) => {
+    if (!dateVal) return '-';
+    try {
+      return new Intl.DateTimeFormat('id-ID', { dateStyle: 'long' }).format(new Date(dateVal));
+    } catch {
+      return String(dateVal);
+    }
+  };
+
+  const periodText = (sub.start_date || sub.startDate) && (sub.end_date || sub.endDate)
+    ? `${fmtSubDate(sub.start_date || sub.startDate)} s/d ${fmtSubDate(sub.end_date || sub.endDate)}`
+    : (sub.created_at ? fmtSubDate(sub.created_at) : '-');
+
+  const metaRaw = [
+    ["No. Referensi", `SUB-${sub.id}`],
+    ["Tanggal", fmtSubDate(sub.start_date || sub.startDate || sub.created_at)],
+    ["Paket Langganan", `${tierName} (${tierLabel})`],
+    ["Masa Berlaku", periodText],
+    ["Nama Pelanggan", userName],
+    ["No. WhatsApp", userPhone],
+    ["Status Akun", statusLabel],
+    ["Metode Pembayaran", "Transfer / QRIS / WhatsApp"],
+  ];
+  if (userEmail && userEmail !== '-') {
+    metaRaw.splice(5, 0, ["Email", userEmail]);
+  }
+  const meta = metaRaw.filter(([, v]) => v != null && v !== "");
+
+  // Benefits list
+  const benefits = isPro ? [
+    { title: "AI Generator Menu & Meal Plan", desc: "Akses Tanpa Batas (Unlimited)", badge: "Unlimited" },
+    { title: "Gratis Ongkir Paket Belanja", desc: "Pengiriman Wilayah Kota Malang", badge: "Free Delivery" },
+    { title: "Akses Penuh Bank Resep", desc: "Semua Resep & Video Memasak", badge: "Full Access" },
+    { title: "Badge Anggota Eksklusif Pro", desc: "Tanda Keanggotaan Terverifikasi", badge: "Aktif" },
+  ] : [
+    { title: "AI Generator Menu & Meal Plan", desc: "Prioritas Kuota Ekstra Bulanan", badge: "Prioritas" },
+    { title: "Akses Penuh Bank Resep", desc: "Semua Resep & Video Memasak", badge: "Full Access" },
+    { title: "Rencana Menu Mingguan", desc: "Fitur Otomatisasi Jadwal Makan", badge: "Aktif" },
+  ];
+
+  // Pengukur teks
+  const mc = document.createElement("canvas").getContext("2d");
+  const fValue = `15px ${RECEIPT_FONT}`;
+  mc.font = fValue;
+  const valueW = contentW - labelColW;
+  const metaLines = meta.map(([label, value]) => ({
+    label,
+    lines: wrapByWidth(mc, value, valueW),
+  }));
+
+  // Hitung tinggi kanvas
+  const HEADER_H = 156;
+  const LINE_H = 24;
+  const ITEM_H = 34;
+  let H = HEADER_H + 26; // header + jeda
+  H += 30; // judul "DETAIL LANGGANAN"
+  for (const m of metaLines) H += m.lines.length * LINE_H + 6;
+  H += 18; // divider
+  H += 30; // judul "BENEFIT KEANGGOTAAN AKTIF"
+  H += benefits.length * ITEM_H;
+  H += 18; // divider
+  H += LINE_H * 2; // harga paket + biaya admin
+  H += 40; // total
+  H += 22; // jeda
+  H += 44; // footer
+  H += 32; // padding bawah
+
+  // Kanvas final (retina-friendly)
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(W * scale);
+  canvas.height = Math.round(H * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  ctx.textBaseline = "top";
+
+  // Latar putih
+  ctx.fillStyle = BRAND.white;
+  ctx.fillRect(0, 0, W, H);
+
+  // Header bernuansa keemasan/hijau pastel CookPass
+  ctx.fillStyle = isPro ? "#f7f1e6" : BRAND.headerBg;
+  ctx.fillRect(0, 0, W, HEADER_H);
+
+  let logo = null;
+  try { logo = await loadImage("/email/cookplan-logo-dark.png"); } catch { /* fallback teks */ }
+  if (logo && logo.width) {
+    const lh = 58;
+    const lw = (logo.width / logo.height) * lh;
+    ctx.drawImage(logo, (W - lw) / 2, 34, lw, lh);
+  } else {
+    ctx.fillStyle = BRAND.logoInk;
+    ctx.font = `bold 32px ${RECEIPT_FONT}`;
+    ctx.textAlign = "center";
+    ctx.fillText("CookPlan", W / 2, 44);
+    ctx.textAlign = "left";
+  }
+
+  // Label Struk
+  ctx.fillStyle = isPro ? "#8a5814" : BRAND.green;
+  ctx.font = `bold 14px ${RECEIPT_FONT}`;
+  ctx.textAlign = "center";
+  ctx.fillText("BUKTI PEMBAYARAN RESMI COOKPASS", W / 2, HEADER_H - 38);
+  ctx.textAlign = "left";
+
+  let y = HEADER_H + 26;
+
+  const sectionTitle = (text) => {
+    ctx.fillStyle = isPro ? "#8a5814" : BRAND.green;
+    ctx.font = `bold 13px ${RECEIPT_FONT}`;
+    ctx.fillText(text.toUpperCase(), padX, y);
+    y += 30;
+  };
+  const divider = () => {
+    y += 8;
+    ctx.strokeStyle = BRAND.line;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(padX, y + 0.5);
+    ctx.lineTo(W - padX, y + 0.5);
+    ctx.stroke();
+    y += 10;
+  };
+
+  // Detail Langganan
+  sectionTitle("Detail Langganan");
+  for (const m of metaLines) {
+    ctx.fillStyle = BRAND.muted;
+    ctx.font = `13px ${RECEIPT_FONT}`;
+    ctx.fillText(m.label, padX, y + 2);
+
+    if (m.label === "Status Akun") {
+      ctx.fillStyle = sub.status === 'active' ? "#1e7e34" : "#b36b00";
+      ctx.font = `bold 14px ${RECEIPT_FONT}`;
+    } else {
+      ctx.fillStyle = BRAND.ink;
+      ctx.font = fValue;
+    }
+    m.lines.forEach((ln, i) => ctx.fillText(ln, padX + labelColW, y + i * LINE_H));
+    y += m.lines.length * LINE_H + 6;
+  }
+
+  divider();
+
+  // Benefit Keanggotaan
+  sectionTitle("Manfaat Layanan Keanggotaan");
+  for (const b of benefits) {
+    ctx.fillStyle = BRAND.ink;
+    ctx.font = `600 14px ${RECEIPT_FONT}`;
+    ctx.fillText(`✓  ${b.title}`, padX, y);
+
+    ctx.fillStyle = BRAND.muted;
+    ctx.font = `12px ${RECEIPT_FONT}`;
+    ctx.fillText(b.desc, padX + 22, y + 16);
+
+    ctx.fillStyle = isPro ? "#8a5814" : BRAND.green;
+    ctx.font = `bold 12px ${RECEIPT_FONT}`;
+    ctx.textAlign = "right";
+    ctx.fillText(b.badge, W - padX, y + 6);
+    ctx.textAlign = "left";
+
+    y += ITEM_H;
+  }
+
+  divider();
+
+  // Rincian Biaya
+  const costRow = (label, value, emphasis) => {
+    ctx.textAlign = "left";
+    ctx.fillStyle = emphasis ? (isPro ? "#8a5814" : BRAND.green) : BRAND.muted;
+    ctx.font = emphasis ? `bold 18px ${RECEIPT_FONT}` : `14px ${RECEIPT_FONT}`;
+    ctx.fillText(label, padX, y);
+    ctx.textAlign = "right";
+    ctx.fillStyle = emphasis ? (isPro ? "#8a5814" : BRAND.green) : BRAND.ink;
+    ctx.font = emphasis ? `bold 18px ${RECEIPT_FONT}` : `15px ${RECEIPT_FONT}`;
+    ctx.fillText(value, W - padX, y);
+    ctx.textAlign = "left";
+    y += emphasis ? 40 : LINE_H;
+  };
+
+  costRow(`Paket ${tierName} (30 Hari)`, formatRupiah(price), false);
+  costRow("Biaya Admin & Transaksi", "Rp 0 (Gratis)", false);
+  costRow("TOTAL DIBAYAR", formatRupiah(price), true);
+
+  // Footer
+  y += 20;
+  ctx.fillStyle = BRAND.ink;
+  ctx.font = `600 14px ${RECEIPT_FONT}`;
+  ctx.textAlign = "center";
+  ctx.fillText("Terima kasih telah bergabung dengan CookPass!", W / 2, y);
+  ctx.fillStyle = BRAND.muted;
+  ctx.font = `12px ${RECEIPT_FONT}`;
+  ctx.fillText("Simpan struk digital ini sebagai bukti keanggotaan aktif Anda.", W / 2, y + 22);
+  ctx.textAlign = "left";
+
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("Gagal membuat gambar struk langganan."))),
+      "image/png"
+    );
+  });
+}
+
+// Buat struk langganan PNG lalu picu unduhan (Struk-CookPass-SUB-<id>.png).
+export async function downloadSubscriptionReceiptImage(sub) {
+  const blob = await renderSubscriptionReceiptImage(sub);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `Struk-CookPass-SUB-${sub.id || "member"}.png`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+// Susun URL WhatsApp konfirmasi aktivasi langganan dengan link wa.me
+export function buildSubscriptionWhatsappUrl(sub) {
+  const phone = sub.user?.delivery_customer_phone || sub.phone;
+  if (!phone) return null;
+  const cleanPhone = String(phone).replace(/\D/g, "");
+  const waNumber = cleanPhone.startsWith("0") ? `62${cleanPhone.slice(1)}` : cleanPhone;
+  const isPro = (sub.tier || '').toLowerCase() === 'pro';
+  const tierName = isPro ? 'CookPass Pro' : 'CookPass Lite';
+  const price = isPro ? 'Rp 29.000' : 'Rp 11.000';
+  const name = sub.user?.full_name || sub.user?.username || sub.name || 'Kak';
+
+  const text = `Halo Kak ${name},\n\nTerima kasih telah berlangganan *${tierName}* di CookPlan seharga *${price}*.\n\nStatus keanggotaan Anda saat ini telah *AKTIF* (Kode: SUB-${sub.id}). Terlampir struk bukti pembayaran resmi langganan Anda.\n\nSelamat menikmati fitur eksklusif CookPlan!\n\nSalam hangat,\nTim CookPlan`;
+
+  return `https://wa.me/${waNumber}?text=${encodeURIComponent(text)}`;
+}
+
 // Susun URL wa.me lengkap (siap dibuka window.open). Teks = ringkasan singkat.
 export function buildWhatsappUrl(order, adminNumber = WA_ADMIN_NUMBER) {
   const text = buildWhatsappText(order);

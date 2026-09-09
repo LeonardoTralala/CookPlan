@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Modal } from '../../components/Modal.jsx';
 import { checkIsAdmin } from '../../services/adminService.js';
 import { getAdminSubscriptions, updateSubscriptionStatus } from '../../services/subscriptionService.js';
+import { downloadSubscriptionReceiptImage, buildSubscriptionWhatsappUrl } from '../../services/orderService.js';
 import { usePlan } from '../../hooks/usePlan.js';
 
 const SUBS_STATUSES = [
@@ -48,6 +49,7 @@ export function AdminSubscriptions() {
   const [filter, setFilter] = useState('all'); // 'all' | status
   const [search, setSearch] = useState('');
   const [busyId, setBusyId] = useState(null);
+  const [strukId, setStrukId] = useState(null);
 
   // Modal State untuk Aktivasi / Edit Tanggal
   const [activeModalItem, setActiveModalItem] = useState(null);
@@ -178,6 +180,18 @@ export function AdminSubscriptions() {
       showToast(err.message || 'Gagal memperpanjang langganan.', { variant: 'error' });
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleDownloadStruk = async (sub) => {
+    setStrukId(sub.id);
+    try {
+      await downloadSubscriptionReceiptImage(sub);
+      showToast(`Struk CookPass #${sub.id} berhasil diunduh!`);
+    } catch (err) {
+      showToast(err.message || 'Gagal membuat struk langganan.', { variant: 'error' });
+    } finally {
+      setStrukId(null);
     }
   };
 
@@ -394,6 +408,32 @@ export function AdminSubscriptions() {
 
                 {/* Action Buttons */}
                 <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                  {/* Download Struk Pembayaran */}
+                  <button
+                    type="button"
+                    onClick={() => handleDownloadStruk(sub)}
+                    disabled={strukId === sub.id}
+                    className="px-3.5 py-2 bg-white border border-primary text-primary hover:bg-primary/5 active:scale-95 rounded-full font-semibold text-xs transition cursor-pointer inline-flex items-center gap-1.5 disabled:opacity-60 shadow-xs"
+                  >
+                    <span className={`material-symbols-outlined text-[16px] ${strukId === sub.id ? 'animate-spin' : ''}`}>
+                      {strukId === sub.id ? 'progress_activity' : 'receipt_long'}
+                    </span>
+                    {strukId === sub.id ? 'Membuat...' : 'Download Struk'}
+                  </button>
+
+                  {/* Kirim WA */}
+                  {buildSubscriptionWhatsappUrl(sub) && (
+                    <a
+                      href={buildSubscriptionWhatsappUrl(sub)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3.5 py-2 bg-emerald-600 text-white hover:bg-emerald-700 active:scale-95 rounded-full font-semibold text-xs transition cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">chat</span>
+                      Kirim WA
+                    </a>
+                  )}
+
                   {sub.status === 'pending' && (
                     <button
                       onClick={() => handleOpenActivateModal(sub)}
