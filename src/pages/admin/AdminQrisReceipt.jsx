@@ -12,6 +12,7 @@ import {
   generateRandomNmid,
   formatReceiptRupiah,
   exportQrisToPng,
+  ensureSuffixEndsWithId,
 } from '../../utils/qrisReceipt.js';
 
 export function AdminQrisReceipt() {
@@ -343,12 +344,31 @@ export function AdminQrisReceipt() {
               </button>
             </div>
 
-            <div className="bg-white rounded-2xl p-3.5 border border-outline-variant/40 space-y-2 text-xs">
-              <div className="flex justify-between items-center">
-                <span className="text-on-surface-variant">Kode Suffix:</span>
-                <span className="font-mono font-bold text-on-surface">QRIS - {randomSuffix}</span>
+            <div className="bg-white rounded-2xl p-3.5 border border-outline-variant/40 space-y-3 text-xs">
+              <div>
+                <div className="flex justify-between items-center mb-1">
+                  <label htmlFor="suffix-input" className="text-on-surface-variant font-medium">
+                    Kode Suffix (Bawah Nominal):
+                  </label>
+                  <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.5 rounded-full font-bold">
+                    Pasti Akhiran ID
+                  </span>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-on-surface-variant font-semibold">
+                    QRIS -
+                  </span>
+                  <input
+                    id="suffix-input"
+                    type="text"
+                    value={randomSuffix}
+                    onChange={(e) => setRandomSuffix(ensureSuffixEndsWithId(e.target.value))}
+                    className="w-full pl-16 pr-3 py-1.5 rounded-xl border border-outline-variant font-mono font-bold text-on-surface text-xs focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+                  />
+                </div>
               </div>
-              <div className="flex justify-between items-center">
+
+              <div className="flex justify-between items-center pt-1 border-t border-outline-variant/30">
                 <span className="text-on-surface-variant">No. Transaksi (Baris 1):</span>
                 <span className="font-mono font-semibold text-on-surface">{txNumbers.part1}</span>
               </div>

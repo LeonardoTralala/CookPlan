@@ -82,7 +82,7 @@ export const QrisReceiptCard = forwardRef(function QrisReceiptCard(
               QRIS
             </p>
             <p className="text-[14px] font-medium text-[#737d8c] mt-1">
-              QRIS - {randomSuffix}
+              QRIS - {randomSuffix?.toUpperCase().endsWith('ID') ? `${randomSuffix.slice(0, -2)}ID` : `${randomSuffix || 'bZ9x'}ID`}
             </p>
           </div>
 

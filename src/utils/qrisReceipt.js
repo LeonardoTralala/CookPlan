@@ -53,15 +53,28 @@ export function getLocalDatetimeInputValue(date = new Date()) {
 }
 
 /**
- * Buat kode acak alfanumerik (misal: "bZ9xKw")
+ * Buat kode acak alfanumerik yang selalu berakhiran "ID" (misal: "bZ9xID")
  */
 export function generateRandomSuffix(len = 6) {
   const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  const prefixLen = Math.max(1, len - 2);
   let res = '';
-  for (let i = 0; i < len; i++) {
+  for (let i = 0; i < prefixLen; i++) {
     res += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return res;
+  return `${res}ID`;
+}
+
+/**
+ * Memastikan string kode berakhiran huruf kapital "ID"
+ */
+export function ensureSuffixEndsWithId(code) {
+  if (!code) return generateRandomSuffix(6);
+  const trimmed = code.trim();
+  if (trimmed.toUpperCase().endsWith('ID')) {
+    return `${trimmed.slice(0, -2)}ID`;
+  }
+  return `${trimmed}ID`;
 }
 
 /**
