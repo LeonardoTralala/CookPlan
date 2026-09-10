@@ -12,6 +12,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
     "@vercel/analytics": "^2.0.1",
+    "html-to-image": "^1.11.13",
     "posthog-js": "^1.407.2",
     "qrcode": "^1.5.4",
     "react": "^19.2.6",

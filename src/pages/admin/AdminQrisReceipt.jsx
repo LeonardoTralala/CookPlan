@@ -1,0 +1,424 @@
+import { useState, useEffect, useRef } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { checkIsAdmin } from '../../services/adminService.js';
+import { usePlan } from '../../hooks/usePlan.js';
+import { QrisReceiptCard } from '../../components/QrisReceiptCard.jsx';
+import {
+  QRIS_BANK_OPTIONS,
+  formatQrisDate,
+  getLocalDatetimeInputValue,
+  generateRandomSuffix,
+  generateTxNumbers,
+  generateRandomNmid,
+  formatReceiptRupiah,
+  exportQrisToPng,
+} from '../../utils/qrisReceipt.js';
+
+export function AdminQrisReceipt() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { showToast } = usePlan();
+
+  const [allowed, setAllowed] = useState(null); // null = checking
+  const cardRef = useRef(null);
+  const [downloading, setDownloading] = useState(false);
+
+  // Parameter dari URL bila dibuka dari rincian order
+  const paramAmount = searchParams.get('amount');
+  const paramDate = searchParams.get('date');
+  const paramOrderCode = searchParams.get('orderId');
+
+  // State nilai yang dapat diatur oleh King
+  const [amount, setAmount] = useState(() => {
+    if (paramAmount) {
+      const parsed = Number(paramAmount);
+      return !isNaN(parsed) && parsed > 0 ? parsed : 200000;
+    }
+    return 200000;
+  });
+
+  const [dateTimeLocal, setDateTimeLocal] = useState(() => {
+    if (paramDate) {
+      const d = new Date(paramDate);
+      if (!isNaN(d.getTime())) return getLocalDatetimeInputValue(d);
+    }
+    return getLocalDatetimeInputValue(new Date());
+  });
+
+  const [bank, setBank] = useState('Mandiri');
+  const [qrType, setQrType] = useState('QR statis');
+  const [storeName, setStoreName] = useState('CookPlan');
+
+  // State nilai yang di-generate secara acak
+  const [randomSuffix, setRandomSuffix] = useState(() => generateRandomSuffix(6));
+  const [txNumbers, setTxNumbers] = useState(() => generateTxNumbers(new Date()));
+  const [nmid, setNmid] = useState(() => generateRandomNmid());
+
+  useEffect(() => {
+    let active = true;
+    checkIsAdmin().then((ok) => {
+      if (active) setAllowed(ok);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Handler acak khusus kode alfanumerik & nomor transaksi (nominal & tanggal tetap sesuai input King)
+  const handleRandomizeCodes = () => {
+    const d = dateTimeLocal ? new Date(dateTimeLocal) : new Date();
+    const newTx = generateTxNumbers(d);
+    setRandomSuffix(generateRandomSuffix(6));
+    setTxNumbers(newTx);
+    setNmid(generateRandomNmid());
+    showToast('Nomor & ID transaksi baru berhasil diacak! 🎲');
+  };
+
+  // Handler salin nomor transaksi
+  const handleCopyTx = async () => {
+    try {
+      await navigator.clipboard.writeText(txNumbers.fullCode);
+      showToast('Nomor transaksi berhasil disalin! 📋');
+    } catch {
+      showToast('Gagal menyalin nomor transaksi.', { variant: 'error' });
+    }
+  };
+
+  // Handler download PNG
+  const handleDownloadPng = async () => {
+    if (downloading || !cardRef.current) return;
+    setDownloading(true);
+    try {
+      const filename = `Struk-QRIS-${txNumbers.part1}.png`;
+      await exportQrisToPng(cardRef.current, filename);
+      showToast(`Struk QRIS berhasil diunduh (${filename})! 📥`);
+    } catch (err) {
+      console.error('Gagal unduh struk PNG:', err);
+      showToast('Gagal mengunduh gambar struk. Coba lagi.', { variant: 'error' });
+    } finally {
+      setDownloading(false);
+    }
+  };
+
+  if (allowed === null) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 text-on-surface-variant">
+        <span className="material-symbols-outlined animate-spin text-4xl text-primary mb-3">
+          progress_activity
+        </span>
+        <p className="text-sm">Memeriksa hak akses admin…</p>
+      </div>
+    );
+  }
+
+  if (allowed === false) {
+    return (
+      <div className="max-w-md mx-auto px-5 py-20 text-center">
+        <span className="material-symbols-outlined text-5xl text-error mb-3">lock</span>
+        <h1 className="font-headline-md text-headline-md text-on-surface mb-2">Akses Ditolak</h1>
+        <p className="text-on-surface-variant text-sm mb-6">
+          Halaman ini khusus untuk administrator CookPlan.
+        </p>
+        <button
+          onClick={() => navigate('/')}
+          className="px-6 py-2.5 bg-primary text-on-primary rounded-full font-semibold text-sm cursor-pointer"
+        >
+          Kembali ke Beranda
+        </button>
+      </div>
+    );
+  }
+
+  const formattedAmount = formatReceiptRupiah(amount);
+  const formattedDate = formatQrisDate(dateTimeLocal);
+
+  return (
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 md:px-8 py-8 space-y-8 animate-fade-in">
+      {/* Header Halaman */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-outline-variant/40 pb-5">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wider">
+              Khusus Admin
+            </span>
+            {paramOrderCode && (
+              <span className="px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-mono font-semibold">
+                Ref: {paramOrderCode}
+              </span>
+            )}
+          </div>
+          <h1 className="font-headline-lg text-headline-lg text-primary flex items-center gap-2">
+            <span className="material-symbols-outlined text-3xl">qr_code_2</span>
+            Generator Struk Transaksi QRIS
+          </h1>
+          <p className="text-on-surface-variant text-sm mt-1">
+            Atur nominal dan tanggal transaksi sesuai kebutuhanmu, acak nomor transaksi dengan satu klik, dan unduh sebagai file PNG proporsional.
+          </p>
+        </div>
+
+        {/* Action Header Button */}
+        <div className="flex items-center gap-2.5 shrink-0">
+          <button
+            type="button"
+            onClick={handleRandomizeCodes}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-surface-container-high hover:bg-surface-container text-on-surface rounded-full text-sm font-semibold transition-all cursor-pointer active:scale-95 shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[18px]">casino</span>
+            Acak ID & Kode
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadPng}
+            disabled={downloading}
+            className="inline-flex items-center gap-1.5 px-5 py-2.5 bg-primary hover:bg-primary/90 text-on-primary rounded-full text-sm font-semibold transition-all cursor-pointer active:scale-95 shadow-md disabled:opacity-60"
+          >
+            <span className={`material-symbols-outlined text-[18px] ${downloading ? 'animate-spin' : ''}`}>
+              {downloading ? 'progress_activity' : 'download'}
+            </span>
+            {downloading ? 'Menyimpan...' : 'Download PNG'}
+          </button>
+        </div>
+      </div>
+
+      {/* Grid: Form Kontrol (Kiri) & Live Preview (Kanan) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        {/* Kolom Form Kontrol */}
+        <div className="lg:col-span-6 space-y-6">
+          {/* Card Atur Nominal */}
+          <div className="bg-white border border-outline-variant/60 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xs">
+            <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/30">
+              <span className="material-symbols-outlined text-primary text-[20px]">payments</span>
+              <h2 className="text-base font-bold text-on-surface">1. Pengaturan Nominal Transaksi</h2>
+            </div>
+
+            <div>
+              <label htmlFor="amount-input" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+                Nominal Pembayaran (Rp)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-sm font-bold text-on-surface-variant">
+                  Rp
+                </span>
+                <input
+                  id="amount-input"
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={amount}
+                  onChange={(e) => setAmount(Math.max(0, Number(e.target.value) || 0))}
+                  placeholder="200000"
+                  className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-outline-variant text-base font-bold text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+                />
+              </div>
+              <p className="text-[12px] text-on-surface-variant mt-1.5 font-medium">
+                Tampilan pada struk: <span className="text-[#00880d] font-bold">{formattedAmount}</span>
+              </p>
+            </div>
+
+            {/* Quick Chips Nominal */}
+            <div>
+              <span className="block text-[11px] font-semibold text-on-surface-variant mb-2">
+                Pilih Cepat Nominal:
+              </span>
+              <div className="flex flex-wrap gap-1.5">
+                {[50000, 75000, 100000, 150000, 200000, 250000, 300000].map((val) => (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setAmount(val)}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                      amount === val
+                        ? 'bg-primary text-on-primary border-primary'
+                        : 'bg-surface-container-lowest text-on-surface border-outline-variant hover:border-primary/50'
+                    }`}
+                  >
+                    {formatReceiptRupiah(val)}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Card Atur Waktu & Metode */}
+          <div className="bg-white border border-outline-variant/60 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xs">
+            <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/30">
+              <span className="material-symbols-outlined text-primary text-[20px]">calendar_clock</span>
+              <h2 className="text-base font-bold text-on-surface">2. Waktu & Sumber Pembayaran</h2>
+            </div>
+
+            <div>
+              <label htmlFor="datetime-input" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+                Tanggal & Jam Transaksi
+              </label>
+              <input
+                id="datetime-input"
+                type="datetime-local"
+                value={dateTimeLocal}
+                onChange={(e) => setDateTimeLocal(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+              />
+              <p className="text-[12px] text-on-surface-variant mt-1.5">
+                Tampilan pada struk: <span className="font-semibold text-on-surface">{formattedDate}</span>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+              <div>
+                <label htmlFor="bank-select" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+                  Dibayar Dari (Bank / E-Wallet)
+                </label>
+                <select
+                  id="bank-select"
+                  value={bank}
+                  onChange={(e) => setBank(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-outline-variant text-sm font-medium text-on-surface bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer"
+                >
+                  {QRIS_BANK_OPTIONS.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="qr-type-select" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+                  Jenis QR
+                </label>
+                <select
+                  id="qr-type-select"
+                  value={qrType}
+                  onChange={(e) => setQrType(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl border border-outline-variant text-sm font-medium text-on-surface bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary cursor-pointer"
+                >
+                  <option value="QR statis">QR statis</option>
+                  <option value="QR dinamis">QR dinamis</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label htmlFor="store-input" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+                  Nama Toko (Merchant)
+                </label>
+                <input
+                  id="store-input"
+                  type="text"
+                  value={storeName}
+                  onChange={(e) => setStoreName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-outline-variant text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="nmid-input" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+                  NMID Toko
+                </label>
+                <input
+                  id="nmid-input"
+                  type="text"
+                  value={nmid}
+                  onChange={(e) => setNmid(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-outline-variant text-sm font-medium font-mono text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Card Rincian ID Transaksi Ter-generate */}
+          <div className="bg-surface-container-low/60 border border-outline-variant/50 rounded-3xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-on-surface uppercase tracking-wide flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[18px] text-primary">tag</span>
+                ID & Kode Transaksi Acak
+              </span>
+              <button
+                type="button"
+                onClick={handleRandomizeCodes}
+                className="text-xs font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[16px]">refresh</span>
+                Acak Ulang
+              </button>
+            </div>
+
+            <div className="bg-white rounded-2xl p-3.5 border border-outline-variant/40 space-y-2 text-xs">
+              <div className="flex justify-between items-center">
+                <span className="text-on-surface-variant">Kode Suffix:</span>
+                <span className="font-mono font-bold text-on-surface">QRIS - {randomSuffix}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-on-surface-variant">No. Transaksi (Baris 1):</span>
+                <span className="font-mono font-semibold text-on-surface">{txNumbers.part1}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-on-surface-variant">No. Transaksi (Baris 2):</span>
+                <span className="font-mono font-semibold text-on-surface">
+                  {txNumbers.part2}
+                  <span className="text-primary font-bold">{txNumbers.part3}</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Kolom Live Preview (Kanan) */}
+        <div className="lg:col-span-6 flex flex-col items-center">
+          <div className="w-full flex items-center justify-between mb-3 px-1 max-w-[420px]">
+            <span className="text-xs font-bold uppercase tracking-wider text-on-surface-variant flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px] text-primary">visibility</span>
+              Live Preview Struk
+            </span>
+            <span className="text-[11px] text-on-surface-variant/80 font-medium">
+              Ukuran download: ~840px (pixelRatio: 2)
+            </span>
+          </div>
+
+          {/* Kartu Struk QRIS yang dirender */}
+          <div className="w-full flex justify-center py-2 px-1">
+            <QrisReceiptCard
+              ref={cardRef}
+              amountText={formattedAmount}
+              randomSuffix={randomSuffix}
+              txPart1={txNumbers.part1}
+              txPart2={txNumbers.part2}
+              txPart3={txNumbers.part3}
+              dateText={formattedDate}
+              bank={bank}
+              qrType={qrType}
+              nmid={nmid}
+              storeName={storeName}
+              onCopyTx={handleCopyTx}
+              onBackClick={() => showToast('Navigasi kembali (preview)')}
+              onHelpClick={() => showToast('Bantuan transaksi QRIS CookPlan')}
+            />
+          </div>
+
+          {/* Tombol Aksi di Bawah Preview */}
+          <div className="w-full max-w-[420px] mt-4 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleRandomizeCodes}
+              className="flex-1 py-3 px-4 border border-outline-variant bg-white hover:bg-surface-container-low text-on-surface rounded-full text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-xs active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[18px]">casino</span>
+              Acak Kode & ID
+            </button>
+            <button
+              type="button"
+              onClick={handleDownloadPng}
+              disabled={downloading}
+              className="flex-1 py-3 px-4 bg-primary hover:bg-primary/90 text-on-primary rounded-full text-xs sm:text-sm font-semibold transition cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95 disabled:opacity-60"
+            >
+              <span className={`material-symbols-outlined text-[18px] ${downloading ? 'animate-spin' : ''}`}>
+                {downloading ? 'progress_activity' : 'download'}
+              </span>
+              {downloading ? 'Memproses...' : 'Download PNG'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

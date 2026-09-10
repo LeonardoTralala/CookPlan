@@ -555,6 +555,18 @@ export function AdminOrders() {
                         </span>
                         {strukId === o.id ? 'Membuat struk…' : 'Download Struk'}
                       </button>
+                      <button
+                        onClick={() => {
+                          const total = (o.total_price ?? 0) + (o.delivery_fee ?? 0);
+                          const date = o.created_at || o.createdAt || '';
+                          navigate(`/admin/qris?amount=${total}&date=${encodeURIComponent(date)}&orderId=${encodeURIComponent(o.id)}`);
+                        }}
+                        className="inline-flex items-center justify-center gap-2 w-full sm:w-auto px-5 py-2.5 border border-primary/40 text-primary bg-primary/5 hover:bg-primary/10 rounded-full font-semibold text-sm active:scale-95 transition cursor-pointer"
+                        title="Buka generator struk QRIS untuk pesanan ini"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">qr_code_2</span>
+                        Struk QRIS
+                      </button>
                       {waLink(o.customer_phone) && (
                         <a
                           href={waLink(o.customer_phone)}
