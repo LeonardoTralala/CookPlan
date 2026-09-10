@@ -34,6 +34,7 @@ const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard.jsx').the
 const AdminOrders = lazy(() => import('./pages/admin/AdminOrders.jsx').then((m) => ({ default: m.AdminOrders })));
 const AdminFeedback = lazy(() => import('./pages/admin/AdminFeedback.jsx').then((m) => ({ default: m.AdminFeedback })));
 const AdminSubscriptions = lazy(() => import('./pages/admin/AdminSubscriptions.jsx').then((m) => ({ default: m.AdminSubscriptions })));
+const AdminQrisReceipt = lazy(() => import('./pages/admin/AdminQrisReceipt.jsx').then((m) => ({ default: m.AdminQrisReceipt })));
 const SharedPlanPage = lazy(() => import('./pages/SharedPlanPage.jsx').then((m) => ({ default: m.SharedPlanPage })));
 const SharedRecipePage = lazy(() => import('./pages/SharedRecipePage.jsx').then((m) => ({ default: m.SharedRecipePage })));
 const RecipeFormPage = lazy(() => import('./pages/RecipeFormPage.jsx'));
@@ -105,6 +106,7 @@ function App() {
               <Route path="/admin/orders" element={<AppShell><AdminLayout><AdminOrders /></AdminLayout></AppShell>} />
               <Route path="/admin/feedback" element={<AppShell><AdminLayout><AdminFeedback /></AdminLayout></AppShell>} />
               <Route path="/admin/subscriptions" element={<AppShell><AdminLayout><AdminSubscriptions /></AdminLayout></AppShell>} />
+              <Route path="/admin/qris" element={<AppShell><AdminLayout><AdminQrisReceipt /></AdminLayout></AppShell>} />
             </Route>
           </Route>
 

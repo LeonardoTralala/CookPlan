@@ -12,6 +12,7 @@ const ADMIN_TABS = [
   { to: '/admin/feedback', icon: 'feedback', label: 'Masukan' },
   { to: '/admin/subscriptions', icon: 'workspace_premium', label: 'Langganan' },
   { to: '/admin/ai', icon: 'settings_suggest', label: 'Provider AI' },
+  { to: '/admin/qris', icon: 'qr_code_2', label: 'Struk QRIS' },
 ];
 
 // Kerangka area admin: sub-nav tab bersama di atas tiap halaman admin agar
