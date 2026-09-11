@@ -8,7 +8,8 @@ import {
   formatQrisDate,
   getLocalDatetimeInputValue,
   getLocalDateOnlyInputValue,
-  generateHMinusOneRandomDate,
+  generatePackageRandomDate,
+  generateSameDayRandomDate,
   generateRandomSuffix,
   generateTxNumbers,
   DEFAULT_NMID,
@@ -17,6 +18,17 @@ import {
   exportQrisToPng,
   ensureSuffixEndsWithId,
 } from '../../utils/qrisReceipt.js';
+
+const SUBSCRIPTION_PRESETS = [
+  { label: 'Lite 1 Bln', val: 11000 },
+  { label: 'Pro 1 Bln', val: 29000 },
+  { label: 'Lite 3 Bln', val: 29700 },
+  { label: 'Pro 3 Bln', val: 74700 },
+  { label: 'Lite 6 Bln', val: 52800 },
+  { label: 'Pro 6 Bln', val: 119400 },
+];
+
+const PACKAGE_PRESETS = [50000, 75000, 100000, 150000, 200000, 250000, 300000];
 
 export function AdminQrisReceipt() {
   const navigate = useNavigate();
@@ -27,21 +39,32 @@ export function AdminQrisReceipt() {
   const cardRef = useRef(null);
   const [downloading, setDownloading] = useState(false);
 
-  // Parameter dari URL bila dibuka dari rincian order
+  // Parameter dari URL bila dibuka dari rincian order / langganan
   const paramAmount = searchParams.get('amount');
   const paramDate = searchParams.get('date');
   const paramOrderCode = searchParams.get('orderId');
+  const paramType = searchParams.get('type');
+
+  // Kategori transaksi: 'package' (Paket Belanja Bahan) | 'subscription' (Langganan Bulanan CookPass)
+  const [transactionType, setTransactionType] = useState(() => {
+    if (paramType === 'subscription' || paramOrderCode?.startsWith('SUB-')) {
+      return 'subscription';
+    }
+    return 'package';
+  });
+  const isSubscription = transactionType === 'subscription';
 
   // State nilai yang dapat diatur oleh King
   const [amount, setAmount] = useState(() => {
     if (paramAmount) {
       const parsed = Number(paramAmount);
-      return !isNaN(parsed) && parsed > 0 ? parsed : 200000;
+      if (!isNaN(parsed) && parsed > 0) return parsed;
     }
-    return 200000;
+    const isSub = paramType === 'subscription' || paramOrderCode?.startsWith('SUB-');
+    return isSub ? 29000 : 200000;
   });
 
-  // 1. Hari Pemesanan Paket (Tanggal rujukan paket)
+  // 1. Hari Pemesanan Paket / Langganan (Tanggal rujukan)
   const [orderDate, setOrderDate] = useState(() => {
     if (paramDate) {
       const d = new Date(paramDate);
@@ -50,10 +73,16 @@ export function AdminQrisReceipt() {
     return getLocalDateOnlyInputValue(new Date());
   });
 
-  // 2. Tanggal & Jam Transaksi Struk QRIS (H-1 dari hari pemesanan paket, jam acak < 20:00)
+  // 2. Tanggal & Jam Transaksi Struk QRIS:
+  // - Langganan CookPass: Hari-H pemesanan (< 20:00)
+  // - Paket Bahan: H-1 atau H-2 (< 20:00)
   const [dateTimeLocal, setDateTimeLocal] = useState(() => {
     const base = paramDate ? new Date(paramDate) : new Date();
-    return getLocalDatetimeInputValue(generateHMinusOneRandomDate(base));
+    const isSub = paramType === 'subscription' || paramOrderCode?.startsWith('SUB-');
+    const targetDate = isSub
+      ? generateSameDayRandomDate(base)
+      : generatePackageRandomDate(base);
+    return getLocalDatetimeInputValue(targetDate);
   });
 
   const [bank, setBank] = useState('Mandiri');
@@ -63,7 +92,12 @@ export function AdminQrisReceipt() {
   // State nilai yang di-generate secara acak
   const [randomSuffix, setRandomSuffix] = useState(() => generateRandomSuffix(6));
   const [txNumbers, setTxNumbers] = useState(() => {
-    const d = dateTimeLocal ? new Date(dateTimeLocal) : generateHMinusOneRandomDate(paramDate ? new Date(paramDate) : new Date());
+    const isSub = paramType === 'subscription' || paramOrderCode?.startsWith('SUB-');
+    const d = dateTimeLocal
+      ? new Date(dateTimeLocal)
+      : (isSub
+          ? generateSameDayRandomDate(paramDate ? new Date(paramDate) : new Date())
+          : generatePackageRandomDate(paramDate ? new Date(paramDate) : new Date()));
     return generateTxNumbers(d);
   });
   const [nmid, setNmid] = useState(DEFAULT_NMID);
@@ -78,12 +112,38 @@ export function AdminQrisReceipt() {
     };
   }, []);
 
+  // Switcher Kategori Transaksi
+  const handleSelectTransactionType = (newType) => {
+    if (newType === transactionType) return;
+    setTransactionType(newType);
+    const base = orderDate ? new Date(orderDate) : new Date();
+    if (newType === 'subscription') {
+      if (amount >= 50000 || amount === 200000) {
+        setAmount(29000);
+      }
+      const newTxDate = generateSameDayRandomDate(base);
+      setDateTimeLocal(getLocalDatetimeInputValue(newTxDate));
+      setTxNumbers(generateTxNumbers(newTxDate));
+      showToast('Mode: Penjualan Langganan Bulanan (Hari-H) 👑');
+    } else {
+      if ([11000, 29000, 29700, 74700, 52800, 119400].includes(amount)) {
+        setAmount(200000);
+      }
+      const newTxDate = generatePackageRandomDate(base);
+      setDateTimeLocal(getLocalDatetimeInputValue(newTxDate));
+      setTxNumbers(generateTxNumbers(newTxDate));
+      showToast('Mode: Paket Belanja Bahan Makanan (H-1 / H-2) 🛒');
+    }
+  };
+
   // Handler Master: 1 tombol untuk mengacak SEMUA variabel yang diperbolehkan diacak
-  // (Waktu H-1 dari hari pemesanan paket < 20:00, Bank Sumber, Suffix ID, & Nomor Transaksi)
+  // (Waktu transaksi < 20:00: Hari-H untuk Langganan, H-1/H-2 untuk Paket, Bank Sumber, Suffix ID, & Nomor Transaksi)
   // Menjaga NMID tetap ID1026539688444, nominal tetap, dan nama toko tetap.
   const handleRandomizeAll = () => {
     const base = orderDate ? new Date(orderDate) : new Date();
-    const newTxDate = generateHMinusOneRandomDate(base);
+    const newTxDate = isSubscription
+      ? generateSameDayRandomDate(base)
+      : generatePackageRandomDate(base); // Acak H-1 atau H-2
     const newDateTimeVal = getLocalDatetimeInputValue(newTxDate);
     setDateTimeLocal(newDateTimeVal);
 
@@ -100,18 +160,34 @@ export function AdminQrisReceipt() {
 
     const formattedShortDate = `${newTxDate.getDate()}/${newTxDate.getMonth() + 1}`;
     const formattedShortTime = `${String(newTxDate.getHours()).padStart(2, '0')}:${String(newTxDate.getMinutes()).padStart(2, '0')}`;
-    showToast(`Semua variabel diacak! (H-1: ${formattedShortDate} pk ${formattedShortTime}, ${newBank}) 🎲`);
+    const modeLabel = isSubscription ? 'Hari-H' : 'H-1/H-2';
+    showToast(`Semua variabel diacak! (${modeLabel}: ${formattedShortDate} pk ${formattedShortTime}, ${newBank}) 🎲`);
   };
 
-  // Handler jika hari pemesanan paket diubah langsung di input date
+  // Handler jika hari pemesanan diubah langsung di input date
   const handleOrderDateChange = (newOrderDateStr) => {
     setOrderDate(newOrderDateStr);
     if (newOrderDateStr) {
-      const newTxDate = generateHMinusOneRandomDate(new Date(newOrderDateStr));
+      const base = new Date(newOrderDateStr);
+      const newTxDate = isSubscription
+        ? generateSameDayRandomDate(base)
+        : generatePackageRandomDate(base);
       setDateTimeLocal(getLocalDatetimeInputValue(newTxDate));
       setTxNumbers(generateTxNumbers(newTxDate));
-      showToast('Waktu transaksi disinkronkan ke H-1 dari pemesanan paket! 📅');
+      const syncMsg = isSubscription
+        ? 'Waktu transaksi disinkronkan ke Hari-H pemesanan langganan! 📅'
+        : 'Waktu transaksi disinkronkan ke H-1/H-2 paket belanja! 📅';
+      showToast(syncMsg);
     }
+  };
+
+  // Handler set spesifik H-1 atau H-2 untuk paket belanja bahan
+  const handleSetPackageDaysBack = (daysBack) => {
+    const base = orderDate ? new Date(orderDate) : new Date();
+    const newTxDate = generatePackageRandomDate(base, daysBack);
+    setDateTimeLocal(getLocalDatetimeInputValue(newTxDate));
+    setTxNumbers(generateTxNumbers(newTxDate));
+    showToast(`Waktu transaksi diatur ke H-${daysBack} (< 20:00)! 📅`);
   };
 
   // Handler acak khusus kode alfanumerik, nomor transaksi, dan bank sumber
@@ -126,14 +202,16 @@ export function AdminQrisReceipt() {
     showToast(`Bank sumber diacak: ${newBank} 🏦`);
   };
 
-  // Handler acak jam transaksi pada tanggal H-1
+  // Handler acak jam transaksi
   const handleRandomizeDateTime = () => {
     const base = orderDate ? new Date(orderDate) : new Date();
-    const newDate = generateHMinusOneRandomDate(base);
+    const newDate = isSubscription
+      ? generateSameDayRandomDate(base)
+      : generatePackageRandomDate(base);
     const val = getLocalDatetimeInputValue(newDate);
     setDateTimeLocal(val);
     setTxNumbers(generateTxNumbers(newDate));
-    showToast('Jam transaksi diacak ulang di bawah 20:00! ⏰');
+    showToast(`Jam transaksi diacak ulang di bawah 20:00 (${isSubscription ? 'Hari-H' : 'H-1/H-2'})! ⏰`);
   };
 
   // Handler salin nomor transaksi
@@ -199,9 +277,18 @@ export function AdminQrisReceipt() {
       {/* Header Halaman */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-outline-variant/40 pb-5">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wider">
               Khusus Admin
+            </span>
+            <span
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider ${
+                isSubscription
+                  ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                  : 'bg-primary/10 text-primary border border-primary/20'
+              }`}
+            >
+              {isSubscription ? '👑 Langganan CookPass' : '🛒 Paket Belanja Bahan'}
             </span>
             {paramOrderCode && (
               <span className="px-2.5 py-0.5 rounded-full bg-surface-container-high text-on-surface-variant text-[11px] font-mono font-semibold">
@@ -224,7 +311,7 @@ export function AdminQrisReceipt() {
             type="button"
             onClick={handleRandomizeAll}
             className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-full text-sm font-semibold transition-all cursor-pointer active:scale-95 shadow-xs"
-            title="Acak semua variabel transaksi (waktu H-1, bank sumber, & nomor transaksi)"
+            title={`Acak semua variabel transaksi (${isSubscription ? 'Hari-H < 20:00' : 'H-1/H-2 < 20:00'}, bank sumber, & nomor transaksi)`}
           >
             <span className="material-symbols-outlined text-[18px]">casino</span>
             Acak Semua Variabel
@@ -247,6 +334,36 @@ export function AdminQrisReceipt() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Kolom Form Kontrol */}
         <div className="lg:col-span-6 space-y-6">
+          {/* Card Pemilih Kategori Transaksi */}
+          <div className="bg-white border border-outline-variant/60 rounded-3xl p-3 sm:p-3.5 shadow-xs">
+            <div className="flex bg-surface-container-low p-1 rounded-2xl gap-1">
+              <button
+                type="button"
+                onClick={() => handleSelectTransactionType('package')}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  !isSubscription
+                    ? 'bg-white text-primary shadow-xs border border-outline-variant/40'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">shopping_bag</span>
+                Paket Belanja (H-1 / H-2)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectTransactionType('subscription')}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  isSubscription
+                    ? 'bg-white text-primary shadow-xs border border-outline-variant/40'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">workspace_premium</span>
+                Langganan Bulanan (Hari-H)
+              </button>
+            </div>
+          </div>
+
           {/* Card Atur Nominal */}
           <div className="bg-white border border-outline-variant/60 rounded-3xl p-5 sm:p-6 space-y-4 shadow-xs">
             <div className="flex items-center gap-2 pb-2 border-b border-outline-variant/30">
@@ -278,28 +395,55 @@ export function AdminQrisReceipt() {
               </p>
             </div>
 
-            {/* Quick Chips Nominal */}
-            <div>
-              <span className="block text-[11px] font-semibold text-on-surface-variant mb-2">
-                Pilih Cepat Nominal:
-              </span>
-              <div className="flex flex-wrap gap-1.5">
-                {[50000, 75000, 100000, 150000, 200000, 250000, 300000].map((val) => (
-                  <button
-                    key={val}
-                    type="button"
-                    onClick={() => setAmount(val)}
-                    className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
-                      amount === val
-                        ? 'bg-primary text-on-primary border-primary'
-                        : 'bg-surface-container-lowest text-on-surface border-outline-variant hover:border-primary/50'
-                    }`}
-                  >
-                    {formatReceiptRupiah(val)}
-                  </button>
-                ))}
+            {/* Quick Chips Nominal Sesuai Mode */}
+            {isSubscription ? (
+              <div>
+                <span className="block text-[11px] font-semibold text-on-surface-variant mb-2">
+                  Pilih Cepat Paket Langganan CookPass:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {SUBSCRIPTION_PRESETS.map((item) => (
+                    <button
+                      key={item.val}
+                      type="button"
+                      onClick={() => setAmount(item.val)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-colors cursor-pointer flex items-center gap-1.5 ${
+                        amount === item.val
+                          ? 'bg-primary text-on-primary border-primary'
+                          : 'bg-surface-container-lowest text-on-surface border-outline-variant hover:border-primary/50'
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                      <span className={`text-[10px] font-normal ${amount === item.val ? 'text-on-primary/80' : 'text-on-surface-variant'}`}>
+                        ({formatReceiptRupiah(item.val)})
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div>
+                <span className="block text-[11px] font-semibold text-on-surface-variant mb-2">
+                  Pilih Cepat Nominal Belanja:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {PACKAGE_PRESETS.map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setAmount(val)}
+                      className={`px-3 py-1 rounded-full text-xs font-semibold border transition-colors cursor-pointer ${
+                        amount === val
+                          ? 'bg-primary text-on-primary border-primary'
+                          : 'bg-surface-container-lowest text-on-surface border-outline-variant hover:border-primary/50'
+                      }`}
+                    >
+                      {formatReceiptRupiah(val)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Card Atur Waktu & Metode */}
@@ -315,7 +459,9 @@ export function AdminQrisReceipt() {
                 <span className="material-symbols-outlined text-primary text-[22px]">auto_awesome</span>
                 <div>
                   <p className="text-xs font-bold text-on-surface">Generator Otomatis 1-Klik</p>
-                  <p className="text-[11px] text-on-surface-variant">Acak waktu H-1 (&lt; 20:00), bank sumber, &amp; no. transaksi sekaligus</p>
+                  <p className="text-[11px] text-on-surface-variant">
+                    Acak waktu transaksi ({isSubscription ? 'Hari-H < 20:00' : 'H-1 / H-2 < 20:00'}), bank sumber, &amp; no. transaksi sekaligus
+                  </p>
                 </div>
               </div>
               <button
@@ -329,10 +475,10 @@ export function AdminQrisReceipt() {
               </button>
             </div>
 
-            {/* Input Hari Pemesanan Paket (Acuan H-1) */}
+            {/* Input Hari Pemesanan */}
             <div>
               <label htmlFor="order-date-input" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
-                Hari Pemesanan Paket (Acuan H-1)
+                {isSubscription ? 'Hari Pemesanan Langganan CookPass (Hari-H)' : 'Hari Pengantaran / Pemesanan Paket (Rujukan H-1 / H-2)'}
               </label>
               <input
                 id="order-date-input"
@@ -342,25 +488,49 @@ export function AdminQrisReceipt() {
                 className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
               />
               <p className="text-[11px] text-on-surface-variant mt-1">
-                Struk pembayaran QRIS di bawah otomatis dihitung <span className="font-semibold text-primary">H-1</span> dari tanggal pemesanan paket ini.
+                {isSubscription
+                  ? 'Struk pembayaran QRIS langganan bulanan dihitung pada Hari-H pemesanan ini dengan jam acak di bawah pukul 20:00 (08:00 - 19:59).'
+                  : 'Struk pembayaran QRIS belanja bahan dihitung H-1 atau H-2 sebelum tanggal pengantaran dengan jam acak di bawah pukul 20:00 (08:00 - 19:59).'}
               </p>
             </div>
 
-            {/* Input Tanggal & Jam Transaksi Struk (H-1) */}
+            {/* Input Tanggal & Jam Transaksi Struk */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-1 mb-1.5">
                 <label htmlFor="datetime-input" className="block text-xs font-semibold text-on-surface-variant">
-                  Tanggal &amp; Jam Transaksi Struk (H-1)
+                  Tanggal &amp; Jam Transaksi Struk {isSubscription ? '(Hari-H)' : '(H-1 / H-2)'}
                 </label>
-                <button
-                  type="button"
-                  onClick={handleRandomizeDateTime}
-                  className="text-[11px] font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
-                  title="Acak ulang jam transaksi H-1 (< 20:00)"
-                >
-                  <span className="material-symbols-outlined text-[13px]">schedule</span>
-                  Acak Jam (&lt; 20:00)
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {!isSubscription && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleSetPackageDaysBack(1)}
+                        className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/60 cursor-pointer active:scale-95 transition"
+                        title="Set tanggal transaksi ke H-1"
+                      >
+                        Set H-1
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetPackageDaysBack(2)}
+                        className="text-[11px] font-semibold px-2.5 py-0.5 rounded-md bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/60 cursor-pointer active:scale-95 transition"
+                        title="Set tanggal transaksi ke H-2"
+                      >
+                        Set H-2
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleRandomizeDateTime}
+                    className="text-[11px] font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    title="Acak ulang waktu transaksi (< 20:00)"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">schedule</span>
+                    Acak Jam (&lt; 20:00)
+                  </button>
+                </div>
               </div>
               <input
                 id="datetime-input"

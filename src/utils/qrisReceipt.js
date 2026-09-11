@@ -87,6 +87,36 @@ export function generateHMinusOneRandomDate(baseDate = new Date()) {
 }
 
 /**
+ * Buat Date H-1 atau H-2 dari hari acuan paket belanja bahan makanan
+ * dengan jam acak di bawah pukul 20:00 (rentang 08:00 - 19:59).
+ * @param {Date|string} baseDate - Tanggal rujukan paket
+ * @param {number|null} daysBack - Jumlah hari mundur (1 = H-1, 2 = H-2, null = acak antara 1 atau 2)
+ */
+export function generatePackageRandomDate(baseDate = new Date(), daysBack = null) {
+  let d = new Date(baseDate);
+  if (isNaN(d.getTime())) d = new Date();
+  const days = daysBack !== null ? daysBack : (Math.random() < 0.5 ? 1 : 2);
+  d.setDate(d.getDate() - days);
+  const randomHour = Math.floor(8 + Math.random() * 12); // 8 s/d 19
+  const randomMinute = Math.floor(Math.random() * 60);  // 0 s/d 59
+  d.setHours(randomHour, randomMinute, 0, 0);
+  return d;
+}
+
+/**
+ * Buat Date pada hari yang sama (Hari-H) dari hari acuan (khusus penjualan langganan bulanan CookPass)
+ * dengan jam acak di bawah pukul 20:00 (rentang 08:00 - 19:59)
+ */
+export function generateSameDayRandomDate(baseDate = new Date()) {
+  let d = new Date(baseDate);
+  if (isNaN(d.getTime())) d = new Date();
+  const randomHour = Math.floor(8 + Math.random() * 12); // 8 s/d 19
+  const randomMinute = Math.floor(Math.random() * 60);  // 0 s/d 59
+  d.setHours(randomHour, randomMinute, 0, 0);
+  return d;
+}
+
+/**
  * Buat kode acak alfanumerik yang selalu berakhiran "ID" (misal: "bZ9xID")
  */
 export function generateRandomSuffix(len = 6) {

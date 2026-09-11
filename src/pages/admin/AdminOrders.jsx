@@ -786,6 +786,23 @@ export function AdminOrders() {
                             {strukSubId === sub.id ? 'Membuat Struk PNG…' : 'Download Struk Pembayaran'}
                           </button>
 
+                          {/* Buka Generator Struk QRIS CookPass */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const isPro = (sub.tier || '').toLowerCase() === 'pro';
+                              const amount = isPro ? 29000 : 11000;
+                              const date = sub.created_at || sub.start_date || '';
+                              const orderCode = `SUB-${sub.id}`;
+                              navigate(`/admin/qris?amount=${amount}&date=${encodeURIComponent(date)}&orderId=${encodeURIComponent(orderCode)}&type=subscription`);
+                            }}
+                            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 border border-primary/40 text-primary bg-primary/5 hover:bg-primary/10 rounded-full font-semibold text-xs active:scale-95 transition cursor-pointer shadow-xs"
+                            title="Buka generator struk QRIS untuk langganan CookPass ini"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">qr_code_2</span>
+                            Struk QRIS
+                          </button>
+
                           {/* Kirim Struk WA */}
                           {waSubUrl && (
                             <a
