@@ -14,7 +14,7 @@ export const QrisReceiptCard = forwardRef(function QrisReceiptCard(
     dateText = '2 Jul 2026 - 16:13',
     bank = 'Mandiri',
     qrType = 'QR statis',
-    nmid = 'ID1026849173025',
+    nmid = 'ID1026539688444',
     storeName = 'CookPlan',
     onCopyTx,
     onBackClick,

@@ -7,9 +7,12 @@ import {
   QRIS_BANK_OPTIONS,
   formatQrisDate,
   getLocalDatetimeInputValue,
+  getLocalDateOnlyInputValue,
+  generateHMinusOneRandomDate,
   generateRandomSuffix,
   generateTxNumbers,
-  generateRandomNmid,
+  DEFAULT_NMID,
+  getRandomBank,
   formatReceiptRupiah,
   exportQrisToPng,
   ensureSuffixEndsWithId,
@@ -38,12 +41,19 @@ export function AdminQrisReceipt() {
     return 200000;
   });
 
-  const [dateTimeLocal, setDateTimeLocal] = useState(() => {
+  // 1. Hari Pemesanan Paket (Tanggal rujukan paket)
+  const [orderDate, setOrderDate] = useState(() => {
     if (paramDate) {
       const d = new Date(paramDate);
-      if (!isNaN(d.getTime())) return getLocalDatetimeInputValue(d);
+      if (!isNaN(d.getTime())) return getLocalDateOnlyInputValue(d);
     }
-    return getLocalDatetimeInputValue(new Date());
+    return getLocalDateOnlyInputValue(new Date());
+  });
+
+  // 2. Tanggal & Jam Transaksi Struk QRIS (H-1 dari hari pemesanan paket, jam acak < 20:00)
+  const [dateTimeLocal, setDateTimeLocal] = useState(() => {
+    const base = paramDate ? new Date(paramDate) : new Date();
+    return getLocalDatetimeInputValue(generateHMinusOneRandomDate(base));
   });
 
   const [bank, setBank] = useState('Mandiri');
@@ -52,8 +62,11 @@ export function AdminQrisReceipt() {
 
   // State nilai yang di-generate secara acak
   const [randomSuffix, setRandomSuffix] = useState(() => generateRandomSuffix(6));
-  const [txNumbers, setTxNumbers] = useState(() => generateTxNumbers(new Date()));
-  const [nmid, setNmid] = useState(() => generateRandomNmid());
+  const [txNumbers, setTxNumbers] = useState(() => {
+    const d = dateTimeLocal ? new Date(dateTimeLocal) : generateHMinusOneRandomDate(paramDate ? new Date(paramDate) : new Date());
+    return generateTxNumbers(d);
+  });
+  const [nmid, setNmid] = useState(DEFAULT_NMID);
 
   useEffect(() => {
     let active = true;
@@ -65,14 +78,62 @@ export function AdminQrisReceipt() {
     };
   }, []);
 
-  // Handler acak khusus kode alfanumerik & nomor transaksi (nominal & tanggal tetap sesuai input King)
-  const handleRandomizeCodes = () => {
-    const d = dateTimeLocal ? new Date(dateTimeLocal) : new Date();
-    const newTx = generateTxNumbers(d);
-    setRandomSuffix(generateRandomSuffix(6));
+  // Handler Master: 1 tombol untuk mengacak SEMUA variabel yang diperbolehkan diacak
+  // (Waktu H-1 dari hari pemesanan paket < 20:00, Bank Sumber, Suffix ID, & Nomor Transaksi)
+  // Menjaga NMID tetap ID1026539688444, nominal tetap, dan nama toko tetap.
+  const handleRandomizeAll = () => {
+    const base = orderDate ? new Date(orderDate) : new Date();
+    const newTxDate = generateHMinusOneRandomDate(base);
+    const newDateTimeVal = getLocalDatetimeInputValue(newTxDate);
+    setDateTimeLocal(newDateTimeVal);
+
+    const newBank = getRandomBank();
+    setBank(newBank);
+
+    const newSuffix = generateRandomSuffix(6);
+    setRandomSuffix(newSuffix);
+
+    const newTx = generateTxNumbers(newTxDate);
     setTxNumbers(newTx);
-    setNmid(generateRandomNmid());
-    showToast('Nomor & ID transaksi baru berhasil diacak! 🎲');
+
+    setNmid(DEFAULT_NMID);
+
+    const formattedShortDate = `${newTxDate.getDate()}/${newTxDate.getMonth() + 1}`;
+    const formattedShortTime = `${String(newTxDate.getHours()).padStart(2, '0')}:${String(newTxDate.getMinutes()).padStart(2, '0')}`;
+    showToast(`Semua variabel diacak! (H-1: ${formattedShortDate} pk ${formattedShortTime}, ${newBank}) 🎲`);
+  };
+
+  // Handler jika hari pemesanan paket diubah langsung di input date
+  const handleOrderDateChange = (newOrderDateStr) => {
+    setOrderDate(newOrderDateStr);
+    if (newOrderDateStr) {
+      const newTxDate = generateHMinusOneRandomDate(new Date(newOrderDateStr));
+      setDateTimeLocal(getLocalDatetimeInputValue(newTxDate));
+      setTxNumbers(generateTxNumbers(newTxDate));
+      showToast('Waktu transaksi disinkronkan ke H-1 dari pemesanan paket! 📅');
+    }
+  };
+
+  // Handler acak khusus kode alfanumerik, nomor transaksi, dan bank sumber
+  const handleRandomizeCodes = () => {
+    handleRandomizeAll();
+  };
+
+  // Handler acak bank sumber secara mandiri
+  const handleRandomizeBank = () => {
+    const newBank = getRandomBank();
+    setBank(newBank);
+    showToast(`Bank sumber diacak: ${newBank} 🏦`);
+  };
+
+  // Handler acak jam transaksi pada tanggal H-1
+  const handleRandomizeDateTime = () => {
+    const base = orderDate ? new Date(orderDate) : new Date();
+    const newDate = generateHMinusOneRandomDate(base);
+    const val = getLocalDatetimeInputValue(newDate);
+    setDateTimeLocal(val);
+    setTxNumbers(generateTxNumbers(newDate));
+    showToast('Jam transaksi diacak ulang di bawah 20:00! ⏰');
   };
 
   // Handler salin nomor transaksi
@@ -161,11 +222,12 @@ export function AdminQrisReceipt() {
         <div className="flex items-center gap-2.5 shrink-0">
           <button
             type="button"
-            onClick={handleRandomizeCodes}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-surface-container-high hover:bg-surface-container text-on-surface rounded-full text-sm font-semibold transition-all cursor-pointer active:scale-95 shadow-sm"
+            onClick={handleRandomizeAll}
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/30 rounded-full text-sm font-semibold transition-all cursor-pointer active:scale-95 shadow-xs"
+            title="Acak semua variabel transaksi (waktu H-1, bank sumber, & nomor transaksi)"
           >
             <span className="material-symbols-outlined text-[18px]">casino</span>
-            Acak ID & Kode
+            Acak Semua Variabel
           </button>
           <button
             type="button"
@@ -247,10 +309,59 @@ export function AdminQrisReceipt() {
               <h2 className="text-base font-bold text-on-surface">2. Waktu & Sumber Pembayaran</h2>
             </div>
 
+            {/* Quick 1-Click Randomize Banner */}
+            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="material-symbols-outlined text-primary text-[22px]">auto_awesome</span>
+                <div>
+                  <p className="text-xs font-bold text-on-surface">Generator Otomatis 1-Klik</p>
+                  <p className="text-[11px] text-on-surface-variant">Acak waktu H-1 (&lt; 20:00), bank sumber, &amp; no. transaksi sekaligus</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleRandomizeAll}
+                className="shrink-0 px-4 py-2 bg-primary text-on-primary rounded-xl text-xs font-semibold hover:bg-primary/90 transition active:scale-95 cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                title="Acak semua variabel transaksi sekaligus"
+              >
+                <span className="material-symbols-outlined text-[16px]">casino</span>
+                Acak Semua Variabel
+              </button>
+            </div>
+
+            {/* Input Hari Pemesanan Paket (Acuan H-1) */}
             <div>
-              <label htmlFor="datetime-input" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
-                Tanggal & Jam Transaksi
+              <label htmlFor="order-date-input" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
+                Hari Pemesanan Paket (Acuan H-1)
               </label>
+              <input
+                id="order-date-input"
+                type="date"
+                value={orderDate}
+                onChange={(e) => handleOrderDateChange(e.target.value)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-outline-variant text-sm font-medium text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary"
+              />
+              <p className="text-[11px] text-on-surface-variant mt-1">
+                Struk pembayaran QRIS di bawah otomatis dihitung <span className="font-semibold text-primary">H-1</span> dari tanggal pemesanan paket ini.
+              </p>
+            </div>
+
+            {/* Input Tanggal & Jam Transaksi Struk (H-1) */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label htmlFor="datetime-input" className="block text-xs font-semibold text-on-surface-variant">
+                  Tanggal &amp; Jam Transaksi Struk (H-1)
+                </label>
+                <button
+                  type="button"
+                  onClick={handleRandomizeDateTime}
+                  className="text-[11px] font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+                  title="Acak ulang jam transaksi H-1 (< 20:00)"
+                >
+                  <span className="material-symbols-outlined text-[13px]">schedule</span>
+                  Acak Jam (&lt; 20:00)
+                </button>
+              </div>
               <input
                 id="datetime-input"
                 type="datetime-local"
@@ -265,9 +376,20 @@ export function AdminQrisReceipt() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
               <div>
-                <label htmlFor="bank-select" className="block text-xs font-semibold text-on-surface-variant mb-1.5">
-                  Dibayar Dari (Bank / E-Wallet)
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label htmlFor="bank-select" className="block text-xs font-semibold text-on-surface-variant">
+                    Dibayar Dari (Bank / E-Wallet)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleRandomizeBank}
+                    className="text-[11px] font-semibold text-primary hover:underline inline-flex items-center gap-1 cursor-pointer"
+                    title="Pilih bank/e-wallet acak"
+                  >
+                    <span className="material-symbols-outlined text-[13px]">shuffle</span>
+                    Acak Bank
+                  </button>
+                </div>
                 <select
                   id="bank-select"
                   value={bank}

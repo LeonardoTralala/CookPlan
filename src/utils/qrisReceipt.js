@@ -16,6 +16,14 @@ export const QRIS_BANK_OPTIONS = [
   'LinkAja',
 ];
 
+/**
+ * Dapatkan bank / e-wallet sumber acak dari daftar QRIS_BANK_OPTIONS
+ */
+export function getRandomBank() {
+  const idx = Math.floor(Math.random() * QRIS_BANK_OPTIONS.length);
+  return QRIS_BANK_OPTIONS[idx];
+}
+
 const INDO_MONTHS_SHORT = [
   'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
   'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
@@ -50,6 +58,32 @@ export function getLocalDatetimeInputValue(date = new Date()) {
   const hh = pad(d.getHours());
   const min = pad(d.getMinutes());
   return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+/**
+ * Format Date object ke string YYYY-MM-DD untuk input HTML type="date"
+ */
+export function getLocalDateOnlyInputValue(date = new Date()) {
+  const d = new Date(date);
+  if (isNaN(d.getTime())) return new Date().toISOString().slice(0, 10);
+  const pad = (n) => String(n).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/**
+ * Buat Date H-1 dari hari acuan (pemesanan paket) dengan jam acak di bawah pukul 20:00 (rentang 08:00 - 19:59)
+ */
+export function generateHMinusOneRandomDate(baseDate = new Date()) {
+  let d = new Date(baseDate);
+  if (isNaN(d.getTime())) d = new Date();
+  d.setDate(d.getDate() - 1);
+  const randomHour = Math.floor(8 + Math.random() * 12); // 8 s/d 19
+  const randomMinute = Math.floor(Math.random() * 60);  // 0 s/d 59
+  d.setHours(randomHour, randomMinute, 0, 0);
+  return d;
 }
 
 /**
@@ -104,14 +138,15 @@ export function generateTxNumbers(date = new Date()) {
 }
 
 /**
- * Buat NMID toko acak CookPlan (misal: "ID1026849173025")
+ * NMID resmi toko CookPlan
+ */
+export const DEFAULT_NMID = 'ID1026539688444';
+
+/**
+ * Mendapatkan NMID resmi toko CookPlan ("ID1026539688444")
  */
 export function generateRandomNmid() {
-  let digits = '';
-  for (let i = 0; i < 11; i++) {
-    digits += Math.floor(Math.random() * 10);
-  }
-  return `ID10${digits}`;
+  return DEFAULT_NMID;
 }
 
 /**
